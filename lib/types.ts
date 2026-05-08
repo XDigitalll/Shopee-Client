@@ -1,0 +1,301 @@
+﻿export type Category = {
+  id: number;
+  name: string;
+  slug?: string;
+  icon?: string;
+  description?: string;
+  active?: boolean;
+  showOnHomepage?: boolean;
+  productCount?: number;
+};
+
+export type Product = {
+  id: number;
+  name: string;
+  description?: string;
+  originalPrice?: number;
+  finalPrice?: number;
+  rating?: number;
+  reviewCount?: number;
+  category?: Category;
+  subCategory?: string;
+  weight?: number;
+  volume?: number;
+  sourceStore?: string;
+  externalLink?: string;
+  stock?: number;
+  images?: string[];
+  externalProductId?: string;
+  status?: string;
+  available: boolean;
+  madeToOrder?: boolean;
+  availabilityNote?: string;
+  source?: string;
+  gallery?: ProductImage[];
+  primaryImageUrl?: string;
+  primaryThumbnailUrl?: string;
+  variants?: ProductVariant[];
+};
+
+export type ProductVariant = {
+  id?: number;
+  sku?: string;
+  color?: string;
+  size?: string;
+  externalPrice?: number;
+  finalPrice?: number;
+  stock?: number;
+};
+
+export type ProductReview = {
+  id?: number;
+  reviewerName?: string;
+  mine?: boolean;
+  rating: number;
+  comment: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ProductReviewSummary = {
+  averageRating?: number;
+  reviewCount?: number;
+  reviews: ProductReview[];
+};
+export type ProductImage = {
+  id?: number;
+  originalUrl?: string;
+  thumbnailUrl?: string;
+  displayOrder?: number;
+  primaryImage?: boolean;
+  altText?: string;
+  legacy?: boolean;
+};
+
+export type CartItem = {
+  itemId: number;
+  productId: number;
+  productName: string;
+  originalPrice?: number;
+  price: number;
+  quantity: number;
+  subTotal: number;
+  imageUrl?: string;
+  variantLabel?: string;
+  itemType?: string;
+  sourceStore?: string;
+  externalLink?: string;
+  madeToOrder: boolean;
+  availabilityNote?: string;
+};
+
+export type Cart = {
+  cartId: number;
+  userId: number;
+  totalPrice: number;
+  items: CartItem[];
+};
+
+export type CouponValidation = {
+  valid: boolean;
+  code?: string;
+  message?: string;
+  discountType?: string;
+  discountAmount?: number;
+};
+
+export type Quote = {
+  id: number;
+  version: number;
+  active: boolean;
+  currency?: string;
+  exchangeRate?: number;
+  productAmountMzn?: number;
+  shippingAmountMzn?: number;
+  riskReserveAmountMzn?: number;
+  operationalCostAmountMzn?: number;
+  urgentChargeAmountMzn?: number;
+  urgentChargePercentage?: number;
+  siteFeeAmountMzn?: number;
+  subtotalMzn?: number;
+  localDeliveryAmountMzn?: number;
+  finalAmountMzn?: number;
+  finalAmountWithDeliveryMzn?: number;
+  quotedAt?: string;
+};
+
+export type Payment = {
+  id: number;
+  amount?: number;
+  method?: string;
+  status?: string;
+  transactionId?: string;
+  payerName?: string;
+  payerPhone?: string;
+  notes?: string;
+  adminNote?: string;
+  paymentDate?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+};
+
+export type OrderItem = {
+  productId?: number;
+  productCode?: string;
+  productName?: string;
+  quantity: number;
+  price?: number;
+  subtotal?: number;
+};
+
+export type Order = {
+  id: number;
+  code?: string;
+  type: string;
+  sourceStore?: string;
+  deliveryMethod?: string;
+  payOnDelivery?: boolean;
+  urgent?: boolean;
+  purchaseGroupKey?: string;
+  purchaseGroupSize?: number;
+  groupedPurchase?: boolean;
+  externalCartUrl?: string;
+  productDetails?: string;
+  requestedQuantity?: number;
+  requestScreenshotUrl?: string;
+  baseAmount?: number;
+  commissionAmount?: number;
+  deliveryFee?: number;
+  urgentSurchargeAmount?: number;
+  exchangeRate?: number;
+  totalAmount?: number;
+  customerFullName?: string;
+  primaryPhoneNumber?: string;
+  alternativePhoneNumber?: string;
+  customerEmail?: string;
+  customerNotes?: string;
+  deliveryCity?: string;
+  deliveryNeighborhood?: string;
+  deliveryStreet?: string;
+  houseNumber?: string;
+  deliveryReference?: string;
+  googleMapsLink?: string;
+  assignedDriverId?: string;
+  assignedDriverName?: string;
+  assignedDriverEmail?: string;
+  assignedDriverPhone?: string;
+  status: string;
+  orderDate?: string;
+  paymentDate?: string;
+  deliveryDate?: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+  deliveryAttempt?: number;
+  lastIssueType?: string;
+  deliveryNotes?: string;
+  adminMessageForClient?: string;
+  items?: OrderItem[];
+  quote?: Quote;
+  payment?: Payment;
+};
+
+export type CheckoutResponse = {
+  mixedCheckout: boolean;
+  message?: string;
+  primaryOrder: Order | null;
+  localOrder?: Order | null;
+  externalOrder?: Order | null;
+  orders?: Order[];
+};
+
+export type OrderStats = {
+  totalOrders: number;
+  inProgress: number;
+  delivered: number;
+  totalSpent: number;
+};
+
+export type UserAddress = {
+  id: number;
+  label: string;
+  city: string;
+  neighborhood: string;
+  street: string;
+  houseNumber?: string;
+  reference: string;
+  googleMapsLink?: string;
+  defaultAddress: boolean;
+  fullAddress: string;
+};
+
+export type CustomerProfile = {
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  displayName?: string;
+  initials?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  alternativePhoneNumber?: string;
+  birthDate?: string;
+  gender?: string;
+  city?: string;
+  deliveryCity?: string;
+  deliveryNeighborhood?: string;
+  deliveryStreet?: string;
+  houseNumber?: string;
+  deliveryReference?: string;
+  googleMapsLink?: string;
+  formattedDeliveryAddress?: string;
+  preferredDeliveryMethod?: string;
+  hasDeliveryAddress?: boolean;
+  deliveryAddressRecommended?: boolean;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  verificationRequired?: boolean;
+  verificationCompleted?: boolean;
+  verificationDestination?: string;
+  verificationDestinationMasked?: string;
+  recommendedVerificationChannel?: string;
+  availableVerificationChannels?: string[];
+  pendingActions?: string[];
+  profileCompleted?: boolean;
+  profileCompletionPercentage?: number;
+  notifyOrderUpdates: boolean;
+  notifyQuoteReady: boolean;
+  notifyPromotions: boolean;
+  notifySms?: boolean;
+  localPasswordEnabled?: boolean;
+  canSetLocalPassword?: boolean;
+  authProvider?: string;
+  memberSince?: string;
+  passwordUpdatedAt?: string;
+  mustChangePassword?: boolean;
+  profileIncomplete?: boolean;
+  hasRealEmail?: boolean;
+  accountCompletionPercentage?: number;
+  accountMissingSteps?: string[];
+  securityVerificationLevel?: string;
+  accountStatus?: string;
+};
+
+export type VerificationDispatchResponse = {
+  sent: boolean;
+  channel?: string;
+  destination?: string;
+  destinationMasked?: string;
+  expiresInSeconds?: number;
+  message?: string;
+};
+
+export type SpringPage<T> = {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+};

@@ -1,0 +1,679 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api-client";
+import { formatMoney } from "@/lib/format";
+import type { Product, ProductReview, ProductReviewSummary, SpringPage } from "@/lib/types";
+import { useAuth } from "@/components/auth-provider";
+
+const RED = "#E8431A";
+const GREEN = "#16A34A";
+
+/* ─── Icons ─────────────────────────────────────────────── */
+function ChevronRightIcon({ size = 14 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>;
+}
+function ChevronLeftIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>;
+}
+function ChevronPrevIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>;
+}
+function ChevronNextIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>;
+}
+function HeartIcon({ filled }: { filled: boolean }) {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill={filled ? RED : "none"} stroke={filled ? RED : "#6B7280"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" /></svg>;
+}
+function ShareIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>;
+}
+function ZoomIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /></svg>;
+}
+function PackageIcon() {
+  return <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" /></svg>;
+}
+function CheckCircleIcon() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="9 12 11 14 15 10" /></svg>;
+}
+function XIcon() {
+  return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>;
+}
+
+/* ─── Helpers ────────────────────────────────────────────── */
+function resolveImages(product?: Product): string[] {
+  if (!product) return [];
+  const gallery = (product.gallery || []).map((img) => img.originalUrl || img.thumbnailUrl).filter(Boolean) as string[];
+  const fallback = [product.primaryImageUrl, product.primaryThumbnailUrl, ...(product.images || [])].filter(Boolean) as string[];
+  return Array.from(new Set([...gallery, ...fallback]));
+}
+
+function colorSwatch(value: string) {
+  const palette: Record<string, string> = {
+    preto: "#111827", branco: "#F9FAFB", azul: "#2563EB", vermelho: "#DC2626",
+    verde: "#16A34A", amarelo: "#F59E0B", rosa: "#EC4899", cinza: "#6B7280",
+    castanho: "#8B5E3C", dourado: "#C9A227", prata: "#A8A29E",
+  };
+  return palette[value.trim().toLowerCase()] ?? "linear-gradient(135deg,#E5E7EB,#9CA3AF)";
+}
+
+function buildSpecs(product?: Product) {
+  if (!product) return [];
+  return [
+    ["Categoria", product.category?.name],
+    ["Subcategoria", product.subCategory],
+    ["Peso", product.weight ? `${product.weight} kg` : undefined],
+    ["Volume", product.volume ? String(product.volume) : undefined],
+    ["Origem", product.sourceStore || product.source],
+    ["Stock", typeof product.stock === "number" ? `${product.stock} unidades` : product.madeToOrder ? "Por encomenda" : undefined],
+    ["Disponibilidade", product.availabilityNote],
+  ].filter(([, v]) => Boolean(v)) as [string, string][];
+}
+
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg key={i} width="14" height="14" viewBox="0 0 24 24" fill={i < Math.round(rating) ? "#F59E0B" : "#E5E7EB"} stroke="none">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Page ───────────────────────────────────────────────── */
+export default function ProductDetailPage() {
+  const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { token } = useAuth();
+  const productId = Number(params.id);
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, reviewCount: 0 });
+  const [related, setRelated] = useState<Product[]>([]);
+  const [activeImage, setActiveImage] = useState("");
+  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedColor, setSelectedColor] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<"add" | "buy" | null>(null);
+  const [wishlist, setWishlist] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+
+  useEffect(() => {
+    const loadPage = async () => {
+      if (!productId) return;
+      setLoading(true);
+      setPageError(null);
+      try {
+        const data = await apiFetch<Product>(`products/${productId}`, token ? { token } : {});
+        setProduct(data);
+        const imgs = resolveImages(data);
+        setActiveImage(imgs[0] || "");
+        const sizes = Array.from(new Set((data.variants || []).map((v) => v.size).filter(Boolean) as string[]));
+        const colors = Array.from(new Set((data.variants || []).map((v) => v.color).filter(Boolean) as string[]));
+        setSelectedSize(sizes[0] || "");
+        setSelectedColor(colors[0] || "");
+
+        const [revPayload] = await Promise.allSettled([
+          apiFetch<ProductReviewSummary>(`products/${productId}/reviews`, token ? { token } : {}),
+        ]);
+        if (revPayload.status === "fulfilled") {
+          setReviews(Array.isArray(revPayload.value.reviews) ? revPayload.value.reviews : []);
+          setReviewSummary({
+            averageRating: Number(revPayload.value.averageRating || data.rating || 0),
+            reviewCount: Number(revPayload.value.reviewCount || data.reviewCount || 0),
+          });
+        }
+
+        if (data.category?.id) {
+          apiFetch<SpringPage<Product>>(`products?page=0&size=12`, token ? { token } : {})
+            .then((p) => setRelated((p.content || []).filter((i) => i.id !== data.id && i.category?.id === data.category?.id).slice(0, 6)))
+            .catch(() => undefined);
+        }
+      } catch (err) {
+        setPageError(err instanceof Error ? err.message : "Não foi possível carregar este produto.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void loadPage();
+  }, [productId, token]);
+
+  const images = useMemo(() => resolveImages(product ?? undefined), [product]);
+  const selectedVariant = useMemo(() => {
+    const variants = product?.variants || [];
+    return variants.find((v) => {
+      const sOk = selectedSize ? v.size === selectedSize : true;
+      const cOk = selectedColor ? v.color === selectedColor : true;
+      return sOk && cOk;
+    }) ?? variants[0];
+  }, [product, selectedColor, selectedSize]);
+
+  const price = Number(selectedVariant?.finalPrice || product?.finalPrice || 0);
+  const originalPrice = Number(product?.originalPrice || 0);
+  const discountPct = originalPrice > price && price > 0 ? Math.round((1 - price / originalPrice) * 100) : 0;
+  const stock = typeof selectedVariant?.stock === "number" ? selectedVariant.stock : product?.stock;
+  const canAdd = product?.madeToOrder || typeof stock !== "number" || stock > 0;
+  const sizeOptions = Array.from(new Set((product?.variants || []).map((v) => v.size).filter(Boolean) as string[]));
+  const colorOptions = Array.from(new Set((product?.variants || []).map((v) => v.color).filter(Boolean) as string[]));
+  const specs = buildSpecs(product ?? undefined);
+  const avgRating = reviewSummary.averageRating;
+  const totalReviews = reviewSummary.reviewCount;
+  const productReference = selectedVariant?.sku || product?.externalProductId;
+
+  const activeImageIndex = images.indexOf(activeImage);
+  const goImage = (dir: 1 | -1) => {
+    const next = (activeImageIndex + dir + images.length) % images.length;
+    setActiveImage(images[next]);
+  };
+
+  const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
+    if (!token) {
+      setFeedback({ type: "info", msg: "Podes ver o produto sem conta. Para guardar carrinho e finalizar compra, entra na tua conta." });
+      return;
+    }
+    setBusyAction(mode);
+    setFeedback(null);
+    try {
+      await apiFetch("cart/add", {
+        method: "POST",
+        token,
+        body: JSON.stringify({ productId: targetId, quantity: qty, variant: variantVal ?? selectedVariant?.id ?? `${selectedColor || ""}-${selectedSize || ""}` }),
+      });
+      if (mode === "buy") {
+        router.push("/cart");
+      } else {
+        setFeedback({ type: "success", msg: "Produto adicionado ao carrinho!" });
+        setTimeout(() => setFeedback(null), 3000);
+      }
+    } catch (err) {
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível adicionar o produto." });
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  /* ── Loading ── */
+  if (loading) {
+    return (
+      <div className="space-y-8 pb-24">
+        <div className="h-5 w-56 animate-pulse rounded-full bg-gray-100" />
+        <div className="grid gap-8 lg:grid-cols-[1fr_420px]">
+          <div className="space-y-3">
+            <div className="aspect-[4/3] animate-pulse rounded-3xl bg-gray-100" />
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 w-16 animate-pulse rounded-xl bg-gray-100" />)}
+            </div>
+          </div>
+          <div className="space-y-4">
+            {[40, 70, 50, 100, 60, 80].map((w, i) => <div key={i} className="animate-pulse rounded-full bg-gray-100" style={{ height: 18, width: `${w}%` }} />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Not found ── */
+  if (!product) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-5 text-center">
+        <PackageIcon />
+        <div>
+          <p className="text-xl font-bold text-gray-900">Produto não encontrado</p>
+          <p className="mt-1 text-sm text-gray-500">O produto que procuras não está disponível.</p>
+        </div>
+        {pageError && <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{pageError}</p>}
+        <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-1.5 rounded-full border px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+          <ChevronLeftIcon /> Voltar à loja
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Lightbox */}
+      {lightbox && activeImage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4" onClick={() => setLightbox(false)}>
+          <button type="button" className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20" onClick={() => setLightbox(false)}><XIcon /></button>
+          {images.length > 1 && (
+            <>
+              <button type="button" className="absolute left-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20" onClick={(e) => { e.stopPropagation(); goImage(-1); }}><ChevronPrevIcon /></button>
+              <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20" onClick={(e) => { e.stopPropagation(); goImage(1); }}><ChevronNextIcon /></button>
+            </>
+          )}
+          <img src={activeImage} alt={product.name} className="max-h-[88vh] max-w-[90vw] rounded-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+          {images.length > 1 && <p className="absolute bottom-6 text-sm font-medium text-white/70">{activeImageIndex + 1} / {images.length}</p>}
+        </div>
+      )}
+
+      {/* Toast feedback */}
+      {feedback && (
+        <div className={`fixed bottom-24 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-semibold shadow-xl lg:bottom-10 ${feedback.type === "success" ? "border-green-200 bg-white text-green-800" : feedback.type === "info" ? "border-orange-200 bg-white text-orange-800" : "border-red-200 bg-white text-red-700"}`}>
+          {feedback.type === "success" ? <CheckCircleIcon /> : null}
+          {feedback.msg}
+        </div>
+      )}
+
+      <div className="pb-28 space-y-10 lg:pb-12">
+
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1.5 text-sm" style={{ color: "#9CA3AF" }}>
+          <Link href="/" className="transition hover:text-gray-700">Início</Link>
+          <ChevronRightIcon />
+          <Link href="/store" className="transition hover:text-gray-700">Loja</Link>
+          {product.category?.name && (
+            <>
+              <ChevronRightIcon />
+              <span className="text-gray-500">{product.category.name}</span>
+            </>
+          )}
+          <ChevronRightIcon />
+          <span className="line-clamp-1 max-w-[140px] font-medium" style={{ color: "#374151" }}>{product.name}</span>
+        </nav>
+
+        {/* Main grid */}
+        <section className="grid gap-8 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_460px]">
+
+          {/* ── Gallery ── */}
+          <div className="space-y-3">
+            <div
+              className="group relative cursor-zoom-in overflow-hidden rounded-3xl border bg-white"
+              style={{ borderColor: "#F0F0F0" }}
+              onClick={() => setLightbox(true)}
+            >
+              {discountPct > 0 && (
+                <span className="absolute left-4 top-4 z-10 rounded-full px-3 py-1.5 text-xs font-black text-white" style={{ background: RED }}>
+                  -{discountPct}%
+                </span>
+              )}
+              <div className="absolute right-3 top-3 z-10 rounded-full bg-white/80 p-1.5 opacity-0 shadow backdrop-blur-sm transition group-hover:opacity-100">
+                <ZoomIcon />
+              </div>
+              <div className="flex aspect-[4/3] items-center justify-center bg-[#FAFAFA] p-6 lg:aspect-square">
+                {activeImage
+                  ? <img src={activeImage} alt={product.name} className="h-full w-full object-contain transition duration-300" />
+                  : <PackageIcon />}
+              </div>
+              {images.length > 1 && (
+                <>
+                  <button type="button" className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 shadow-md transition hover:bg-white" onClick={(e) => { e.stopPropagation(); goImage(-1); }}><ChevronPrevIcon /></button>
+                  <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white/90 p-2 shadow-md transition hover:bg-white" onClick={(e) => { e.stopPropagation(); goImage(1); }}><ChevronNextIcon /></button>
+                </>
+              )}
+            </div>
+
+            {images.length > 1 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {images.map((img, idx) => {
+                  const active = img === activeImage;
+                  return (
+                    <button key={img} type="button" onClick={() => setActiveImage(img)} className="flex-none overflow-hidden rounded-xl border-2 bg-white transition" style={{ borderColor: active ? RED : "transparent", outline: active ? `none` : "1px solid #F0F0F0" }}>
+                      <img src={img} alt={`${product.name} ${idx + 1}`} className="h-14 w-14 object-cover sm:h-16 sm:w-16" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {images.length > 1 && (
+              <div className="flex justify-center gap-1.5">
+                {images.map((img, idx) => (
+                  <button key={img} type="button" onClick={() => setActiveImage(img)} className="rounded-full transition" style={{ width: img === activeImage ? 20 : 6, height: 6, background: img === activeImage ? RED : "#E5E7EB" }} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Product info ── */}
+          <div className="space-y-5">
+
+            {/* Header */}
+            <div>
+              <div className="flex items-start justify-between gap-3">
+                <span className="inline-flex rounded-full px-3 py-1 text-xs font-bold" style={{ background: "#FFF0EB", color: RED }}>
+                  {product.category?.name || "Produto"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setWishlist((w) => !w)} className="rounded-full border bg-white p-2 shadow-sm transition hover:scale-105" style={{ borderColor: "#F0F0F0" }}>
+                    <HeartIcon filled={wishlist} />
+                  </button>
+                  <button type="button" className="rounded-full border bg-white p-2 shadow-sm transition hover:scale-105" style={{ borderColor: "#F0F0F0" }}>
+                    <ShareIcon />
+                  </button>
+                </div>
+              </div>
+              <h1 className="mt-3 text-2xl font-black leading-snug sm:text-3xl" style={{ color: "#111827", fontFamily: "'Sora', sans-serif" }}>
+                {product.name}
+              </h1>
+
+              {/* Rating row */}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                {avgRating > 0 ? (
+                  <>
+                    <StarRow rating={avgRating} />
+                    <span className="text-sm font-bold" style={{ color: "#F59E0B" }}>{avgRating.toFixed(1)}</span>
+                    <span className="text-sm" style={{ color: "#6B7280" }}>({totalReviews} {totalReviews === 1 ? "avaliação" : "avaliações"})</span>
+                  </>
+                ) : (
+                  <span className="text-sm" style={{ color: "#9CA3AF" }}>Sem avaliações ainda</span>
+                )}
+                {product.madeToOrder && (
+                  <span className="rounded-full border px-2.5 py-0.5 text-xs font-semibold" style={{ borderColor: "#FDE68A", background: "#FFFBEB", color: "#92400E" }}>Por encomenda</span>
+                )}
+              </div>
+            </div>
+
+            {/* Price */}
+            <div className="rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+              <div className="flex flex-wrap items-end gap-3">
+                <span className="text-3xl font-black sm:text-4xl" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>
+                  {formatMoney(price)}
+                </span>
+                {originalPrice > price && (
+                  <span className="mb-1 text-base line-through" style={{ color: "#9CA3AF" }}>{formatMoney(originalPrice)}</span>
+                )}
+                {discountPct > 0 && (
+                  <span className="mb-1 rounded-full px-2.5 py-1 text-xs font-black" style={{ background: "#ECFDF5", color: GREEN }}>
+                    Poupa {discountPct}%
+                  </span>
+                )}
+              </div>
+              {discountPct > 0 && (
+                <p className="mt-1 text-xs" style={{ color: "#6B7280" }}>
+                  Poupas {formatMoney(originalPrice - price)} em relação ao preço original
+                </p>
+              )}
+            </div>
+
+            {/* Variants */}
+            {sizeOptions.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-bold" style={{ color: "#111827" }}>Tamanho</p>
+                  {selectedSize && <span className="text-xs font-medium" style={{ color: RED }}>{selectedSize}</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {sizeOptions.map((size) => {
+                    const active = size === selectedSize;
+                    return (
+                      <button key={size} type="button" onClick={() => setSelectedSize(size)} className="rounded-xl border px-4 py-2 text-sm font-bold transition" style={{ borderColor: active ? RED : "#E5E7EB", background: active ? "#FFF0EB" : "white", color: active ? RED : "#374151", boxShadow: active ? `0 0 0 1px ${RED}` : "none" }}>
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {colorOptions.length > 0 && (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-bold" style={{ color: "#111827" }}>Cor</p>
+                  {selectedColor && <span className="text-xs font-medium" style={{ color: RED }}>{selectedColor}</span>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {colorOptions.map((color) => {
+                    const active = color === selectedColor;
+                    const swatch = colorSwatch(color);
+                    return (
+                      <button key={color} type="button" onClick={() => setSelectedColor(color)} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition" style={{ borderColor: active ? RED : "#E5E7EB", background: active ? "#FFF0EB" : "white", color: "#374151", boxShadow: active ? `0 0 0 1px ${RED}` : "none" }}>
+                        <span className="h-4 w-4 rounded-full border" style={{ background: swatch, borderColor: "#D1D5DB" }} />
+                        {color}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Qty + stock */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="mb-2 text-sm font-bold" style={{ color: "#111827" }}>Quantidade</p>
+                <div className="inline-flex items-center gap-1 rounded-2xl border bg-white" style={{ borderColor: "#E5E7EB" }}>
+                  <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="flex h-10 w-10 items-center justify-center rounded-l-2xl text-xl font-black transition hover:bg-gray-50" style={{ color: RED }}>−</button>
+                  <span className="min-w-[2.5rem] text-center text-sm font-bold" style={{ color: "#111827" }}>{quantity}</span>
+                  <button type="button" onClick={() => setQuantity((q) => Math.min(99, q + 1))} className="flex h-10 w-10 items-center justify-center rounded-r-2xl text-xl font-black transition hover:bg-gray-50" style={{ color: RED }}>+</button>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-medium" style={{ color: "#9CA3AF" }}>Disponível</p>
+                <p className="text-sm font-bold" style={{ color: typeof stock === "number" && stock <= 3 ? "#DC2626" : GREEN }}>
+                  {typeof stock === "number"
+                    ? stock <= 3 && stock > 0
+                      ? `Apenas ${stock} restante${stock > 1 ? "s" : ""}!`
+                      : stock === 0
+                        ? "Sem stock"
+                        : `${stock} unidades`
+                    : product.madeToOrder
+                      ? "Por encomenda"
+                      : product.availabilityNote || "Disponível"}
+                </p>
+                {typeof stock === "number" && stock > 0 && stock <= 10 && (
+                  <div className="mt-1.5 h-1.5 w-20 overflow-hidden rounded-full bg-gray-200 ml-auto">
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (stock / 10) * 100)}%`, background: stock <= 3 ? "#DC2626" : GREEN }} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* CTAs */}
+            <div className="hidden gap-3 lg:grid lg:grid-cols-2">
+              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canAdd ? RED : "#E5E7EB", color: canAdd ? RED : "#9CA3AF", background: canAdd ? "white" : "#F9FAFB" }}>
+                {busyAction === "add" ? "A adicionar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
+              </button>
+              <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canAdd ? RED : "#9CA3AF" }}>
+                {busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
+              </button>
+            </div>
+
+            {/* Trust badges */}
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+              {[
+                { icon: "🚚", title: "Entrega rápida", sub: "Maputo e arredores" },
+                { icon: "🔒", title: "Pagamento seguro", sub: "M-Pesa · e-Mola" },
+                { icon: "↩️", title: "7 dias", sub: "Devolução simples" },
+              ].map((badge) => (
+                <div key={badge.title} className="flex flex-col items-center gap-1 text-center">
+                  <span className="text-xl">{badge.icon}</span>
+                  <p className="text-xs font-bold" style={{ color: "#111827" }}>{badge.title}</p>
+                  <p className="text-[10px] leading-tight" style={{ color: "#9CA3AF" }}>{badge.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* SKU / ref */}
+            {productReference && (
+              <p className="text-xs" style={{ color: "#9CA3AF" }}>
+                Ref: <span className="font-mono font-semibold" style={{ color: "#6B7280" }}>{productReference}</span>
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* ── Tabs ── */}
+        <section className="rounded-3xl border bg-white shadow-sm" style={{ borderColor: "#F0F0F0" }}>
+          <div className="flex gap-1 border-b p-2" style={{ borderColor: "#F0F0F0" }}>
+            {([
+              { key: "description", label: "Descrição" },
+              { key: "specs", label: "Especificações", count: specs.length },
+              { key: "reviews", label: "Avaliações", count: totalReviews || undefined },
+            ] as { key: typeof activeTab; label: string; count?: number }[]).map((tab) => {
+              const active = activeTab === tab.key;
+              return (
+                <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={{ background: active ? RED : "transparent", color: active ? "white" : "#6B7280" }}>
+                  {tab.label}
+                  {tab.count != null && tab.count > 0 && (
+                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black leading-none" style={{ background: active ? "rgba(255,255,255,0.25)" : "#F3F4F6", color: active ? "white" : "#6B7280" }}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-6">
+            {activeTab === "description" && (
+              <div className="prose prose-sm max-w-none text-sm leading-7" style={{ color: "#4B5563" }}>
+                {product.description
+                  ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
+                  : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
+              </div>
+            )}
+
+            {activeTab === "specs" && (
+              specs.length > 0
+                ? (
+                  <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "#F0F0F0" }}>
+                    <table className="w-full border-collapse text-sm">
+                      <tbody>
+                        {specs.map(([label, value], i) => (
+                          <tr key={label} style={{ background: i % 2 === 0 ? "#FAFAFA" : "white" }}>
+                            <td className="border-b px-5 py-3.5 font-semibold" style={{ borderColor: "#F0F0F0", color: "#374151", width: "35%" }}>{label}</td>
+                            <td className="border-b px-5 py-3.5" style={{ borderColor: "#F0F0F0", color: "#6B7280" }}>{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+                : <p className="italic text-sm" style={{ color: "#9CA3AF" }}>Sem especificações disponíveis.</p>
+            )}
+
+            {activeTab === "reviews" && (
+              <div className="space-y-6">
+                {/* Rating summary */}
+                {totalReviews > 0 && (
+                  <div className="flex flex-col gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+                    <div className="flex flex-col items-center gap-1 sm:min-w-[100px]">
+                      <span className="text-5xl font-black" style={{ color: "#111827" }}>{avgRating.toFixed(1)}</span>
+                      <StarRow rating={avgRating} />
+                      <p className="text-xs" style={{ color: "#9CA3AF" }}>{totalReviews} {totalReviews === 1 ? "avaliação" : "avaliações"}</p>
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      {[5, 4, 3, 2, 1].map((star) => {
+                        const count = reviews.filter((r) => Math.round(r.rating) === star).length;
+                        const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
+                        return (
+                          <div key={star} className="flex items-center gap-2 text-xs">
+                            <span className="w-3 text-right font-semibold" style={{ color: "#6B7280" }}>{star}</span>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="#F59E0B" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-200">
+                              <div className="h-full rounded-full bg-yellow-400 transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="w-6 text-right" style={{ color: "#9CA3AF" }}>{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {reviews.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed py-12 text-center" style={{ borderColor: "#E5E7EB" }}>
+                    <p className="text-sm font-semibold" style={{ color: "#6B7280" }}>Ainda não há avaliações para este produto.</p>
+                    <p className="mt-1 text-xs" style={{ color: "#9CA3AF" }}>Sê o primeiro a partilhar a tua experiência!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {reviews.map((review, i) => (
+                      <article key={`${review.id ?? review.reviewerName ?? "r"}-${i}`} className="rounded-2xl border p-5 transition hover:shadow-sm" style={{ borderColor: "#F0F0F0" }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full text-sm font-black text-white" style={{ background: RED }}>
+                              {(review.reviewerName || "C").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold" style={{ color: "#111827" }}>{review.reviewerName || "Cliente"}</p>
+                              <p className="text-xs" style={{ color: "#9CA3AF" }}>
+                                {review.updatedAt || review.createdAt
+                                  ? new Date(review.updatedAt || review.createdAt || "").toLocaleDateString("pt-PT", { year: "numeric", month: "short", day: "numeric" })
+                                  : "Data não informada"}
+                              </p>
+                            </div>
+                          </div>
+                          <StarRow rating={review.rating} />
+                        </div>
+                        {review.comment && <p className="mt-3 text-sm leading-6" style={{ color: "#4B5563" }}>{review.comment}</p>}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Related products ── */}
+        {related.length > 0 && (
+          <section>
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: RED }}>Também pode gostar</p>
+                <h2 className="mt-1 text-xl font-black sm:text-2xl" style={{ color: "#111827", fontFamily: "'Sora', sans-serif" }}>Produtos relacionados</h2>
+              </div>
+              <Link href="/store" className="rounded-full border px-4 py-2 text-sm font-bold transition hover:bg-gray-50" style={{ borderColor: "#E5E7EB", color: "#374151" }}>Ver todos</Link>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-2 sm:grid sm:overflow-visible sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 [&::-webkit-scrollbar]:hidden">
+              {related.map((item) => {
+                const img = resolveImages(item)[0] || "";
+                const itemPrice = Number(item.finalPrice || 0);
+                const itemOriginal = Number(item.originalPrice || 0);
+                const itemDiscount = itemOriginal > itemPrice && itemPrice > 0 ? Math.round((1 - itemPrice / itemOriginal) * 100) : 0;
+                return (
+                  <article key={item.id} className="flex w-44 flex-none flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md sm:w-auto" style={{ borderColor: "#F0F0F0" }}>
+                    <Link href={`/store/${item.id}`} className="relative block bg-[#FAFAFA]">
+                      {itemDiscount > 0 && <span className="absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: RED }}>-{itemDiscount}%</span>}
+                      <div className="flex h-36 items-center justify-center p-3">
+                        {img
+                          ? <img src={img} alt={item.name} className="h-full w-full object-contain" />
+                          : <PackageIcon />}
+                      </div>
+                    </Link>
+                    <div className="flex flex-1 flex-col gap-2 p-3">
+                      <Link href={`/store/${item.id}`} className="text-xs font-semibold leading-snug line-clamp-2 hover:underline" style={{ color: "#111827" }}>{item.name}</Link>
+                      <div className="mt-auto">
+                        <p className="text-sm font-black" style={{ color: RED }}>{formatMoney(itemPrice)}</p>
+                        {itemOriginal > itemPrice && <p className="text-xs line-through" style={{ color: "#9CA3AF" }}>{formatMoney(itemOriginal)}</p>}
+                      </div>
+                      <button type="button" onClick={() => void addToCart(item.id, "add", undefined, 1)} className="w-full rounded-xl py-2 text-xs font-black text-white transition hover:opacity-90" style={{ background: RED }}>
+                        Adicionar
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* ── Sticky mobile CTA ── */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white px-4 py-3 shadow-xl lg:hidden" style={{ borderColor: "#F0F0F0" }}>
+        <div className="flex items-center gap-3">
+          <div className="flex-1">
+            <p className="line-clamp-1 text-xs font-semibold" style={{ color: "#6B7280" }}>{product.name}</p>
+            <p className="text-base font-black" style={{ color: RED }}>{formatMoney(price)}</p>
+          </div>
+          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canAdd ? RED : "#E5E7EB", color: canAdd ? RED : "#9CA3AF" }}>
+            {busyAction === "add" ? "..." : "Carrinho"}
+          </button>
+          <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canAdd ? RED : "#9CA3AF" }}>
+            {busyAction === "buy" ? "..." : "Comprar"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
