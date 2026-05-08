@@ -73,6 +73,17 @@ function buildSpecs(product?: Product) {
   ].filter(([, v]) => Boolean(v)) as [string, string][];
 }
 
+function RichSection({ title, icon, content }: { title: string; icon: string; content: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-bold" style={{ color: "#111827" }}>{icon} {title}</p>
+      <div className="rounded-2xl border p-4 text-sm leading-7" style={{ borderColor: "#F0F0F0", background: "#FAFAFA", color: "#4B5563" }}>
+        {content.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)}
+      </div>
+    </div>
+  );
+}
+
 function StarRow({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -97,9 +108,10 @@ export default function ProductDetailPage() {
   const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, reviewCount: 0 });
   const [related, setRelated] = useState<Product[]>([]);
   const [activeImage, setActiveImage] = useState("");
-  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews" | "delivery" | "guide">("description");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
+  const [selectedAttrValues, setSelectedAttrValues] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [pageError, setPageError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
@@ -118,10 +130,21 @@ export default function ProductDetailPage() {
         setProduct(data);
         const imgs = resolveImages(data);
         setActiveImage(imgs[0] || "");
-        const sizes = Array.from(new Set((data.variants || []).map((v) => v.size).filter(Boolean) as string[]));
-        const colors = Array.from(new Set((data.variants || []).map((v) => v.color).filter(Boolean) as string[]));
+        const activeVariants = (data.variants || []).filter((v) => v.active !== false);
+        const sizes = Array.from(new Set(activeVariants.map((v) => v.size).filter(Boolean) as string[]));
+        const colors = Array.from(new Set(activeVariants.map((v) => v.color).filter(Boolean) as string[]));
         setSelectedSize(sizes[0] || "");
         setSelectedColor(colors[0] || "");
+
+        // Pre-select first option for each attribute key
+        if (data.hasVariants && data.variantAttributeKeys?.length) {
+          const defaults: Record<string, string> = {};
+          for (const key of data.variantAttributeKeys) {
+            const firstVal = activeVariants.map((v) => v.attributes?.[key]).find(Boolean);
+            if (firstVal) defaults[key] = firstVal;
+          }
+          setSelectedAttrValues(defaults);
+        }
 
         const [revPayload] = await Promise.allSettled([
           apiFetch<ProductReviewSummary>(`products/${productId}/reviews`, token ? { token } : {}),
@@ -148,21 +171,52 @@ export default function ProductDetailPage() {
     void loadPage();
   }, [productId, token]);
 
-  const images = useMemo(() => resolveImages(product ?? undefined), [product]);
   const selectedVariant = useMemo(() => {
-    const variants = product?.variants || [];
-    return variants.find((v) => {
+    const variants = (product?.variants || []).filter((v) => v.active !== false);
+    if (!variants.length) return undefined;
+
+    // New attribute-based selection
+    if (product?.hasVariants && Object.keys(selectedAttrValues).length > 0) {
+      const match = variants.find((v) => {
+        const attrs = v.attributes ?? {};
+        return Object.entries(selectedAttrValues).every(([key, val]) => attrs[key] === val);
+      });
+      return match ?? variants[0];
+    }
+
+    // Legacy color/size fallback
+    const match = variants.find((v) => {
       const sOk = selectedSize ? v.size === selectedSize : true;
       const cOk = selectedColor ? v.color === selectedColor : true;
       return sOk && cOk;
-    }) ?? variants[0];
-  }, [product, selectedColor, selectedSize]);
+    });
+    return match ?? variants[0];
+  }, [product, selectedColor, selectedSize, selectedAttrValues]);
 
-  const price = Number(selectedVariant?.finalPrice || product?.finalPrice || 0);
+  const images = useMemo(() => {
+    const base = resolveImages(product ?? undefined);
+    if (selectedVariant?.mainImageUrl && !base.includes(selectedVariant.mainImageUrl)) {
+      return [selectedVariant.mainImageUrl, ...base];
+    }
+    return base;
+  }, [product, selectedVariant]);
+
+  // Switch main image when variant changes
+  useEffect(() => {
+    if (selectedVariant?.mainImageUrl) {
+      setActiveImage(selectedVariant.mainImageUrl);
+    } else if (images.length > 0) {
+      setActiveImage(images[0]);
+    }
+  }, [selectedVariant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const price = Number(selectedVariant?.effectivePrice ?? selectedVariant?.finalPrice ?? product?.finalPrice ?? 0);
   const originalPrice = Number(product?.originalPrice || 0);
   const discountPct = originalPrice > price && price > 0 ? Math.round((1 - price / originalPrice) * 100) : 0;
   const stock = typeof selectedVariant?.stock === "number" ? selectedVariant.stock : product?.stock;
-  const canAdd = product?.madeToOrder || typeof stock !== "number" || stock > 0;
+  // If product has variants, a variant must be selected
+  const variantRequired = product?.hasVariants && !selectedVariant;
+  const canAdd = !variantRequired && (product?.madeToOrder || typeof stock !== "number" || stock > 0);
   const sizeOptions = Array.from(new Set((product?.variants || []).map((v) => v.size).filter(Boolean) as string[]));
   const colorOptions = Array.from(new Set((product?.variants || []).map((v) => v.color).filter(Boolean) as string[]));
   const specs = buildSpecs(product ?? undefined);
@@ -187,7 +241,11 @@ export default function ProductDetailPage() {
       await apiFetch("cart/add", {
         method: "POST",
         token,
-        body: JSON.stringify({ productId: targetId, quantity: qty, variant: variantVal ?? selectedVariant?.id ?? `${selectedColor || ""}-${selectedSize || ""}` }),
+        body: JSON.stringify({
+          productId: targetId,
+          quantity: qty,
+          variantId: variantVal ?? selectedVariant?.id ?? undefined,
+        }),
       });
       if (mode === "buy") {
         router.push("/cart");
@@ -395,8 +453,52 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Variants */}
-            {sizeOptions.length > 0 && (
+            {/* Dynamic attribute-based variant selector */}
+            {product.hasVariants && product.variantAttributeKeys && product.variantAttributeKeys.length > 0 && (
+              <div className="space-y-4">
+                {product.variantAttributeKeys.map((attrKey) => {
+                  const values = Array.from(new Set(
+                    (product.variants || [])
+                      .filter((v) => v.active !== false)
+                      .map((v) => v.attributes?.[attrKey])
+                      .filter(Boolean) as string[]
+                  ));
+                  if (values.length === 0) return null;
+                  const selected = selectedAttrValues[attrKey];
+                  const isCor = attrKey.toLowerCase().includes("cor") || attrKey.toLowerCase().includes("color");
+                  return (
+                    <div key={attrKey}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-bold" style={{ color: "#111827" }}>{attrKey}</p>
+                        {selected && <span className="text-xs font-medium" style={{ color: RED }}>{selected}</span>}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {values.map((val) => {
+                          const active = selected === val;
+                          return isCor ? (
+                            <button key={val} type="button" onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
+                              className="flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition"
+                              style={{ borderColor: active ? RED : "#E5E7EB", background: active ? "#FFF0EB" : "white", color: "#374151", boxShadow: active ? `0 0 0 1px ${RED}` : "none" }}>
+                              <span className="h-4 w-4 rounded-full border" style={{ background: colorSwatch(val), borderColor: "#D1D5DB" }} />
+                              {val}
+                            </button>
+                          ) : (
+                            <button key={val} type="button" onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
+                              className="rounded-xl border px-4 py-2 text-sm font-bold transition"
+                              style={{ borderColor: active ? RED : "#E5E7EB", background: active ? "#FFF0EB" : "white", color: active ? RED : "#374151", boxShadow: active ? `0 0 0 1px ${RED}` : "none" }}>
+                              {val}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Legacy size/color selectors for products without the new attribute system */}
+            {!product.hasVariants && sizeOptions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-bold" style={{ color: "#111827" }}>Tamanho</p>
@@ -415,7 +517,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {colorOptions.length > 0 && (
+            {!product.hasVariants && colorOptions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-bold" style={{ color: "#111827" }}>Cor</p>
@@ -503,15 +605,17 @@ export default function ProductDetailPage() {
 
         {/* ── Tabs ── */}
         <section className="rounded-3xl border bg-white shadow-sm" style={{ borderColor: "#F0F0F0" }}>
-          <div className="flex gap-1 border-b p-2" style={{ borderColor: "#F0F0F0" }}>
+          <div className="flex gap-1 border-b p-2 overflow-x-auto" style={{ borderColor: "#F0F0F0" }}>
             {([
               { key: "description", label: "Descrição" },
-              { key: "specs", label: "Especificações", count: specs.length },
+              { key: "specs", label: "Especificações", count: specs.length + Object.keys(product.specifications ?? {}).length },
+              { key: "delivery", label: "Entrega", hidden: !product.deliveryInfo && !product.warrantyInfo && !product.returnPolicy },
+              { key: "guide", label: "Guia de uso", hidden: !product.usageGuide && !(product.packageItems?.length) },
               { key: "reviews", label: "Avaliações", count: totalReviews || undefined },
-            ] as { key: typeof activeTab; label: string; count?: number }[]).map((tab) => {
+            ] as { key: typeof activeTab; label: string; count?: number; hidden?: boolean }[]).filter((t) => !t.hidden).map((tab) => {
               const active = activeTab === tab.key;
               return (
-                <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={{ background: active ? RED : "transparent", color: active ? "white" : "#6B7280" }}>
+                <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className="flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={{ background: active ? RED : "transparent", color: active ? "white" : "#6B7280" }}>
                   {tab.label}
                   {tab.count != null && tab.count > 0 && (
                     <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black leading-none" style={{ background: active ? "rgba(255,255,255,0.25)" : "#F3F4F6", color: active ? "white" : "#6B7280" }}>
@@ -525,30 +629,87 @@ export default function ProductDetailPage() {
 
           <div className="p-6">
             {activeTab === "description" && (
-              <div className="prose prose-sm max-w-none text-sm leading-7" style={{ color: "#4B5563" }}>
-                {product.description
-                  ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
-                  : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
+              <div className="space-y-4">
+                {product.shortDescription && (
+                  <p className="text-base font-semibold leading-7" style={{ color: "#111827" }}>{product.shortDescription}</p>
+                )}
+                <div className="prose prose-sm max-w-none text-sm leading-7" style={{ color: "#4B5563" }}>
+                  {product.description
+                    ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
+                    : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
+                </div>
+                {product.packageItems && product.packageItems.length > 0 && (
+                  <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: "#374151" }}>Conteudo da caixa</p>
+                    <ul className="space-y-1">
+                      {product.packageItems.map((item, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#4B5563" }}>
+                          <span style={{ color: GREEN }}>✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
-            {activeTab === "specs" && (
-              specs.length > 0
-                ? (
-                  <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "#F0F0F0" }}>
-                    <table className="w-full border-collapse text-sm">
-                      <tbody>
-                        {specs.map(([label, value], i) => (
-                          <tr key={label} style={{ background: i % 2 === 0 ? "#FAFAFA" : "white" }}>
-                            <td className="border-b px-5 py-3.5 font-semibold" style={{ borderColor: "#F0F0F0", color: "#374151", width: "35%" }}>{label}</td>
-                            <td className="border-b px-5 py-3.5" style={{ borderColor: "#F0F0F0", color: "#6B7280" }}>{value}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {activeTab === "specs" && (() => {
+              const allSpecs = [...specs];
+              if (product.specifications) {
+                for (const [k, v] of Object.entries(product.specifications)) {
+                  if (!allSpecs.find(([label]) => label === k)) {
+                    allSpecs.push([k, v]);
+                  }
+                }
+              }
+              return allSpecs.length > 0 ? (
+                <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "#F0F0F0" }}>
+                  <table className="w-full border-collapse text-sm">
+                    <tbody>
+                      {allSpecs.map(([label, value], i) => (
+                        <tr key={label} style={{ background: i % 2 === 0 ? "#FAFAFA" : "white" }}>
+                          <td className="border-b px-5 py-3.5 font-semibold" style={{ borderColor: "#F0F0F0", color: "#374151", width: "35%" }}>{label}</td>
+                          <td className="border-b px-5 py-3.5" style={{ borderColor: "#F0F0F0", color: "#6B7280" }}>{value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="italic text-sm" style={{ color: "#9CA3AF" }}>Sem especificações disponíveis.</p>;
+            })()}
+
+            {activeTab === "delivery" && (
+              <div className="space-y-6">
+                {product.deliveryInfo && (
+                  <RichSection title="Entrega" icon="🚚" content={product.deliveryInfo} />
+                )}
+                {product.warrantyInfo && (
+                  <RichSection title="Garantia" icon="🛡️" content={product.warrantyInfo} />
+                )}
+                {product.returnPolicy && (
+                  <RichSection title="Política de devolução" icon="↩️" content={product.returnPolicy} />
+                )}
+              </div>
+            )}
+
+            {activeTab === "guide" && (
+              <div className="space-y-6">
+                {product.usageGuide && (
+                  <RichSection title="Guia de uso e cuidados" icon="📖" content={product.usageGuide} />
+                )}
+                {product.packageItems && product.packageItems.length > 0 && (
+                  <div>
+                    <p className="mb-3 text-sm font-bold" style={{ color: "#111827" }}>📦 Conteudo da caixa</p>
+                    <ul className="space-y-1.5">
+                      {product.packageItems.map((item, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#4B5563" }}>
+                          <span style={{ color: GREEN }}>✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                )
-                : <p className="italic text-sm" style={{ color: "#9CA3AF" }}>Sem especificações disponíveis.</p>
+                )}
+              </div>
             )}
 
             {activeTab === "reviews" && (
