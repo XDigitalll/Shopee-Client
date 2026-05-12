@@ -92,7 +92,8 @@ export default function OrderQuotePage() {
   const inputClass = "w-full rounded-2xl border px-4 py-3 text-sm outline-none";
   const orderStatus = order?.status ?? "";
   const isPayOnDelivery = Boolean(order?.payOnDelivery) && order?.deliveryMethod === "DELIVERY";
-  const showPaymentSection = orderStatus === "PENDING_PAYMENT" || (orderStatus === "PAID" && !isPayOnDelivery);
+  const showPaymentSection = ["PENDING_PAYMENT", "PAYMENT_REJECTED", "PAYMENT_SUBMITTED", "PAYMENT_UNDER_REVIEW"].includes(orderStatus)
+    || (orderStatus === "PAID" && !isPayOnDelivery);
   const q = order?.quote;
   const finalAmount = orderVisibleTotal(order);
   const needsAccountVerification =
@@ -313,34 +314,17 @@ export default function OrderQuotePage() {
               <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ background: "#F0FDF4", borderColor: "#86EFAC", color: "#166534" }}>
                 O teu pagamento ja foi submetido e confirmado para este pedido.
               </div>
+            ) : orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW" ? (
+              <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ background: "#EFF6FF", borderColor: "#BFDBFE", color: "#1D4ED8" }}>
+                O pagamento ja foi submetido e esta a aguardar validacao financeira.
+              </div>
             ) : (
-              <form onSubmit={handlePaymentSubmit} className="mt-5 grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Metodo</label>
-                  <select value={method} onChange={(event) => setMethod(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
-                    {paymentMethods.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Nome do pagador</label>
-                  <input value={payerName} onChange={(event) => setPayerName(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Numero usado</label>
-                  <input value={payerPhone} onChange={(event) => setPayerPhone(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} placeholder="+258849614486" />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Referencia da transaccao</label>
-                  <input value={transactionId} onChange={(event) => setTransactionId(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="mb-2 block text-sm font-semibold">Notas</label>
-                  <textarea value={notes} onChange={(event) => setNotes(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC", minHeight: 110 }} />
-                </div>
-                <button type="submit" disabled={isBusy} className="md:col-span-2 rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: isBusy ? "#FDB8A7" : RED }}>
-                  {isBusy ? "A enviar..." : "Enviar comprovativo"}
-                </button>
-              </form>
+              <div className="mt-5 rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFF8F5", color: "#6B7280" }}>
+                <p>Para submeter o pagamento com comprovativo e validacao por metodo, abre a pagina segura de pagamento.</p>
+                <Link href={`/orders/${orderId}/payment`} className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: RED }}>
+                  {orderStatus === "PAYMENT_REJECTED" ? "Reenviar pagamento" : "Submeter pagamento"}
+                </Link>
+              </div>
             )}
           </section>
         ) : isPayOnDelivery ? (
