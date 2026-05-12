@@ -13,6 +13,8 @@ export type Product = {
   id: number;
   name: string;
   description?: string;
+  shortDescription?: string;
+  slug?: string;
   originalPrice?: number;
   finalPrice?: number;
   rating?: number;
@@ -35,6 +37,14 @@ export type Product = {
   primaryImageUrl?: string;
   primaryThumbnailUrl?: string;
   variants?: ProductVariant[];
+  hasVariants?: boolean;
+  variantAttributeKeys?: string[];
+  specifications?: Record<string, string>;
+  packageItems?: string[];
+  deliveryInfo?: string;
+  warrantyInfo?: string;
+  returnPolicy?: string;
+  usageGuide?: string;
 };
 
 export type ProductVariant = {
@@ -44,7 +54,15 @@ export type ProductVariant = {
   size?: string;
   externalPrice?: number;
   finalPrice?: number;
+  promotionalPrice?: number;
+  effectivePrice?: number;
   stock?: number;
+  active?: boolean;
+  mainImageUrl?: string;
+  displayOrder?: number;
+  attributes?: Record<string, string>;
+  label?: string;
+  inStock?: boolean;
 };
 
 export type ProductReview = {

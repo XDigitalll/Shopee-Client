@@ -355,12 +355,12 @@ export default function StorePage() {
       <div className="rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED }}>CatÃ¡logo</p>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED }}>Catálogo</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
               Loja XDigital
             </h1>
             <p className="mt-1 text-sm" style={{ color: "#9CA3AF" }}>
-              {categories.length} categorias Â· {visibleProducts.length} produtos nesta pÃ¡gina
+              {categories.length} categorias · {visibleProducts.length} produtos nesta página
             </p>
           </div>
           <div className="w-full max-w-sm">
@@ -427,7 +427,7 @@ export default function StorePage() {
           <div className="rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-20 text-center" style={{ borderColor: "#E9ECEF" }}>
             <PackageIcon />
             <p className="mt-4 text-sm font-medium" style={{ color: "#9CA3AF" }}>
-              Nenhum produto disponÃ­vel com esse filtro.
+              Nenhum produto disponível com esse filtro.
             </p>
           </div>
         </div>
@@ -459,7 +459,7 @@ export default function StorePage() {
         </div>
       )}
 
-      {/* PaginaÃ§Ã£o */}
+      {/* Paginação */}
       <div className="flex items-center justify-between pt-2">
         <button
           type="button"

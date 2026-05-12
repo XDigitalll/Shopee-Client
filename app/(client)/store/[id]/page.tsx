@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
@@ -73,6 +73,150 @@ function buildSpecs(product?: Product) {
   ].filter(([, v]) => Boolean(v)) as [string, string][];
 }
 
+function RichSection({ title, icon, content }: { title: string; icon: string; content: string }) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-bold" style={{ color: "#111827" }}>{icon} {title}</p>
+      <div className="rounded-2xl border p-4 text-sm leading-7" style={{ borderColor: "#F0F0F0", background: "#FAFAFA", color: "#4B5563" }}>
+        {content.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Visual variant helpers ─────────────────────────────── */
+const VISUAL_ATTR_NORMALIZED = new Set([
+  "cor", "color", "modelo", "estampa", "design", "lente", "armacao", "material",
+  "tonalidade", "acabamento", "padrao",
+]);
+
+function normalizeKey(key: string): string {
+  return key.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function isVisualAttr(key: string): boolean {
+  const norm = normalizeKey(key);
+  // exact match OR the key contains a visual term (handles "Cor da lente", "Cor da armação")
+  return [...VISUAL_ATTR_NORMALIZED].some((term) => norm === term || norm.includes(term));
+}
+
+type StockStatus = "available" | "limited" | "unavailable";
+
+function getAttrValueStock(
+  variants: NonNullable<Product["variants"]>,
+  attrKey: string,
+  attrValue: string,
+  madeToOrder: boolean | undefined,
+  currentSelections: Record<string, string>
+): StockStatus {
+  if (madeToOrder) return "available";
+  const compatible = variants.filter((v) => {
+    if (!v.active) return false;
+    const attrs = v.attributes ?? {};
+    if (attrs[attrKey] !== attrValue) return false;
+    for (const [k, val] of Object.entries(currentSelections)) {
+      if (k === attrKey) continue;
+      if (attrs[k] !== undefined && attrs[k] !== val) return false;
+    }
+    return true;
+  });
+  if (compatible.length === 0) return "unavailable";
+  const totalStock = compatible.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+  if (totalStock <= 0) return "unavailable";
+  if (totalStock <= 5) return "limited";
+  return "available";
+}
+
+const VariantThumb = memo(function VariantThumb({
+  value, imageUrl, fallbackUrl, stockStatus, isActive, onClick,
+}: {
+  value: string; imageUrl?: string | null; fallbackUrl?: string | null; stockStatus: StockStatus; isActive: boolean; onClick: () => void;
+}) {
+  const resolvedImage = imageUrl ?? fallbackUrl;
+  const isUnavailable = stockStatus === "unavailable";
+  const isLimited = stockStatus === "limited";
+  return (
+    <button
+      type="button"
+      onClick={isUnavailable ? undefined : onClick}
+      disabled={isUnavailable}
+      title={isUnavailable ? `${value} — sem stock` : isLimited ? `${value} — poucas unidades` : value}
+      className="relative flex-none flex flex-col items-center gap-1.5 transition-opacity"
+      style={{ opacity: isUnavailable ? 0.4 : 1, cursor: isUnavailable ? "not-allowed" : "pointer" }}
+    >
+      <div
+        className="relative overflow-hidden rounded-xl border-2 transition-all duration-200"
+        style={{
+          width: 80, height: 80,
+          borderColor: isActive ? RED : "#E5E7EB",
+          boxShadow: isActive ? `0 0 0 2px ${RED}` : "none",
+          transform: isActive ? "scale(1.06)" : "scale(1)",
+        }}
+      >
+        {resolvedImage
+          ? <img src={resolvedImage} alt={value} loading="lazy" className="h-full w-full object-cover" />
+          : <div className="h-full w-full" style={{ background: colorSwatch(value) }} />}
+        {isUnavailable && (
+          <div
+            className="absolute inset-0"
+            style={{ background: "repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.55) 4px,rgba(255,255,255,0.55) 6px)" }}
+          />
+        )}
+        {isActive && (
+          <div className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5 5 4 7.5 8.5 2.5" stroke={RED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+        )}
+        {isLimited && (
+          <div className="absolute left-1 top-1 h-2.5 w-2.5 rounded-full border-2 border-white" style={{ background: "#F97316" }} />
+        )}
+      </div>
+      <span
+        className="max-w-[80px] truncate text-center text-[10px] font-semibold leading-none"
+        style={{ color: isActive ? RED : isUnavailable ? "#9CA3AF" : "#4B5563" }}
+      >
+        {value}
+      </span>
+    </button>
+  );
+});
+
+const VariantPill = memo(function VariantPill({
+  value, stockStatus, isActive, onClick,
+}: {
+  value: string; stockStatus: StockStatus; isActive: boolean; onClick: () => void;
+}) {
+  const isUnavailable = stockStatus === "unavailable";
+  const isLimited = stockStatus === "limited";
+  return (
+    <button
+      type="button"
+      onClick={isUnavailable ? undefined : onClick}
+      disabled={isUnavailable}
+      className="relative rounded-xl border px-4 py-2 text-sm font-bold transition-all"
+      style={{
+        borderColor: isActive ? RED : "#E5E7EB",
+        background: isActive ? "#FFF0EB" : isUnavailable ? "#F9FAFB" : "white",
+        color: isActive ? RED : isUnavailable ? "#9CA3AF" : "#374151",
+        boxShadow: isActive ? `0 0 0 1px ${RED}` : "none",
+        cursor: isUnavailable ? "not-allowed" : "pointer",
+        textDecoration: isUnavailable ? "line-through" : "none",
+        opacity: isUnavailable ? 0.55 : 1,
+      }}
+    >
+      {value}
+      {isLimited && (
+        <span
+          className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white"
+          style={{ background: "#F97316" }}
+        />
+      )}
+    </button>
+  );
+});
+
+/* ─────────────────────────────────────────────────────────── */
+
 function StarRow({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -97,9 +241,10 @@ export default function ProductDetailPage() {
   const [reviewSummary, setReviewSummary] = useState({ averageRating: 0, reviewCount: 0 });
   const [related, setRelated] = useState<Product[]>([]);
   const [activeImage, setActiveImage] = useState("");
-  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews" | "delivery" | "guide">("description");
   const [selectedSize, setSelectedSize] = useState("");
   const [selectedColor, setSelectedColor] = useState("");
+  const [selectedAttrValues, setSelectedAttrValues] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
   const [pageError, setPageError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
@@ -107,6 +252,7 @@ export default function ProductDetailPage() {
   const [busyAction, setBusyAction] = useState<"add" | "buy" | null>(null);
   const [wishlist, setWishlist] = useState(false);
   const [lightbox, setLightbox] = useState(false);
+  const [imgFading, setImgFading] = useState(false);
 
   useEffect(() => {
     const loadPage = async () => {
@@ -118,10 +264,21 @@ export default function ProductDetailPage() {
         setProduct(data);
         const imgs = resolveImages(data);
         setActiveImage(imgs[0] || "");
-        const sizes = Array.from(new Set((data.variants || []).map((v) => v.size).filter(Boolean) as string[]));
-        const colors = Array.from(new Set((data.variants || []).map((v) => v.color).filter(Boolean) as string[]));
+        const activeVariants = (data.variants || []).filter((v) => v.active !== false);
+        const sizes = Array.from(new Set(activeVariants.map((v) => v.size).filter(Boolean) as string[]));
+        const colors = Array.from(new Set(activeVariants.map((v) => v.color).filter(Boolean) as string[]));
         setSelectedSize(sizes[0] || "");
         setSelectedColor(colors[0] || "");
+
+        // Pre-select first option for each attribute key
+        if (data.hasVariants && data.variantAttributeKeys?.length) {
+          const defaults: Record<string, string> = {};
+          for (const key of data.variantAttributeKeys) {
+            const firstVal = activeVariants.map((v) => v.attributes?.[key]).find(Boolean);
+            if (firstVal) defaults[key] = firstVal;
+          }
+          setSelectedAttrValues(defaults);
+        }
 
         const [revPayload] = await Promise.allSettled([
           apiFetch<ProductReviewSummary>(`products/${productId}/reviews`, token ? { token } : {}),
@@ -148,23 +305,82 @@ export default function ProductDetailPage() {
     void loadPage();
   }, [productId, token]);
 
-  const images = useMemo(() => resolveImages(product ?? undefined), [product]);
   const selectedVariant = useMemo(() => {
-    const variants = product?.variants || [];
-    return variants.find((v) => {
+    const variants = (product?.variants || []).filter((v) => v.active !== false);
+    if (!variants.length) return undefined;
+
+    // New attribute-based selection
+    if (product?.hasVariants && Object.keys(selectedAttrValues).length > 0) {
+      const match = variants.find((v) => {
+        const attrs = v.attributes ?? {};
+        return Object.entries(selectedAttrValues).every(([key, val]) => attrs[key] === val);
+      });
+      return match ?? variants[0];
+    }
+
+    // Legacy color/size fallback
+    const match = variants.find((v) => {
       const sOk = selectedSize ? v.size === selectedSize : true;
       const cOk = selectedColor ? v.color === selectedColor : true;
       return sOk && cOk;
-    }) ?? variants[0];
-  }, [product, selectedColor, selectedSize]);
+    });
+    return match ?? variants[0];
+  }, [product, selectedColor, selectedSize, selectedAttrValues]);
 
-  const price = Number(selectedVariant?.finalPrice || product?.finalPrice || 0);
+  const images = useMemo(() => {
+    const base = resolveImages(product ?? undefined);
+    if (selectedVariant?.mainImageUrl && !base.includes(selectedVariant.mainImageUrl)) {
+      return [selectedVariant.mainImageUrl, ...base];
+    }
+    return base;
+  }, [product, selectedVariant]);
+
+  // Switch main image when variant changes
+  useEffect(() => {
+    if (selectedVariant?.mainImageUrl) {
+      setActiveImage(selectedVariant.mainImageUrl);
+    } else if (images.length > 0) {
+      setActiveImage(images[0]);
+    }
+  }, [selectedVariant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fade-in on image change
+  useEffect(() => {
+    setImgFading(true);
+    const t = setTimeout(() => setImgFading(false), 30);
+    return () => clearTimeout(t);
+  }, [activeImage]);
+
+  const price = Number(selectedVariant?.effectivePrice ?? selectedVariant?.finalPrice ?? product?.finalPrice ?? 0);
   const originalPrice = Number(product?.originalPrice || 0);
   const discountPct = originalPrice > price && price > 0 ? Math.round((1 - price / originalPrice) * 100) : 0;
   const stock = typeof selectedVariant?.stock === "number" ? selectedVariant.stock : product?.stock;
-  const canAdd = product?.madeToOrder || typeof stock !== "number" || stock > 0;
+  const variantRequired = product?.hasVariants && !selectedVariant;
+  const canAdd = !variantRequired && (product?.madeToOrder || typeof stock !== "number" || stock > 0);
   const sizeOptions = Array.from(new Set((product?.variants || []).map((v) => v.size).filter(Boolean) as string[]));
   const colorOptions = Array.from(new Set((product?.variants || []).map((v) => v.color).filter(Boolean) as string[]));
+
+  // Smart attribute split: selector (>1 unique value) vs characteristic (exactly 1 value)
+  const attrValueCounts = useMemo(() => {
+    const active = (product?.variants || []).filter((v) => v.active !== false);
+    const counts: Record<string, Set<string>> = {};
+    for (const v of active) {
+      for (const [k, val] of Object.entries(v.attributes ?? {})) {
+        if (!counts[k]) counts[k] = new Set();
+        counts[k].add(val);
+      }
+    }
+    return counts;
+  }, [product]);
+
+  const selectorKeys = (product?.variantAttributeKeys ?? []).filter((k) => (attrValueCounts[k]?.size ?? 0) > 1);
+  const characteristicKeys = (product?.variantAttributeKeys ?? []).filter((k) => (attrValueCounts[k]?.size ?? 0) === 1);
+
+  // Fallback image for variant thumbs that have no individual mainImageUrl
+  const productFallbackImage = useMemo(
+    () => product?.primaryImageUrl ?? product?.gallery?.[0]?.originalUrl ?? null,
+    [product]
+  );
   const specs = buildSpecs(product ?? undefined);
   const avgRating = reviewSummary.averageRating;
   const totalReviews = reviewSummary.reviewCount;
@@ -187,7 +403,11 @@ export default function ProductDetailPage() {
       await apiFetch("cart/add", {
         method: "POST",
         token,
-        body: JSON.stringify({ productId: targetId, quantity: qty, variant: variantVal ?? selectedVariant?.id ?? `${selectedColor || ""}-${selectedSize || ""}` }),
+        body: JSON.stringify({
+          productId: targetId,
+          quantity: qty,
+          variantId: variantVal ?? selectedVariant?.id ?? undefined,
+        }),
       });
       if (mode === "buy") {
         router.push("/cart");
@@ -301,7 +521,7 @@ export default function ProductDetailPage() {
               </div>
               <div className="flex aspect-[4/3] items-center justify-center bg-[#FAFAFA] p-6 lg:aspect-square">
                 {activeImage
-                  ? <img src={activeImage} alt={product.name} className="h-full w-full object-contain transition duration-300" />
+                  ? <img src={activeImage} alt={product.name} className="h-full w-full object-contain" style={{ opacity: imgFading ? 0 : 1, transition: "opacity 0.22s ease" }} />
                   : <PackageIcon />}
               </div>
               {images.length > 1 && (
@@ -395,8 +615,109 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Variants */}
-            {sizeOptions.length > 0 && (
+            {/* Dynamic attribute-based variant selectors (only multi-value keys) */}
+            {product.hasVariants && selectorKeys.length > 0 && (
+              <div className="space-y-5">
+                {selectorKeys.map((attrKey) => {
+                  const activeVariants = (product.variants || []).filter((v) => v.active !== false);
+                  const values = Array.from(new Set(
+                    activeVariants.map((v) => v.attributes?.[attrKey]).filter(Boolean) as string[]
+                  ));
+                  if (values.length === 0) return null;
+                  const selected = selectedAttrValues[attrKey];
+                  const visual = isVisualAttr(attrKey);
+                  return (
+                    <div key={attrKey}>
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-sm font-bold" style={{ color: "#111827" }}>{attrKey}</p>
+                        {selected && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FFF0EB", color: RED }}>{selected}</span>}
+                      </div>
+                      {visual ? (
+                        <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
+                          {values.map((val) => {
+                            const variantForVal = activeVariants.find((v) => v.attributes?.[attrKey] === val);
+                            const stockStatus = getAttrValueStock(activeVariants, attrKey, val, product.madeToOrder, selectedAttrValues);
+                            return (
+                              <VariantThumb
+                                key={val}
+                                value={val}
+                                imageUrl={variantForVal?.mainImageUrl}
+                                fallbackUrl={productFallbackImage}
+                                stockStatus={stockStatus}
+                                isActive={selected === val}
+                                onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {values.map((val) => {
+                            const stockStatus = getAttrValueStock(activeVariants, attrKey, val, product.madeToOrder, selectedAttrValues);
+                            return (
+                              <VariantPill
+                                key={val}
+                                value={val}
+                                stockStatus={stockStatus}
+                                isActive={selected === val}
+                                onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Fixed characteristics — single-value attrs shown as info, not selectors */}
+            {product.hasVariants && characteristicKeys.length > 0 && (
+              <div className="rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+                <p className="mb-3 text-xs font-bold uppercase tracking-widest" style={{ color: "#374151" }}>Características incluídas</p>
+                <div className="flex flex-col gap-2">
+                  {characteristicKeys.map((k) => {
+                    const val = selectedVariant?.attributes?.[k] ?? [...(attrValueCounts[k] ?? new Set())][0];
+                    return val ? (
+                      <div key={k} className="flex items-center justify-between text-sm">
+                        <span style={{ color: "#6B7280" }}>{k}</span>
+                        <span className="font-semibold" style={{ color: "#374151" }}>{val}</span>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Selected variant summary */}
+            {product.hasVariants && selectedVariant && (
+              <div className="rounded-2xl border p-4" style={{ borderColor: "#E8431A22", background: "#FFF8F7" }}>
+                <p className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: "#374151" }}>Selecionado</p>
+                {Object.keys(selectedVariant.attributes ?? {}).length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-1.5">
+                    {Object.entries(selectedVariant.attributes ?? {}).map(([k, v]) => (
+                      <span key={k} className="rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ background: "#F3F4F6", color: "#374151" }}>
+                        {k}: <span style={{ color: RED }}>{v}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  {selectedVariant.sku && (
+                    <span className="font-mono" style={{ color: "#6B7280" }}>SKU: {selectedVariant.sku}</span>
+                  )}
+                  <span className="font-semibold" style={{ color: typeof stock === "number" && stock <= 5 && stock > 0 ? "#DC2626" : "#16A34A" }}>
+                    {typeof stock === "number"
+                      ? stock === 0 ? "Sem stock" : stock <= 5 ? `Apenas ${stock} restante${stock > 1 ? "s" : ""}` : `${stock} disponíveis`
+                      : product.madeToOrder ? "Por encomenda" : "Disponível"}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Legacy size/color selectors for products without the new attribute system */}
+            {!product.hasVariants && sizeOptions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-bold" style={{ color: "#111827" }}>Tamanho</p>
@@ -415,7 +736,7 @@ export default function ProductDetailPage() {
               </div>
             )}
 
-            {colorOptions.length > 0 && (
+            {!product.hasVariants && colorOptions.length > 0 && (
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <p className="text-sm font-bold" style={{ color: "#111827" }}>Cor</p>
@@ -503,15 +824,17 @@ export default function ProductDetailPage() {
 
         {/* ── Tabs ── */}
         <section className="rounded-3xl border bg-white shadow-sm" style={{ borderColor: "#F0F0F0" }}>
-          <div className="flex gap-1 border-b p-2" style={{ borderColor: "#F0F0F0" }}>
+          <div className="flex gap-1 border-b p-2 overflow-x-auto" style={{ borderColor: "#F0F0F0" }}>
             {([
               { key: "description", label: "Descrição" },
-              { key: "specs", label: "Especificações", count: specs.length },
+              { key: "specs", label: "Especificações", count: specs.length + Object.keys(product.specifications ?? {}).length },
+              { key: "delivery", label: "Entrega", hidden: !product.deliveryInfo && !product.warrantyInfo && !product.returnPolicy },
+              { key: "guide", label: "Guia de uso", hidden: !product.usageGuide && !(product.packageItems?.length) },
               { key: "reviews", label: "Avaliações", count: totalReviews || undefined },
-            ] as { key: typeof activeTab; label: string; count?: number }[]).map((tab) => {
+            ] as { key: typeof activeTab; label: string; count?: number; hidden?: boolean }[]).filter((t) => !t.hidden).map((tab) => {
               const active = activeTab === tab.key;
               return (
-                <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className="flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={{ background: active ? RED : "transparent", color: active ? "white" : "#6B7280" }}>
+                <button key={tab.key} type="button" onClick={() => setActiveTab(tab.key)} className="flex shrink-0 items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-bold transition" style={{ background: active ? RED : "transparent", color: active ? "white" : "#6B7280" }}>
                   {tab.label}
                   {tab.count != null && tab.count > 0 && (
                     <span className="rounded-full px-1.5 py-0.5 text-[10px] font-black leading-none" style={{ background: active ? "rgba(255,255,255,0.25)" : "#F3F4F6", color: active ? "white" : "#6B7280" }}>
@@ -525,30 +848,87 @@ export default function ProductDetailPage() {
 
           <div className="p-6">
             {activeTab === "description" && (
-              <div className="prose prose-sm max-w-none text-sm leading-7" style={{ color: "#4B5563" }}>
-                {product.description
-                  ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
-                  : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
+              <div className="space-y-4">
+                {product.shortDescription && (
+                  <p className="text-base font-semibold leading-7" style={{ color: "#111827" }}>{product.shortDescription}</p>
+                )}
+                <div className="prose prose-sm max-w-none text-sm leading-7" style={{ color: "#4B5563" }}>
+                  {product.description
+                    ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
+                    : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
+                </div>
+                {product.packageItems && product.packageItems.length > 0 && (
+                  <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+                    <p className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: "#374151" }}>Conteudo da caixa</p>
+                    <ul className="space-y-1">
+                      {product.packageItems.map((item, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#4B5563" }}>
+                          <span style={{ color: GREEN }}>✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
-            {activeTab === "specs" && (
-              specs.length > 0
-                ? (
-                  <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "#F0F0F0" }}>
-                    <table className="w-full border-collapse text-sm">
-                      <tbody>
-                        {specs.map(([label, value], i) => (
-                          <tr key={label} style={{ background: i % 2 === 0 ? "#FAFAFA" : "white" }}>
-                            <td className="border-b px-5 py-3.5 font-semibold" style={{ borderColor: "#F0F0F0", color: "#374151", width: "35%" }}>{label}</td>
-                            <td className="border-b px-5 py-3.5" style={{ borderColor: "#F0F0F0", color: "#6B7280" }}>{value}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+            {activeTab === "specs" && (() => {
+              const allSpecs = [...specs];
+              if (product.specifications) {
+                for (const [k, v] of Object.entries(product.specifications)) {
+                  if (!allSpecs.find(([label]) => label === k)) {
+                    allSpecs.push([k, v]);
+                  }
+                }
+              }
+              return allSpecs.length > 0 ? (
+                <div className="overflow-hidden rounded-2xl border" style={{ borderColor: "#F0F0F0" }}>
+                  <table className="w-full border-collapse text-sm">
+                    <tbody>
+                      {allSpecs.map(([label, value], i) => (
+                        <tr key={label} style={{ background: i % 2 === 0 ? "#FAFAFA" : "white" }}>
+                          <td className="border-b px-5 py-3.5 font-semibold" style={{ borderColor: "#F0F0F0", color: "#374151", width: "35%" }}>{label}</td>
+                          <td className="border-b px-5 py-3.5" style={{ borderColor: "#F0F0F0", color: "#6B7280" }}>{value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="italic text-sm" style={{ color: "#9CA3AF" }}>Sem especificações disponíveis.</p>;
+            })()}
+
+            {activeTab === "delivery" && (
+              <div className="space-y-6">
+                {product.deliveryInfo && (
+                  <RichSection title="Entrega" icon="🚚" content={product.deliveryInfo} />
+                )}
+                {product.warrantyInfo && (
+                  <RichSection title="Garantia" icon="🛡️" content={product.warrantyInfo} />
+                )}
+                {product.returnPolicy && (
+                  <RichSection title="Política de devolução" icon="↩️" content={product.returnPolicy} />
+                )}
+              </div>
+            )}
+
+            {activeTab === "guide" && (
+              <div className="space-y-6">
+                {product.usageGuide && (
+                  <RichSection title="Guia de uso e cuidados" icon="📖" content={product.usageGuide} />
+                )}
+                {product.packageItems && product.packageItems.length > 0 && (
+                  <div>
+                    <p className="mb-3 text-sm font-bold" style={{ color: "#111827" }}>📦 Conteudo da caixa</p>
+                    <ul className="space-y-1.5">
+                      {product.packageItems.map((item, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm" style={{ color: "#4B5563" }}>
+                          <span style={{ color: GREEN }}>✓</span> {item}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                )
-                : <p className="italic text-sm" style={{ color: "#9CA3AF" }}>Sem especificações disponíveis.</p>
+                )}
+              </div>
             )}
 
             {activeTab === "reviews" && (

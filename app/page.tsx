@@ -181,7 +181,7 @@ function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+              placeholder="••••••••"
               autoComplete="current-password"
               className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition-all"
               style={{ borderColor: "#E9ECEF", background: "#FAFAFA", color: DARK }}
@@ -274,6 +274,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
 
   const banner = banners[current] ?? null;
   const hasBanners = loaded && count > 0;
+  const isLoadingBanners = !loaded;
 
   return (
     <section
@@ -317,7 +318,11 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
         <>
           <div
             className="absolute inset-0"
-            style={{ background: `linear-gradient(150deg, ${RED} 0%, #9B2009 55%, ${BLUE_DARK} 100%)` }}
+            style={{
+              background: isLoadingBanners
+                ? `linear-gradient(150deg, ${RED} 0%, #9B2009 55%, ${BLUE_DARK} 100%)`
+                : `linear-gradient(150deg, ${DARK} 0%, #332019 55%, ${BLUE_DARK} 100%)`,
+            }}
           />
           <div
             className="absolute inset-0 pointer-events-none opacity-[0.06]"
@@ -336,27 +341,49 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-xs font-bold"
             style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
           >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-            Plataforma lider de importacao em Mocambique
+            {isLoadingBanners ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white/70" />
+                A carregar destaques
+              </>
+            ) : hasBanners ? (
+              <>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+                Plataforma lider de importacao em Mocambique
+              </>
+            ) : (
+              <>
+                <span className="h-2 w-2 rounded-full bg-white/60" />
+                Destaques indisponiveis
+              </>
+            )}
           </div>
 
           <h1
             className="text-4xl font-black leading-[1.1] sm:text-5xl lg:text-6xl"
             style={{ fontFamily: "'Sora',sans-serif", textShadow: "0 2px 32px rgba(0,0,0,0.5)" }}
           >
-            {hasBanners && banner ? (
+            {isLoadingBanners ? (
+              <span className="block space-y-3" aria-label="A carregar destaque principal">
+                <span className="block h-12 w-[min(100%,34rem)] animate-pulse rounded-2xl bg-white/25 sm:h-14 lg:h-16" />
+                <span className="block h-12 w-[min(82%,28rem)] animate-pulse rounded-2xl bg-white/20 sm:h-14 lg:h-16" />
+              </span>
+            ) : hasBanners && banner ? (
               banner.title
             ) : (
-              <>Compra no mundo,{" "}<span style={{ color: "#FFD4C8" }}>recebe em Mocambique.</span></>
+              "Conteudo em actualizacao"
             )}
           </h1>
 
-          {(hasBanners && banner?.subtitle) || !hasBanners ? (
+          {isLoadingBanners ? (
+            <div className="max-w-lg space-y-3" aria-label="A carregar descricao do destaque">
+              <div className="h-4 w-full animate-pulse rounded-full bg-white/20" />
+              <div className="h-4 w-11/12 animate-pulse rounded-full bg-white/20" />
+              <div className="h-4 w-8/12 animate-pulse rounded-full bg-white/15" />
+            </div>
+          ) : hasBanners && banner?.subtitle ? (
             <p className="max-w-lg text-base leading-7 opacity-90" style={{ fontFamily: "'DM Sans',sans-serif" }}>
-              {hasBanners && banner?.subtitle
-                ? banner.subtitle
-                : <>Encomenda na Amazon, Shein, Temu e muito mais â€” nos tratamos da importacao, alfandega e entrega na tua porta. Pagamento em <strong>Meticais</strong>, suporte em <strong>Portugues</strong>.</>
-              }
+              {banner.subtitle}
             </p>
           ) : null}
 
@@ -380,26 +407,12 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             </button>
           </div>
 
-          {!hasBanners && (
-            <div className="flex flex-wrap gap-8 pt-2">
-              {[
-                { value: "2.400+", label: "Clientes satisfeitos" },
-                { value: "98%", label: "Pedidos entregues" },
-                { value: "4.9 â˜…", label: "Avaliacao media" },
-              ].map((s) => (
-                <div key={s.label}>
-                  <p className="text-2xl font-black" style={{ fontFamily: "'Sora',sans-serif" }}>{s.value}</p>
-                  <p className="text-xs opacity-70">{s.label}</p>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Slider controls */}
         {count > 1 && (
           <>
-            {/* Prev / Next arrows â€” visible only on hover */}
+            {/* Prev / Next arrows — visible only on hover */}
             <button
               type="button"
               onClick={() => resetTimer(current - 1)}
@@ -428,7 +441,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
                 pointerEvents: hovered ? "auto" : "none",
                 transition: "opacity 0.3s",
               }}
-              aria-label="PrÃ³ximo"
+              aria-label="Próximo"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
             </button>
@@ -1303,5 +1316,3 @@ export default function Home() {
     </ClientShell>
   );
 }
-
-
