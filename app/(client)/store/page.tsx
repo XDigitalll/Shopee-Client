@@ -167,12 +167,10 @@ function ProductCard({
   product,
   adding,
   onAddToCart,
-  compact = false,
 }: {
   product: Product;
   adding: boolean;
   onAddToCart: (event: React.MouseEvent, productId: number) => void;
-  compact?: boolean;
 }) {
   const img = resolveProductImage(product);
   const canAdd = canAddToCart(product);
@@ -181,7 +179,7 @@ function ProductCard({
   return (
     <Link
       href={`/store/${product.id}`}
-      className="group block rounded-[20px] overflow-hidden border bg-white flex flex-col transition-all duration-200"
+      className="group flex h-full flex-col overflow-hidden rounded-[18px] border bg-white transition-all duration-200"
       style={{
         borderColor: "#F2D4CC",
         boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
@@ -190,12 +188,12 @@ function ProductCard({
       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "0 8px 28px rgba(232,67,26,0.15)"; e.currentTarget.style.borderColor = "#E8431A"; e.currentTarget.style.transform = "translateY(-2px)"; }}
       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.05)"; e.currentTarget.style.borderColor = "#F2D4CC"; e.currentTarget.style.transform = "translateY(0)"; }}
     >
-      <div className="relative overflow-hidden" style={{ height: compact ? 170 : 190, background: "#FFF8F5", flexShrink: 0 }}>
+      <div className="relative aspect-square overflow-hidden" style={{ background: "#FFF8F5", flexShrink: 0 }}>
         {img ? (
           <img
             src={img}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -226,7 +224,7 @@ function ProductCard({
         </div>
       </div>
 
-      <div className="flex flex-col flex-1 p-3 gap-2">
+      <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="text-sm font-bold leading-snug line-clamp-2" style={{ color: "#1A1410", minHeight: "2.5rem" }}>
           {product.name}
         </h3>
@@ -237,8 +235,8 @@ function ProductCard({
               {formatMoney(product.originalPrice)}
             </p>
           )}
-          <p className="text-lg font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>
-            {formatMoney(product.finalPrice)}
+          <p className="text-base font-black sm:text-lg" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>
+            {product.hasVariants ? `A partir de ${formatMoney(product.finalPrice)}` : formatMoney(product.finalPrice)}
           </p>
         </div>
 
@@ -321,10 +319,7 @@ export default function StorePage() {
   const visibleProducts = searchTerm.trim()
     ? products.filter((p) => p.name.toLowerCase().includes(searchTerm.trim().toLowerCase()) || p.category?.name?.toLowerCase().includes(searchTerm.trim().toLowerCase()))
     : products;
-  const productShelves = useMemo(
-    () => buildProductShelves(visibleProducts, searchTerm, activeCategory),
-    [activeCategory, searchTerm, visibleProducts]
-  );
+  const displayedProducts = useMemo(() => sortForMerch(visibleProducts), [visibleProducts]);
 
   const handleAddToCart = async (e: React.MouseEvent, productId: number) => {
     e.preventDefault();
@@ -357,10 +352,10 @@ export default function StorePage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED }}>Catálogo</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
-              Loja XDigital
+              Loja ShopeeX
             </h1>
             <p className="mt-1 text-sm" style={{ color: "#9CA3AF" }}>
-              {categories.length} categorias · {visibleProducts.length} produtos nesta página
+              Produtos prontos para comprar, pagamento local e entrega em Mocambique.
             </p>
           </div>
           <div className="w-full max-w-sm">
@@ -418,7 +413,7 @@ export default function StorePage() {
           />
           <ClientProductGridSkeleton items={8} />
         </div>
-      ) : visibleProducts.length === 0 ? (
+      ) : displayedProducts.length === 0 ? (
         <div className="space-y-4">
           <ClientStateCard
             title="Nada encontrado"
@@ -432,30 +427,30 @@ export default function StorePage() {
           </div>
         </div>
       ) : (
-        <div className="space-y-7">
-          {productShelves.map((shelf) => (
-            <section key={shelf.id} className="rounded-[28px] border bg-white p-4 shadow-sm sm:p-5" style={{ borderColor: "#F2D4CC" }}>
-              <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Prateleira</p>
-                  <h2 className="mt-1 text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{shelf.title}</h2>
-                  <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>{shelf.subtitle}</p>
-                </div>
-                <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>{shelf.products.length} produtos</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-                {shelf.products.map((product) => (
-                  <ProductCard
-                    key={`${shelf.id}-${product.id}`}
-                    product={product}
-                    adding={isAddingId === product.id}
-                    onAddToCart={(event, productId) => void handleAddToCart(event, productId)}
-                    compact
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+        <div>
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+                Catálogo
+              </p>
+              <h2 className="mt-1 text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+                {searchTerm.trim() ? "Resultados encontrados" : activeCategory === "all" ? "Todos os produtos" : "Produtos da categoria"}
+              </h2>
+            </div>
+            <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>
+              {displayedProducts.length} produtos
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4">
+            {displayedProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                adding={isAddingId === product.id}
+                onAddToCart={(event, productId) => void handleAddToCart(event, productId)}
+              />
+            ))}
+          </div>
         </div>
       )}
 

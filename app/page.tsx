@@ -279,7 +279,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
   return (
     <section
       className="relative overflow-hidden"
-      style={{ minHeight: "min(640px, 92vh)" }}
+      style={{ minHeight: "clamp(420px, 62vh, 560px)" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -335,8 +335,8 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
       )}
 
       {/* Content */}
-      <div className="relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-20 sm:px-6 lg:py-28" style={{ zIndex: 2, minHeight: "min(640px, 92vh)" }}>
-        <div className="max-w-2xl space-y-7 text-white">
+      <div className="relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 lg:py-20" style={{ zIndex: 2, minHeight: "clamp(420px, 62vh, 560px)" }}>
+        <div className="max-w-2xl space-y-5 text-white">
           <div
             className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-xs font-bold"
             style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
@@ -360,7 +360,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
           </div>
 
           <h1
-            className="text-4xl font-black leading-[1.1] sm:text-5xl lg:text-6xl"
+            className="text-3xl font-black leading-[1.08] sm:text-4xl lg:text-5xl"
             style={{ fontFamily: "'Sora',sans-serif", textShadow: "0 2px 32px rgba(0,0,0,0.5)" }}
           >
             {isLoadingBanners ? (
@@ -371,7 +371,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             ) : hasBanners && banner ? (
               banner.title
             ) : (
-              "Conteudo em actualizacao"
+              "Compra fácil em Moçambique"
             )}
           </h1>
 
@@ -385,7 +385,11 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <p className="max-w-lg text-base leading-7 opacity-90" style={{ fontFamily: "'DM Sans',sans-serif" }}>
               {banner.subtitle}
             </p>
-          ) : null}
+          ) : (
+            <p className="max-w-lg text-base leading-7 opacity-90" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+              Produtos prontos para comprar, pagamento local e compra internacional assistida.
+            </p>
+          )}
 
           <div className="flex flex-wrap gap-3">
             <button
@@ -535,41 +539,43 @@ function HowItWorks() {
   ];
 
   return (
-    <section className="py-16 px-4 sm:px-6" style={{ background: "#F8F9FA" }}>
+    <section className="px-4 py-10 sm:px-6" style={{ background: "#F8F9FA" }}>
       <div className="mx-auto max-w-7xl">
-        <div className="mb-12 text-center">
+        <div className="mb-6 text-center">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em]" style={{ color: RED }}>
             Como funciona
           </p>
-          <h2 className="text-2xl font-black sm:text-3xl" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
+          <h2 className="text-2xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
             Simples, rapido e seguro
           </h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm leading-7" style={{ color: "#6B7280" }}>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-6" style={{ color: "#6B7280" }}>
             Toda a complexidade da importacao fica connosco. Tu so precisas de escolher o que queres.
           </p>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3">
           {steps.map((step) => (
             <div
               key={step.n}
-              className="relative overflow-hidden rounded-3xl p-7"
+              className="relative flex gap-3 overflow-hidden rounded-2xl p-4 sm:block"
               style={{ background: "white", boxShadow: "0 2px 16px rgba(0,0,0,0.06)", border: "1px solid #E9ECEF" }}
             >
               <div
-                className="mb-4 inline-flex items-center justify-center rounded-2xl px-3 py-1"
+                className="mb-0 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl sm:mb-3 sm:h-auto sm:w-auto sm:px-3 sm:py-1"
                 style={{ background: `${step.color}18` }}
               >
-                <span className="text-2xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: step.color }}>
+                <span className="text-lg font-black sm:text-2xl" style={{ fontFamily: "'Sora',sans-serif", color: step.color }}>
                   {step.n}
                 </span>
               </div>
-              <h3 className="mb-2 text-base font-black" style={{ color: DARK, fontFamily: "'Sora',sans-serif" }}>
-                {step.title}
-              </h3>
-              <p className="text-sm leading-6" style={{ color: "#6B7280" }}>
-                {step.desc}
-              </p>
+              <div>
+                <h3 className="mb-1 text-base font-black" style={{ color: DARK, fontFamily: "'Sora',sans-serif" }}>
+                  {step.title}
+                </h3>
+                <p className="text-sm leading-5" style={{ color: "#6B7280" }}>
+                  {step.desc}
+                </p>
+              </div>
               {/* Decorative */}
               <div
                 className="absolute -right-4 -top-4 h-20 w-20 rounded-full opacity-5"
@@ -604,9 +610,9 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
   }
 
   return (
-    <section className="bg-white py-12 px-4 sm:px-6">
+    <section className="bg-white px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex items-end justify-between">
+        <div className="mb-4 flex items-end justify-between">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-[0.2em]" style={{ color: RED }}>
               Categorias
@@ -623,19 +629,15 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
           </Link>
         </div>
 
-        <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
           {/* "All" chip */}
           <Link
             href="/store"
-            className="col-span-0 flex flex-col items-center gap-2 rounded-2xl border-2 p-3 transition-all"
-            style={{ background: RED_PALE, borderColor: RED }}
+            className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-all"
+            style={{ background: RED, borderColor: RED, color: "white" }}
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#1A1410] shadow-sm">
-              <CategoryIcon icon={ALL_CATEGORIES_ICON} className="h-6 w-6" />
-            </span>
-            <span className="text-xs font-semibold" style={{ color: RED }}>
-              Todos
-            </span>
+            <CategoryIcon icon={ALL_CATEGORIES_ICON} className="h-4 w-4" />
+            Todos
           </Link>
 
           {displayed.map((cat) => {
@@ -643,8 +645,8 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
               <Link
                 key={cat.id}
                 href={`/store?categoryId=${cat.id}`}
-                className="flex flex-col items-center gap-2 rounded-2xl border-2 p-3 transition-all"
-                style={{ background: "#F8F9FA", borderColor: "transparent" }}
+                className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-all"
+                style={{ background: "#F8F9FA", borderColor: "#E9ECEF", color: "#374151" }}
                 onMouseEnter={(e) => {
                   (e.currentTarget as HTMLElement).style.background = "#FFF0EB";
                 }}
@@ -652,15 +654,8 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
                   (e.currentTarget as HTMLElement).style.background = "#F8F9FA";
                 }}
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#1A1410] shadow-sm">
-                  <CategoryIcon icon={cat.icon} className="h-6 w-6" />
-                </span>
-                <span
-                  className="text-xs font-semibold text-center leading-tight"
-                  style={{ color: "#374151" }}
-                >
-                  {cat.name}
-                </span>
+                <CategoryIcon icon={cat.icon} className="h-4 w-4" />
+                <span>{cat.name}</span>
               </Link>
             );
           })}
@@ -842,19 +837,19 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
   return (
     <Link
       href={`/store/${product.id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border bg-white transition-all"
+      className="group flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-all"
       style={{ borderColor: "#E9ECEF", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", textDecoration: "none" }}
       onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 8px 28px ${RED}18`)}
       onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)")}
     >
       {/* Image */}
-      <div className="relative overflow-hidden" style={{ height: 180, background: "#F8F9FA" }}>
+      <div className="relative aspect-square overflow-hidden" style={{ background: "#F8F9FA" }}>
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={img}
             alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-107"
+            className="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -874,7 +869,7 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 flex-col gap-2 p-3.5">
+      <div className="flex flex-1 flex-col gap-2 p-3">
         <h3 className="line-clamp-2 text-sm font-bold leading-snug" style={{ color: DARK }}>
           {product.name}
         </h3>
@@ -904,8 +899,8 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
                 {formatMoney(origPrice)}
               </p>
             )}
-            <p className="text-base font-black" style={{ color: RED, fontFamily: "'Sora',sans-serif" }}>
-              {formatMoney(finalPrice)}
+            <p className="text-base font-black sm:text-lg" style={{ color: RED, fontFamily: "'Sora',sans-serif" }}>
+              {product.hasVariants ? `A partir de ${formatMoney(finalPrice)}` : formatMoney(finalPrice)}
             </p>
           </div>
           <span className="text-[11px]" style={{ color: "#9CA3AF" }}>
@@ -990,7 +985,7 @@ function ProductsSection({
   searchQuery, onSearch, onSearchSubmit, searchActive,
 }: ProductsSectionProps) {
   const [feedback, setFeedback] = useState<FeedbackState>(null);
-  const shelves = useMemo(() => buildHomepageShelves(products, searchActive), [products, searchActive]);
+  const displayProducts = useMemo(() => [...products].sort((a, b) => productScore(b) - productScore(a)).slice(0, 12), [products]);
 
   useEffect(() => {
     if (feedback) {
@@ -1009,7 +1004,7 @@ function ProductsSection({
               Catalogo
             </p>
             <h2 className="text-xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
-              Produtos em destaque
+              Mais vendidos e novidades
             </h2>
             <p className="mt-1 text-sm" style={{ color: "#9CA3AF" }}>
               {searchActive && searchQuery
@@ -1088,30 +1083,29 @@ function ProductsSection({
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            {shelves.map((shelf) => (
-              <section key={shelf.id} className="rounded-[28px] border bg-white p-4 shadow-sm sm:p-5" style={{ borderColor: "#F2D4CC" }}>
-                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Prateleira</p>
-                    <h3 className="mt-1 text-xl font-black" style={{ color: DARK, fontFamily: "'Sora', sans-serif" }}>{shelf.title}</h3>
-                    <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>{shelf.subtitle}</p>
-                  </div>
-                  <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>{shelf.products.length} produtos</span>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {shelf.products.slice(0, 8).map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      token={token}
-                      onLoginClick={onLoginClick}
-                      onFeedback={(msg, type) => setFeedback({ msg, type })}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
+          <div>
+            <div className="mb-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+                  Destaques
+                </p>
+                <h3 className="mt-1 text-xl font-black" style={{ color: DARK, fontFamily: "'Sora', sans-serif" }}>
+                  Produtos prontos para comprar
+                </h3>
+              </div>
+              <span className="text-xs font-bold" style={{ color: "#9CA3AF" }}>{displayProducts.length} produtos</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+              {displayProducts.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  token={token}
+                  onLoginClick={onLoginClick}
+                  onFeedback={(msg, type) => setFeedback({ msg, type })}
+                />
+              ))}
+            </div>
           </div>
         )}
 

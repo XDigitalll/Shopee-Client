@@ -19,6 +19,9 @@ function customerStage(status: string) {
     QUOTED: "Em analise",
     APPROVED: "Aguardando pagamento",
     PENDING_PAYMENT: "Aguardando pagamento",
+    PAYMENT_SUBMITTED: "Pagamento submetido",
+    PAYMENT_UNDER_REVIEW: "Pagamento em analise",
+    PAYMENT_REJECTED: "Pagamento recusado",
     PAID: "Confirmado",
     CONFIRMED: "Confirmado",
     ORDERED: "Em processamento",
@@ -43,7 +46,7 @@ function resolveOrderHref(order: Order) {
     return `/orders/${order.id}/quote`;
   }
 
-  if (order.status === "PENDING_PAYMENT" && !order.payOnDelivery) {
+  if ((order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery) {
     return `/orders/${order.id}/payment`;
   }
 

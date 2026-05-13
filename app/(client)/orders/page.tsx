@@ -82,6 +82,9 @@ function customerStage(status: string) {
     QUOTED: "PRICING",
     APPROVED: "AWAITING_PAYMENT",
     PENDING_PAYMENT: "AWAITING_PAYMENT",
+    PAYMENT_SUBMITTED: "AWAITING_PAYMENT",
+    PAYMENT_UNDER_REVIEW: "AWAITING_PAYMENT",
+    PAYMENT_REJECTED: "AWAITING_PAYMENT",
     PAID: "CONFIRMED",
     CONFIRMED: "CONFIRMED",
     ORDERED: "PROCESSING",
@@ -103,6 +106,9 @@ function statusMeta(status: string) {
     RECEIVED: { label: "Recebido", bg: "#FFF7ED", color: "#C2410C" },
     PRICING: { label: "Em analise", bg: "#FEF3C7", color: "#92400E" },
     AWAITING_PAYMENT: { label: "Aguardando pagamento", bg: "#FFF7ED", color: "#9A3412" },
+    PAYMENT_SUBMITTED: { label: "Pagamento submetido", bg: "#EFF6FF", color: "#1D4ED8" },
+    PAYMENT_UNDER_REVIEW: { label: "Pagamento em analise", bg: "#F5F3FF", color: "#5B21B6" },
+    PAYMENT_REJECTED: { label: "Pagamento recusado", bg: "#FEE2E2", color: "#991B1B" },
     CONFIRMED: { label: "Confirmado", bg: "#DCFCE7", color: "#166534" },
     PROCESSING: { label: "Em processamento", bg: "#E0F2FE", color: "#0369A1" },
     INTERNATIONAL_TRANSIT: { label: "Em transito", bg: "#DBEAFE", color: "#1D4ED8" },
@@ -144,6 +150,9 @@ function internalStepIndex(status: string) {
     PENDING: 0,
     APPROVED: 1,
     PENDING_PAYMENT: 1,
+    PAYMENT_SUBMITTED: 1,
+    PAYMENT_UNDER_REVIEW: 1,
+    PAYMENT_REJECTED: 1,
     PAID: 2,
     CONFIRMED: 2,
     ORDERED: 3,
@@ -721,7 +730,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {status === "PENDING_PAYMENT" && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>Pagar agora</Link>}
+            {(status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{status === "PAYMENT_REJECTED" ? "Reenviar pagamento" : "Pagar agora"}</Link>}
             {status === "SHIPPED" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear envio</a>}
             {(status === "OUT_FOR_DELIVERY" || (status === "ARRIVED" && order.deliveryMethod === "STORE_PICKUP")) && (
               <button

@@ -102,6 +102,26 @@ function isVisualAttr(key: string): boolean {
 
 type StockStatus = "available" | "limited" | "unavailable";
 
+function isColorAttr(key: string): boolean {
+  const norm = normalizeKey(key);
+  return norm === "cor" || norm === "color" || norm.startsWith("cor ");
+}
+
+function isPhotoAttr(key: string): boolean {
+  const norm = normalizeKey(key);
+  return ["modelo", "foto", "estampa", "design", "lente", "armacao", "padrao"].some((term) => norm.includes(term));
+}
+
+function isSizeAttr(key: string): boolean {
+  const norm = normalizeKey(key);
+  return ["tamanho", "size", "numero", "medida"].some((term) => norm.includes(term));
+}
+
+function isTechAttr(key: string): boolean {
+  const norm = normalizeKey(key);
+  return ["ram", "armazenamento", "capacidade", "cpu", "processador", "memoria", "storage"].some((term) => norm.includes(term));
+}
+
 function getAttrValueStock(
   variants: NonNullable<Product["variants"]>,
   attrKey: string,
@@ -181,24 +201,69 @@ const VariantThumb = memo(function VariantThumb({
   );
 });
 
-const VariantPill = memo(function VariantPill({
+const ColorSwatchOption = memo(function ColorSwatchOption({
   value, stockStatus, isActive, onClick,
 }: {
   value: string; stockStatus: StockStatus; isActive: boolean; onClick: () => void;
 }) {
   const isUnavailable = stockStatus === "unavailable";
   const isLimited = stockStatus === "limited";
+  const swatch = colorSwatch(value);
   return (
     <button
       type="button"
       onClick={isUnavailable ? undefined : onClick}
       disabled={isUnavailable}
-      className="relative rounded-xl border px-4 py-2 text-sm font-bold transition-all"
+      className="group relative flex min-w-[92px] items-center gap-2 rounded-2xl border px-3 py-2.5 text-left transition-all"
       style={{
         borderColor: isActive ? RED : "#E5E7EB",
-        background: isActive ? "#FFF0EB" : isUnavailable ? "#F9FAFB" : "white",
-        color: isActive ? RED : isUnavailable ? "#9CA3AF" : "#374151",
-        boxShadow: isActive ? `0 0 0 1px ${RED}` : "none",
+        background: isActive ? "#FFF4F0" : "white",
+        color: isUnavailable ? "#9CA3AF" : "#111827",
+        boxShadow: isActive ? "0 12px 30px rgba(232,67,26,0.14), 0 0 0 1px #E8431A" : "0 6px 18px rgba(17,24,39,0.04)",
+        cursor: isUnavailable ? "not-allowed" : "pointer",
+        opacity: isUnavailable ? 0.5 : 1,
+      }}
+    >
+      <span
+        className="grid h-8 w-8 flex-none place-items-center rounded-full border"
+        style={{ borderColor: isActive ? RED : "#D1D5DB", background: "#fff" }}
+      >
+        <span className="h-5 w-5 rounded-full border border-black/10" style={{ background: swatch }} />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-black">{value}</span>
+        <span className="block text-[10px] font-semibold uppercase tracking-wide" style={{ color: isLimited ? "#F97316" : "#9CA3AF" }}>
+          {isUnavailable ? "Sem stock" : isLimited ? "Poucas" : "Disponivel"}
+        </span>
+      </span>
+      {isActive && (
+        <span className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full text-white shadow-sm" style={{ background: RED }}>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5 5 4 7.5 8.5 2.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </span>
+      )}
+    </button>
+  );
+});
+
+const VariantPill = memo(function VariantPill({
+  value, stockStatus, isActive, onClick, tone = "default",
+}: {
+  value: string; stockStatus: StockStatus; isActive: boolean; onClick: () => void; tone?: "default" | "size" | "tech";
+}) {
+  const isUnavailable = stockStatus === "unavailable";
+  const isLimited = stockStatus === "limited";
+  const compact = tone === "size";
+  return (
+    <button
+      type="button"
+      onClick={isUnavailable ? undefined : onClick}
+      disabled={isUnavailable}
+      className={`relative border text-sm font-black transition-all ${compact ? "min-w-12 rounded-xl px-4 py-3" : "rounded-2xl px-4 py-3"}`}
+      style={{
+        borderColor: isActive ? RED : "#E5E7EB",
+        background: isActive ? "#FFF4F0" : isUnavailable ? "#F9FAFB" : "white",
+        color: isActive ? RED : isUnavailable ? "#9CA3AF" : tone === "tech" ? "#111827" : "#374151",
+        boxShadow: isActive ? `0 10px 24px rgba(232,67,26,0.12), 0 0 0 1px ${RED}` : "0 6px 18px rgba(17,24,39,0.04)",
         cursor: isUnavailable ? "not-allowed" : "pointer",
         textDecoration: isUnavailable ? "line-through" : "none",
         opacity: isUnavailable ? 0.55 : 1,
@@ -625,14 +690,45 @@ export default function ProductDetailPage() {
                   ));
                   if (values.length === 0) return null;
                   const selected = selectedAttrValues[attrKey];
-                  const visual = isVisualAttr(attrKey);
+                  const colorSelector = isColorAttr(attrKey);
+                  const photoSelector = !colorSelector && isPhotoAttr(attrKey);
+                  const sizeSelector = isSizeAttr(attrKey);
+                  const techSelector = isTechAttr(attrKey);
                   return (
-                    <div key={attrKey}>
+                    <div key={attrKey} className="rounded-3xl border p-4" style={{ borderColor: "#F1E7E2", background: "rgba(255,255,255,0.72)" }}>
                       <div className="mb-3 flex items-center justify-between">
-                        <p className="text-sm font-bold" style={{ color: "#111827" }}>{attrKey}</p>
-                        {selected && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "#FFF0EB", color: RED }}>{selected}</span>}
+                        <div>
+                          <p className="text-sm font-black" style={{ color: "#111827" }}>{attrKey}</p>
+                          <p className="text-xs" style={{ color: "#9CA3AF" }}>
+                            {colorSelector
+                              ? "Escolhe a cor"
+                              : photoSelector
+                                ? "Escolhe o modelo"
+                                : sizeSelector
+                                  ? "Escolhe o tamanho"
+                                  : techSelector
+                                    ? "Escolhe a configuracao"
+                                    : "Escolhe uma opcao"}
+                          </p>
+                        </div>
+                        {selected && <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ background: "#FFF0EB", color: RED }}>{selected}</span>}
                       </div>
-                      {visual ? (
+                      {colorSelector ? (
+                        <div className="flex flex-wrap gap-2.5">
+                          {values.map((val) => {
+                            const stockStatus = getAttrValueStock(activeVariants, attrKey, val, product.madeToOrder, selectedAttrValues);
+                            return (
+                              <ColorSwatchOption
+                                key={val}
+                                value={val}
+                                stockStatus={stockStatus}
+                                isActive={selected === val}
+                                onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
+                              />
+                            );
+                          })}
+                        </div>
+                      ) : photoSelector ? (
                         <div className="flex gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
                           {values.map((val) => {
                             const variantForVal = activeVariants.find((v) => v.attributes?.[attrKey] === val);
@@ -660,6 +756,7 @@ export default function ProductDetailPage() {
                                 value={val}
                                 stockStatus={stockStatus}
                                 isActive={selected === val}
+                                tone={sizeSelector ? "size" : techSelector ? "tech" : "default"}
                                 onClick={() => setSelectedAttrValues((prev) => ({ ...prev, [attrKey]: val }))}
                               />
                             );
