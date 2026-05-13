@@ -53,8 +53,11 @@ export type ProductVariant = {
   color?: string;
   size?: string;
   externalPrice?: number;
+  purchasePrice?: number;
   finalPrice?: number;
   promotionalPrice?: number;
+  profitAmount?: number;
+  marginPercentage?: number;
   effectivePrice?: number;
   stock?: number;
   active?: boolean;

@@ -18,11 +18,11 @@ const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pd
 const ACCEPTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
 
 const PAYMENT_CONFIG = {
-  MPESA_NUMBER: "+258840000000",
-  EMOLA_NUMBER: "+258860000000",
-  BANK_NAME: "Banco Exemplo",
-  BANK_ACCOUNT: "000000000",
-  ACCOUNT_HOLDER: "X Digital",
+  MPESA_NUMBER: process.env.NEXT_PUBLIC_MPESA_NUMBER || "",
+  EMOLA_NUMBER: process.env.NEXT_PUBLIC_EMOLA_NUMBER || "",
+  BANK_NAME: process.env.NEXT_PUBLIC_BANK_NAME || "",
+  BANK_ACCOUNT: process.env.NEXT_PUBLIC_BANK_ACCOUNT || "",
+  ACCOUNT_HOLDER: process.env.NEXT_PUBLIC_ACCOUNT_HOLDER || "",
 };
 
 type PaymentMethodType = "MPESA" | "EMOLA" | "BANK_TRANSFER" | "VISA_MANUAL";
@@ -59,8 +59,8 @@ function normalizePhone(value: string) {
 
 function validPhoneForMethod(method: PaymentMethodType, phone: string) {
   const digits = normalizePhone(phone);
-  if (method === "MPESA") return /^84\d{7}$/.test(digits);
-  if (method === "EMOLA") return /^86\d{7}$/.test(digits);
+  if (method === "MPESA") return /^(84|85)\d{7}$/.test(digits);
+  if (method === "EMOLA") return /^(86|87)\d{7}$/.test(digits);
   return true;
 }
 
@@ -145,6 +145,18 @@ function methodInstructions(method: PaymentMethodType, amount: number) {
   ];
 }
 
+function paymentSubmitErrorMessage(payload: unknown) {
+  const message = payload && typeof payload === "object"
+    ? String((payload as Record<string, unknown>).message || (payload as Record<string, unknown>).error || "")
+    : "";
+
+  if (/conta.*dados|telefone.*email|email.*telefone/i.test(message)) {
+    return "Nao foi possivel submeter o pagamento nesta sessao. Confirma que continuas autenticado e tenta novamente.";
+  }
+
+  return message || "Nao foi possivel submeter o pagamento.";
+}
+
 export default function OrderPaymentPage() {
   const params = useParams<{ id: string }>();
   const { token } = useAuth();
@@ -156,7 +168,6 @@ export default function OrderPaymentPage() {
   const [payerPhone, setPayerPhone] = useState("");
   const [payerBank, setPayerBank] = useState("");
   const [transactionReference, setTransactionReference] = useState("");
-  const [amount, setAmount] = useState("");
   const [last4, setLast4] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
@@ -173,7 +184,6 @@ export default function OrderPaymentPage() {
         setAllOrders(orders);
         const currentOrder = orders.find((item) => item.id === orderId) || null;
         setOrder(currentOrder);
-        setAmount(String(orderVisibleTotal(currentOrder) || ""));
         setPayerName(currentOrder?.customerFullName || "");
         setPayerPhone(currentOrder?.primaryPhoneNumber || "");
       } catch (error) {
@@ -199,7 +209,7 @@ export default function OrderPaymentPage() {
     [allOrders, order],
   );
 
-  const totalAmount = orderVisibleTotal(order);
+  const officialAmount = orderVisibleTotal(order);
   const orderStatus = submission?.orderStatus || order?.status || "";
   const visual = statusCopy(orderStatus, order?.adminMessageForClient || submission?.reviewNote);
   const canSubmit = orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED";
@@ -232,13 +242,12 @@ export default function OrderPaymentPage() {
   }
 
   function validateForm() {
-    const numericAmount = Number(amount);
     if (!payerName.trim()) return "Informe o nome do titular.";
-    if (!numericAmount || numericAmount <= 0) return "Informe um valor valido.";
+    if (!officialAmount || officialAmount <= 0) return "O valor oficial do pedido ainda nao esta disponivel. Actualiza a pagina e tenta novamente.";
     if ((method === "MPESA" || method === "EMOLA") && !validPhoneForMethod(method, payerPhone)) {
       return method === "MPESA"
-        ? "Numero M-Pesa invalido. Usa +25884xxxxxxx ou 84xxxxxxx."
-        : "Numero eMola invalido. Usa +25886xxxxxxx ou 86xxxxxxx.";
+        ? "Numero M-Pesa invalido. Usa +25884xxxxxxx, +25885xxxxxxx, 84xxxxxxx ou 85xxxxxxx."
+        : "Numero eMola invalido. Usa +25886xxxxxxx, +25887xxxxxxx, 86xxxxxxx ou 87xxxxxxx.";
     }
     if (method === "BANK_TRANSFER") {
       if (!payerBank.trim()) return "Informe o banco usado na transferencia.";
@@ -270,7 +279,7 @@ export default function OrderPaymentPage() {
       payerPhone: payerPhone.trim() || null,
       payerBank: payerBank.trim() || null,
       transactionReference: transactionReference.trim() || null,
-      amount: Number(amount),
+      amount: officialAmount,
       currency: "MZN",
       metadata: {
         source: "client-web",
@@ -291,14 +300,11 @@ export default function OrderPaymentPage() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data?.message || data?.error || "Nao foi possivel submeter o pagamento.");
+        throw new Error(paymentSubmitErrorMessage(data));
       }
       setSubmission(data as SubmissionResponse);
       setOrder((current) => current ? { ...current, status: "PAYMENT_SUBMITTED" } : current);
-      setFeedback({
-        type: "success",
-        msg: "Pagamento submetido para analise. A nossa equipa financeira vai validar e avisar assim que for confirmado.",
-      });
+      setFeedback(null);
       emitClientDataChanged();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
@@ -329,7 +335,7 @@ export default function OrderPaymentPage() {
           </div>
           <div className="rounded-[24px] border px-5 py-4" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Total a pagar</p>
-            <p className="mt-2 text-3xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAmount)}</p>
+            <p className="mt-2 text-3xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(officialAmount)}</p>
             <p className="mt-2 text-xs" style={{ color: "#6B7280" }}>Estado actual: {orderStatus || "A carregar"}</p>
           </div>
         </div>
@@ -339,13 +345,13 @@ export default function OrderPaymentPage() {
           <p className="mt-1 text-sm leading-6">{visual.body}</p>
         </div>
 
-        {feedback ? (
+        {feedback && (feedback.type === "error" || !isLocked) ? (
           <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={feedback.type === "success" ? { background: "#F0FDF4", borderColor: "#86EFAC", color: "#166534" } : { background: "#FFF5F5", borderColor: "#FECACA", color: "#B42318" }}>
             {feedback.msg}
           </div>
         ) : null}
 
-        {isLocked ? (
+        {isLocked && orderStatus !== "PAYMENT_SUBMITTED" ? (
           <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
             <p className="text-sm font-semibold" style={{ color: "#6B7280" }}>
               Nao e preciso submeter outro comprovativo agora. Quando a validacao terminar, o estado do pedido sera actualizado automaticamente.
@@ -381,7 +387,7 @@ export default function OrderPaymentPage() {
               <div className="rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>
                 <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Instrucoes</p>
                 <div className="mt-4 space-y-3">
-                  {methodInstructions(method, totalAmount).map(([label, value]) => (
+                  {methodInstructions(method, officialAmount).map(([label, value]) => (
                     <div key={label} className="rounded-2xl bg-white/75 px-4 py-3">
                       <p className="text-xs font-semibold" style={{ color: "#9CA3AF" }}>{label}</p>
                       <p className="mt-1 text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{value}</p>
@@ -398,13 +404,15 @@ export default function OrderPaymentPage() {
 
                 <label className="block">
                   <span className="mb-2 block text-sm font-semibold">Valor pago</span>
-                  <input type="number" min="0" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} />
+                  <input readOnly value={formatMoney(officialAmount)} className={`${inputClass} cursor-not-allowed font-black`} style={{ borderColor: "#F2D4CC", background: "#F9FAFB", color: "#374151" }} aria-readonly="true" />
+                  <span className="mt-1 block text-xs" style={{ color: "#6B7280" }}>Valor oficial do pedido/cotacao aprovada.</span>
                 </label>
 
                 {(method === "MPESA" || method === "EMOLA") ? (
                   <label className="block">
                     <span className="mb-2 block text-sm font-semibold">Numero que efectuou o pagamento</span>
-                    <input value={payerPhone} onChange={(event) => setPayerPhone(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} placeholder={method === "MPESA" ? "+25884xxxxxxx" : "+25886xxxxxxx"} />
+                    <input value={payerPhone} onChange={(event) => setPayerPhone(event.target.value)} className={inputClass} style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }} placeholder={method === "MPESA" ? "+25884xxxxxxx ou +25885xxxxxxx" : "+25886xxxxxxx ou +25887xxxxxxx"} />
+                    <span className="mt-1 block text-xs" style={{ color: "#6B7280" }}>Pode ser diferente do numero da tua conta.</span>
                   </label>
                 ) : null}
 

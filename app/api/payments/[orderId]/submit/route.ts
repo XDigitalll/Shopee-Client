@@ -16,14 +16,26 @@ function apiErrorMessage(payload: unknown) {
   return null;
 }
 
+function paymentSubmitErrorMessage(payload: unknown) {
+  const message = apiErrorMessage(payload);
+  if (message && /conta.*dados|telefone.*email|email.*telefone/i.test(message)) {
+    return "Nao foi possivel submeter o pagamento nesta sessao. Confirma que continuas autenticado e tenta novamente.";
+  }
+  return message ?? "Nao foi possivel submeter o pagamento.";
+}
+
 export async function POST(request: NextRequest, context: RouteContext) {
   const { orderId } = await context.params;
   const backendUrl = `${BACKEND_URL}/api/payments/${encodeURIComponent(orderId)}/submit`;
   const headers = new Headers();
   const authorization = request.headers.get("authorization");
+  const cookie = request.headers.get("cookie");
 
   if (authorization) {
     headers.set("Authorization", authorization);
+  }
+  if (cookie) {
+    headers.set("Cookie", cookie);
   }
 
   let backendResponse: Response;
@@ -47,7 +59,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   if (!backendResponse.ok) {
     return NextResponse.json(
-      { message: apiErrorMessage(payload) ?? "Nao foi possivel submeter o pagamento." },
+      { message: paymentSubmitErrorMessage(payload) },
       { status: backendResponse.status }
     );
   }
