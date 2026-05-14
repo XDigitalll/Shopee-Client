@@ -44,7 +44,7 @@ async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit)
   const response = await fetch(url, { ...init, headers, cache: "no-store", credentials: "same-origin" });
   if (response.status === 204) return null as T;
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel concluir a operacao.");
+  if (!response.ok) throw new Error(payload?.message || payload?.error || "Não foi possível concluir a operação.");
   return payload as T;
 }
 
@@ -83,7 +83,7 @@ export default function CartPage() {
         return preserved.length ? preserved : (payload.items || []).map((item) => item.itemId);
       });
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar o carrinho." });
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível carregar o carrinho." });
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +159,7 @@ export default function CartPage() {
       setFeedback({ type: "info", msg: "Itens selecionados removidos." });
       await loadCart();
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel remover os selecionados." });
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível remover os selecionados." });
     } finally {
       setIsRemovingSelected(false);
     }
@@ -169,12 +169,12 @@ export default function CartPage() {
     if (!token || !couponCode.trim()) return;
     setIsApplyingCoupon(true);
     try {
-      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, { method: "POST", body: JSON.stringify({ code: couponCode.trim(), subtotal: selectedLocalSubtotal }) });
+      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, { method: "POST", body: JSON.stringify({ code: couponCode.trim(), subtotal: selectedLocalSubtotal, appliesTo: "INTERNAL_PRODUCTS" }) });
       setCoupon(payload);
-      setFeedback({ type: "success", msg: payload.message || "Cupao aplicado com sucesso." });
+      setFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
     } catch (error) {
       setCoupon(null);
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel validar o cupao." });
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível validar o cupão." });
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -263,8 +263,8 @@ export default function CartPage() {
                               <h2 className="text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{item.productName}</h2>
                               {isExternal && <span className="rounded-full px-2.5 py-1 text-[11px] font-black text-white" style={{ background: "#F97316", fontFamily: "'Sora', sans-serif" }}>EXTERNO</span>}
                             </div>
-                            <p className="text-sm" style={{ color: "#6B7280" }}>Variante: {item.variantLabel || "Variante padrÃƒÂ£o"}</p>
-                            {isExternal ? <div className="rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}><p className="font-semibold">Aguarda cotaÃƒÂ§ÃƒÂ£o</p><p className="truncate">{item.externalLink || item.availabilityNote || "Link externo submetido"}</p></div> : <p className="text-sm" style={{ color: "#6B7280" }}>{item.availabilityNote || "Produto local com preco ja definido."}</p>}
+                            <p className="text-sm" style={{ color: "#6B7280" }}>Variante: {item.variantLabel || "Variante padrão"}</p>
+                            {isExternal ? <div className="rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}><p className="font-semibold">Aguarda cotação</p><p className="truncate">{item.externalLink || item.availabilityNote || "Link externo submetido"}</p></div> : <p className="text-sm" style={{ color: "#6B7280" }}>{item.availabilityNote || "Produto local com preço já definido."}</p>}
                           </div>
 
                           <div className="text-left sm:text-right">
@@ -311,7 +311,7 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-3">
-              <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>CupÃƒÂ£o</label>
+              <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>Cupão</label>
               <div className="flex gap-2">
                 <input value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Ex.: BEMVINDO10" className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }} />
                 <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim()} className="rounded-2xl px-4 py-3 text-sm font-bold text-white transition" style={{ background: isApplyingCoupon || !couponCode.trim() ? "#FDB8A7" : RED, cursor: isApplyingCoupon || !couponCode.trim() ? "not-allowed" : "pointer" }}>{isApplyingCoupon ? "..." : "Aplicar"}</button>
@@ -325,7 +325,7 @@ export default function CartPage() {
 
             <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
               <p className="font-semibold">Compra internacional em paralelo</p>
-              <p>{selectedExternalItems.length} item(ns) externo(s) seleccionados. Eles seguem numa proposta separada com preco final e prazo estimado, sem travar a compra local.</p>
+              <p>{selectedExternalItems.length} item(ns) externo(s) selecionados. Eles seguem numa proposta separada com preço final e prazo estimado, sem travar a compra local.</p>
             </div>
 
             <div className="rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#6B7280" }}>
