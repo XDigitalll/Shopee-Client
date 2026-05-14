@@ -235,9 +235,21 @@ type HeroBanner = {
   title: string;
   subtitle: string;
   imageUrl: string;
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
   ctaText?: string;
   ctaUrl?: string;
 };
+
+function bannerObjectPosition(focus?: HeroBanner["imageFocus"]) {
+  const positions: Record<NonNullable<HeroBanner["imageFocus"]>, string> = {
+    center: "center",
+    top: "top center",
+    bottom: "bottom center",
+    left: "left center",
+    right: "right center",
+  };
+  return positions[focus ?? "center"];
+}
 
 function HeroSection({ token, onLoginClick }: { token: string | null; onLoginClick: () => void }) {
   const scrollTo = (id: string) => {
@@ -248,6 +260,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
   const [current, setCurrent] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [failedBannerIds, setFailedBannerIds] = useState<Set<number>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -295,22 +308,21 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
               className="hero-banner-slide absolute inset-0 transition-opacity duration-700"
               style={{ opacity: i === current ? 1 : 0, zIndex: 0 }}
             >
-              <img
-                src={b.imageUrl}
-                alt={b.title}
-                className="hero-banner-image h-full w-full"
-                style={{ position: "absolute", inset: 0 }}
-              />
+              {failedBannerIds.has(b.id) ? (
+                <div className="hero-banner-fallback absolute inset-0" />
+              ) : (
+                <img
+                  src={b.imageUrl}
+                  alt={b.title}
+                  className="hero-banner-image h-full w-full"
+                  style={{ position: "absolute", inset: 0, objectPosition: bannerObjectPosition(b.imageFocus) }}
+                  onError={() => setFailedBannerIds((currentIds) => new Set(currentIds).add(b.id))}
+                />
+              )}
             </div>
           ))}
           {/* Dark gradient overlay for text readability */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: "linear-gradient(90deg, rgba(10,5,3,0.78) 0%, rgba(10,5,3,0.55) 50%, rgba(10,5,3,0.18) 100%)",
-              zIndex: 1,
-            }}
-          />
+          <div className="hero-banner-overlay absolute inset-0" style={{ zIndex: 1 }} />
           {/* Bottom gradient for dots */}
           <div
             className="absolute bottom-0 left-0 right-0 h-28"

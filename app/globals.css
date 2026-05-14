@@ -74,7 +74,12 @@ textarea {
 
 .hero-banner-section,
 .hero-banner-content {
-  min-height: clamp(420px, 62svh, 560px);
+  min-height: clamp(440px, 36.45vw, 700px);
+}
+
+.hero-banner-section {
+  aspect-ratio: 1920 / 700;
+  width: 100%;
 }
 
 .hero-banner-slide {
@@ -86,32 +91,53 @@ textarea {
   object-position: center;
 }
 
+.hero-banner-fallback {
+  background: linear-gradient(135deg, #170d09 0%, #4a160b 42%, #1a2744 100%);
+}
+
+.hero-banner-overlay {
+  background:
+    linear-gradient(90deg, rgba(10, 5, 3, 0.78) 0%, rgba(10, 5, 3, 0.54) 50%, rgba(10, 5, 3, 0.2) 100%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.24), transparent 45%);
+}
+
 @media (max-width: 1023px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(460px, 70svh, 620px);
+    min-height: clamp(470px, 58.33vw, 680px);
   }
 
-  .hero-banner-image {
-    object-position: center;
+  .hero-banner-section {
+    aspect-ratio: 1200 / 700;
+  }
+
+  .hero-banner-overlay {
+    background:
+      linear-gradient(90deg, rgba(10, 5, 3, 0.82) 0%, rgba(10, 5, 3, 0.58) 58%, rgba(10, 5, 3, 0.28) 100%),
+      linear-gradient(to top, rgba(0, 0, 0, 0.34), transparent 48%);
   }
 }
 
 @media (max-width: 767px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(520px, 82svh, 700px);
+    min-height: clamp(560px, 133.33vw, 760px);
   }
 
-  .hero-banner-image {
-    object-fit: contain;
-    object-position: top center;
+  .hero-banner-section {
+    aspect-ratio: 900 / 1200;
+  }
+
+  .hero-banner-overlay {
+    background:
+      linear-gradient(180deg, rgba(10, 5, 3, 0.5) 0%, rgba(10, 5, 3, 0.78) 52%, rgba(10, 5, 3, 0.88) 100%),
+      linear-gradient(90deg, rgba(10, 5, 3, 0.42), rgba(10, 5, 3, 0.18));
   }
 }
 
 @media (max-width: 480px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(560px, 88svh, 740px);
+    min-height: clamp(560px, 138vw, 740px);
   }
 }

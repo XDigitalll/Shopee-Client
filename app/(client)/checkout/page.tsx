@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import type { Cart, CartItem, CheckoutResponse, CustomerProfile, Order, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { addressMatchesForm, applySavedAddress, createAddressLabel, createPrefilledAddress, createPrefilledContact } from "@/lib/address-book";
@@ -51,10 +52,21 @@ function isCheckoutResponse(payload: CheckoutResponse | Order | null): payload i
   );
 }
 
+function getInternalOrderForPayment(result: CheckoutResponse) {
+  if (result.localOrder?.id) return result.localOrder;
+  if (result.primaryOrder?.type === "INTERNAL" && result.primaryOrder.id) return result.primaryOrder;
+  return result.orders?.find((order) => order.type === "INTERNAL" && order.id) ?? null;
+}
+
 async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(url, { ...init, headers, cache: "no-store" });
+  const method = String(init?.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) headers.set(XSRF_HEADER, csrfToken);
+  }
+  const response = await fetch(url, { ...init, headers, cache: "no-store", credentials: "same-origin" });
   if (response.status === 204) return null as T;
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel concluir a operacao.");
@@ -164,7 +176,7 @@ export default function CheckoutPage() {
       return;
     }
     setIsSubmitting(true);
-    setFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e fechar esta compra com seguranca." });
+    setFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     try {
       const checkoutResult = await fetchWithAuth<CheckoutResponse | Order>("/api/xdigital/orders/from-cart", token, {
         method: "POST",
@@ -213,12 +225,22 @@ export default function CheckoutPage() {
       const primaryOrder = result.primaryOrder;
       const localOrder = result.localOrder;
       const externalOrder = result.externalOrder;
+      const internalOrderForPayment = getInternalOrderForPayment(result);
+
+      if (internalOrderForPayment?.id) {
+        setFeedback({
+          type: "success",
+          msg: result.mixedCheckout && externalOrder
+            ? `Pedido local ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento; a compra internacional ${orderDisplayCode(externalOrder)} fica em analise separada.`
+            : `Pedido ${orderDisplayCode(internalOrderForPayment)} criado. A abrir pagamento...`,
+        });
+        router.push(`/orders/${internalOrderForPayment.id}/payment`);
+        return;
+      }
 
       setFeedback({
         type: "success",
-        msg: result.mixedCheckout && externalOrder
-          ? `Pedido local ${orderDisplayCode(localOrder ?? primaryOrder)} criado. A compra internacional ${orderDisplayCode(externalOrder)} sera tratada numa proposta separada.`
-          : `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso!`,
+        msg: `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso. A proposta sera analisada pela equipa.`,
       });
       router.push("/orders");
     } catch (error) {
@@ -380,7 +402,9 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white transition" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>{isSubmitting ? "A finalizar..." : externalItems.length > 0 && localItems.length > 0 ? "Criar compra composta" : "Criar pedido"}</button>
+              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white transition" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
+                {isSubmitting ? "A preparar pagamento..." : localItems.length > 0 ? "Confirmar e pagar" : "Criar proposta"}
+              </button>
               <Link href="/cart" className="rounded-2xl border px-5 py-3.5 text-sm font-bold transition" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Voltar ao carrinho</Link>
             </div>
           </form>
@@ -412,16 +436,28 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
-                  <p className="font-semibold">Compra internacional em paralelo</p>
-                  <p>{externalItems.length} item(ns) serao tratados numa proposta separada com preco final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
-                </div>
+                {externalItems.length > 0 ? (
+                  <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
+                    <p className="font-semibold">Compra internacional em paralelo</p>
+                    <p>{externalItems.length} item(ns) serao tratados numa proposta separada com preco final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#6B7280" }}>
                   <p className="font-semibold" style={{ color: "#1A1410" }}>Depois de confirmar</p>
-                  <p className="mt-2">1. O pedido local sera criado agora.</p>
-                  <p className="mt-1">2. A compra internacional vai aparecer no teu painel como proposta em analise.</p>
-                  <p className="mt-1">3. Recebes tudo no mesmo painel, cada parte com o seu proximo passo.</p>
+                  {localItems.length > 0 ? (
+                    <>
+                      <p className="mt-2">1. Criamos o teu pedido.</p>
+                      <p className="mt-1">2. Vais direto para o pagamento.</p>
+                      <p className="mt-1">3. Depois validamos e seguimos com a entrega.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2">1. Criamos a tua proposta de compra internacional.</p>
+                      <p className="mt-1">2. A equipa analisa preco, frete e prazo.</p>
+                      <p className="mt-1">3. Depois recebes a cotacao para aprovar.</p>
+                    </>
+                  )}
                 </div>
               </>
             )}
