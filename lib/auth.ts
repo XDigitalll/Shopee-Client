@@ -2,6 +2,9 @@
 export const REFRESH_TOKEN_KEY = "shopee_client_refresh_token";
 export const AUTH_CHANGE_EVENT = "shopeex-auth-change";
 
+// Cookie names (read-only client access; httpOnly cookies are set by the server)
+export const PROFILE_COOKIE = "shopee_client_profile";
+
 // Legacy keys from before the rename — kept only for one-time migration on bootstrap.
 const LEGACY_TOKEN_KEY = "shopee_admin_token";
 const LEGACY_REFRESH_TOKEN_KEY = "shopee_refresh_token";
@@ -89,6 +92,19 @@ export function clearStoredToken() {
   clearStoredSession();
 }
 
+export function getProfileCookie(): Record<string, unknown> | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(PROFILE_COOKIE + "="));
+  if (!match) return null;
+  try {
+    return JSON.parse(decodeURIComponent(match.slice(PROFILE_COOKIE.length + 1))) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export async function refreshStoredSession() {
   if (typeof window === "undefined") {
     return null;
@@ -99,17 +115,18 @@ export async function refreshStoredSession() {
   }
 
   const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) {
+  // If no localStorage refresh token, still attempt cookie-based refresh via the dedicated route
+  if (!refreshToken && !document.cookie.includes("shopee_client_refresh=")) {
     clearStoredSession();
     return null;
   }
 
-  refreshPromise = fetch("/api/xdigital/auth/refresh", {
+  refreshPromise = fetch("/api/auth/refresh", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ refreshToken }),
+    body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
     cache: "no-store",
   })
     .then(async (response) => {
