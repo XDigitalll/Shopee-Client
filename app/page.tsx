@@ -781,6 +781,7 @@ type FeedbackState = { msg: string; type: "success" | "error" } | null;
 type ProductCardProps = {
   product: Product;
   token: string | null;
+  authReady: boolean;
   onLoginClick: () => void;
   onFeedback: (msg: string, type: "success" | "error") => void;
 };
@@ -789,7 +790,7 @@ function canAddToCart(product: Product) {
   return product.madeToOrder || typeof product.stock !== "number" || product.stock > 0;
 }
 
-function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardProps) {
+function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: ProductCardProps) {
   const [adding, setAdding] = useState(false);
   const img =
     product.primaryThumbnailUrl ||
@@ -808,7 +809,12 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
   const handleAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!token) { onLoginClick(); return; }
+    if (!authReady) return;
+    if (!token) {
+      onFeedback("Inicia sessão para adicionar ao carrinho.", "error");
+      onLoginClick();
+      return;
+    }
     setAdding(true);
     try {
       await apiFetch("cart/add", {
@@ -901,17 +907,17 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
         <button
           type="button"
           onClick={(e) => void handleAdd(e)}
-          disabled={adding || !canAdd}
+          disabled={adding || !canAdd || !authReady}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition-all"
           style={{
-            background: adding || !canAdd ? "#9CA3AF" : RED,
-            cursor: adding || !canAdd ? "not-allowed" : "pointer",
+            background: adding || !canAdd || !authReady ? "#9CA3AF" : RED,
+            cursor: adding || !canAdd || !authReady ? "not-allowed" : "pointer",
           }}
-          onMouseEnter={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED_HOVER; }}
-          onMouseLeave={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED; }}
+          onMouseEnter={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED_HOVER; }}
+          onMouseLeave={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED; }}
         >
           <CartIconSvg size={16} />
-          {adding ? "A adicionar..." : canAdd ? "Carrinho" : "Sem stock"}
+          {adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"}
         </button>
       </div>
     </Link>
@@ -963,6 +969,7 @@ type ProductsSectionProps = {
   isLoading: boolean;
   hasError: boolean;
   token: string | null;
+  authReady: boolean;
   onLoginClick: () => void;
   searchQuery: string;
   onSearch: (v: string) => void;
@@ -971,7 +978,7 @@ type ProductsSectionProps = {
 };
 
 function ProductsSection({
-  products, isLoading, hasError, token, onLoginClick,
+  products, isLoading, hasError, token, authReady, onLoginClick,
   searchQuery, onSearch, onSearchSubmit, searchActive,
 }: ProductsSectionProps) {
   const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -1091,6 +1098,7 @@ function ProductsSection({
                   key={p.id}
                   product={p}
                   token={token}
+                  authReady={authReady}
                   onLoginClick={onLoginClick}
                   onFeedback={(msg, type) => setFeedback({ msg, type })}
                 />
@@ -1202,7 +1210,7 @@ function OrderTracker({ order }: { order: Order }) {
 // â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Home() {
-  const { token, login } = useAuth();
+  const { token, isReady, login } = useAuth();
 
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1289,6 +1297,7 @@ export default function Home() {
         isLoading={loadingProducts}
         hasError={productsError}
         token={token}
+        authReady={isReady}
         onLoginClick={openLogin}
         searchQuery={searchQuery}
         onSearch={handleSearchChange}

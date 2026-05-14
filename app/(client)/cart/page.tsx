@@ -9,6 +9,7 @@ import { ClientConfirmDialog, ClientFeedbackDock, ClientSectionSkeleton } from "
 import { formatMoney } from "@/lib/format";
 import type { Cart, CartItem, CouponValidation } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
 const RED = "#E8431A";
 const RED_PALE = "#FCEBEB";
@@ -35,7 +36,12 @@ function PaymentBadge({ label }: { label: string }) {
 async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(url, { ...init, headers, cache: "no-store" });
+  const method = String(init?.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) headers.set(XSRF_HEADER, csrfToken);
+  }
+  const response = await fetch(url, { ...init, headers, cache: "no-store", credentials: "same-origin" });
   if (response.status === 204) return null as T;
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel concluir a operacao.");

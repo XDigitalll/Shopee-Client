@@ -15,6 +15,10 @@ type ApiOptions = RequestInit & {
   token?: string | null;
 };
 
+function isMutation(method: string) {
+  return !["GET", "HEAD", "OPTIONS"].includes(method);
+}
+
 function getApiErrorMessage(payload: unknown) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -81,16 +85,33 @@ async function performRequest(path: string, options: ApiOptions = {}) {
     ...options,
     headers,
     cache: "no-store",
+    credentials: "same-origin",
   });
 }
 
 export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
+  const method = String(options.method || "GET").toUpperCase();
+  const mutation = isMutation(method);
+  const csrfBeforeRequest = getCsrfToken();
   let response = await performRequest(path, options);
 
   if (response.status === 401 && path !== "auth/refresh") {
     const refreshed = await refreshStoredSession();
     if (refreshed) {
       response = await performRequest(path, options);
+    }
+  }
+
+  if (mutation && response.status === 403) {
+    const csrfAfterResponse = getCsrfToken();
+
+    if (csrfAfterResponse && csrfAfterResponse !== csrfBeforeRequest) {
+      response = await performRequest(path, options);
+    } else if (path !== "auth/refresh") {
+      const refreshed = await refreshStoredSession();
+      if (refreshed) {
+        response = await performRequest(path, options);
+      }
     }
   }
 
@@ -110,8 +131,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
     throw new Error(message);
   }
 
-  const method = String(options.method || "GET").toUpperCase();
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+  if (mutation) {
     emitClientDataChanged();
   }
 

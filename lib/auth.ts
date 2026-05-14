@@ -74,6 +74,7 @@ export async function loadSessionProfile() {
   const response = await fetch("/api/auth/me", {
     method: "GET",
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   if (!response.ok) {
@@ -89,6 +90,7 @@ export async function refreshStoredSession() {
   const response = await fetch("/api/auth/refresh", {
     method: "POST",
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   if (!response.ok) {

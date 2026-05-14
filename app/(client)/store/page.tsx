@@ -166,10 +166,12 @@ function buildProductShelves(products: Product[], searchTerm: string, activeCate
 function ProductCard({
   product,
   adding,
+  authReady,
   onAddToCart,
 }: {
   product: Product;
   adding: boolean;
+  authReady: boolean;
   onAddToCart: (event: React.MouseEvent, productId: number) => void;
 }) {
   const img = resolveProductImage(product);
@@ -249,17 +251,17 @@ function ProductCard({
         <button
           type="button"
           onClick={(e) => onAddToCart(e, product.id)}
-          disabled={adding || !canAdd}
+          disabled={adding || !canAdd || !authReady}
           className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold text-white transition-all mt-1"
           style={{
-            background: adding || !canAdd ? "#D1D5DB" : RED,
-            cursor: adding || !canAdd ? "not-allowed" : "pointer",
+            background: adding || !canAdd || !authReady ? "#D1D5DB" : RED,
+            cursor: adding || !canAdd || !authReady ? "not-allowed" : "pointer",
           }}
-          onMouseEnter={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED_HOVER; }}
-          onMouseLeave={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED; }}
+          onMouseEnter={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED_HOVER; }}
+          onMouseLeave={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED; }}
         >
           <CartPlusIcon />
-          {adding ? "A adicionar..." : canAdd ? "Carrinho" : "Sem stock"}
+          {adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"}
         </button>
       </div>
     </Link>
@@ -267,7 +269,7 @@ function ProductCard({
 }
 
 export default function StorePage() {
-  const { token } = useAuth();
+  const { token, isReady } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -324,8 +326,10 @@ export default function StorePage() {
   const handleAddToCart = async (e: React.MouseEvent, productId: number) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isReady) return;
     if (!token) {
-      setFeedback({ type: "info", msg: "Podes ver a loja sem conta. Para guardar carrinho e finalizar compra, entra na tua conta." });
+      setFeedback({ type: "info", msg: "Inicia sessão para adicionar ao carrinho." });
+      router.push(`/login?redirect=${encodeURIComponent("/store")}`);
       return;
     }
     setIsAddingId(productId);
@@ -447,6 +451,7 @@ export default function StorePage() {
                 key={product.id}
                 product={product}
                 adding={isAddingId === product.id}
+                authReady={isReady}
                 onAddToCart={(event, productId) => void handleAddToCart(event, productId)}
               />
             ))}
