@@ -530,6 +530,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearStoredSession();
       setSessionProfile(null);
       syncSessionFromStorage();
+      void fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
       router.replace("/login");
     },
     refreshProfile: async () => {

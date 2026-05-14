@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE } from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -14,6 +15,11 @@ async function forward(request: NextRequest, path: string[]) {
 
   if (authorization) {
     headers.set("Authorization", authorization);
+  } else {
+    const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
+    if (cookieToken) {
+      headers.set("Authorization", `Bearer ${cookieToken}`);
+    }
   }
 
   if (contentType) {

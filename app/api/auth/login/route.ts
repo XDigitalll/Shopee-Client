@@ -1,4 +1,14 @@
-﻿import { NextResponse } from "next/server";
+﻿import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import {
+  buildProfileJson,
+  cookieOpts,
+  PROFILE_COOKIE,
+  REFRESH_COOKIE_NAME,
+  REFRESH_MAX_AGE,
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+} from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -60,10 +70,17 @@ export async function POST(request: Request) {
       );
     }
 
+    const token: string = payload.token;
+    const refreshToken: string = payload.refreshToken;
+    const cookieStore = await cookies();
+    cookieStore.set(SESSION_COOKIE, token, cookieOpts(true, SESSION_MAX_AGE));
+    cookieStore.set(REFRESH_COOKIE_NAME, refreshToken, cookieOpts(true, REFRESH_MAX_AGE));
+    cookieStore.set(PROFILE_COOKIE, buildProfileJson(token), cookieOpts(false, SESSION_MAX_AGE));
+
     return NextResponse.json(
       {
-        token: payload.token,
-        refreshToken: payload.refreshToken,
+        token,
+        refreshToken,
         mustChangePassword: payload.mustChangePassword ?? false,
       },
       { status: 200 }
