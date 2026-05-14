@@ -118,7 +118,7 @@ export default function OrderReceiptPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-10">
+    <div className="mx-auto max-w-5xl min-w-0 space-y-5 pb-10">
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <Link href="/orders" className="inline-flex rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>
           Voltar aos pedidos
@@ -138,20 +138,20 @@ export default function OrderReceiptPage() {
         </div>
       )}
 
-      <section id="receipt-sheet" className="rounded-[32px] border bg-white p-6 shadow-sm md:p-8" style={{ borderColor: "#F2D4CC" }}>
+      <section id="receipt-sheet" className="min-w-0 rounded-[24px] border bg-white p-4 shadow-sm sm:rounded-[32px] sm:p-6 md:p-8" style={{ borderColor: "#F2D4CC" }}>
         <div className="flex flex-col gap-6 border-b pb-6 md:flex-row md:items-start md:justify-between" style={{ borderColor: "#F2D4CC" }}>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold" style={{ color: RED }}>ShopeeX Digital</p>
-            <h1 className="mt-2 text-3xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Recibo do pedido</h1>
+            <h1 className="mt-2 text-2xl font-black sm:text-3xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Recibo do pedido</h1>
             <p className="mt-2 max-w-xl text-sm" style={{ color: "#6B7280" }}>
               Comprovativo completo do teu pedido, pronto para imprimir ou guardar em PDF.
             </p>
           </div>
 
-          <div className="rounded-[24px] px-5 py-4" style={{ background: "linear-gradient(135deg, #FFF4EF 0%, #FFFDFC 100%)" }}>
+          <div className="min-w-0 rounded-[24px] px-4 py-4 sm:px-5" style={{ background: "linear-gradient(135deg, #FFF4EF 0%, #FFFDFC 100%)" }}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "#9CA3AF" }}>Recibo</p>
-            <p className="mt-2 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>#{order?.id || orderId}</p>
-            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Emitido em {formatDate(order?.deliveryDate || order?.paymentDate || order?.orderDate)}</p>
+            <p className="mt-2 break-words text-xl font-black sm:text-2xl" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>#{order?.id || orderId}</p>
+            <p className="mt-1 break-words text-sm" style={{ color: "#6B7280" }}>Emitido em {formatDate(order?.deliveryDate || order?.paymentDate || order?.orderDate)}</p>
           </div>
         </div>
 
@@ -162,42 +162,42 @@ export default function OrderReceiptPage() {
             { label: "Entrega", value: humanize(order?.deliveryMethod) },
             { label: "Loja", value: order?.sourceStore ? humanize(order.sourceStore) : "Loja ShopeeX Digital" },
           ].map((item) => (
-            <article key={item.label} className="rounded-[24px] border px-4 py-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
+            <article key={item.label} className="min-w-0 rounded-[24px] border px-4 py-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{item.label}</p>
-              <p className="mt-2 text-sm font-bold" style={{ color: "#1A1410" }}>{item.value}</p>
+              <p className="mt-2 break-words text-sm font-bold" style={{ color: "#1A1410" }}>{item.value}</p>
             </article>
           ))}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-6">
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC" }}>
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Dados do cliente</h2>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-black sm:text-xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Dados do cliente</h2>
                 <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: "#ECFDF5", color: GREEN }}>Confirmado</span>
               </div>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Nome</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerFullName || "--"}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Email</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerEmail || "--"}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Telefone principal</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.primaryPhoneNumber || "--"}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Telefone alternativo</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.alternativePhoneNumber || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Nome</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerFullName || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Email</p><p className="mt-1 break-all text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerEmail || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Telefone principal</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.primaryPhoneNumber || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Telefone alternativo</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.alternativePhoneNumber || "--"}</p></div>
               </div>
             </article>
 
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC" }}>
-              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Detalhes da entrega</h2>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <h2 className="text-lg font-black sm:text-xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Detalhes da entrega</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Modalidade</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{humanize(order?.deliveryMethod)}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Morada</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{buildAddress(order || { id: 0, type: "", status: "" } as Order)}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Maps</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.googleMapsLink || "--"}</p></div>
-                <div><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Observacoes</p><p className="mt-1 text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerNotes || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Modalidade</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{humanize(order?.deliveryMethod)}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Morada</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{buildAddress(order || { id: 0, type: "", status: "" } as Order)}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Maps</p><p className="mt-1 break-all text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.googleMapsLink || "--"}</p></div>
+                <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>Observacoes</p><p className="mt-1 break-words text-sm font-semibold" style={{ color: "#1A1410" }}>{order?.customerNotes || "--"}</p></div>
               </div>
             </article>
 
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC" }}>
-              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Itens do pedido</h2>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <h2 className="text-lg font-black sm:text-xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Itens do pedido</h2>
               <div className="mt-4 overflow-hidden rounded-[22px] border" style={{ borderColor: "#F2D4CC" }}>
-                <table className="w-full border-collapse text-sm">
+                <table className="receipt-items-table w-full border-collapse text-sm">
                   <thead style={{ background: "#FFF8F5" }}>
                     <tr>
                       <th className="px-4 py-3 text-left font-bold" style={{ color: "#6B7280" }}>Item</th>
@@ -209,19 +209,19 @@ export default function OrderReceiptPage() {
                   <tbody>
                     {(order?.items?.length ? order.items : [{ productName: order?.sourceStore ? `Pedido ${humanize(order.sourceStore)}` : "Pedido sem itens detalhados", quantity: 1, subtotal: summary.total }]).map((item, index) => (
                       <tr key={`${item.productName}-${index}`} style={{ borderTop: index === 0 ? "none" : "1px solid #F2D4CC" }}>
-                        <td className="px-4 py-3" style={{ color: "#1A1410" }}>
-                          <div>
-                            <p>{item.productName || "Item"}</p>
+                        <td className="px-4 py-3" data-label="Item" style={{ color: "#1A1410" }}>
+                          <div className="min-w-0">
+                            <p className="break-words">{item.productName || "Item"}</p>
                             {item.productCode ? (
-                              <p className="mt-1 text-xs font-bold uppercase tracking-wide" style={{ color: RED }}>
+                              <p className="mt-1 break-all text-xs font-bold uppercase tracking-wide" style={{ color: RED }}>
                                 Código físico: {item.productCode}
                               </p>
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-center" style={{ color: "#6B7280" }}>{item.quantity || 1}</td>
-                        <td className="px-4 py-3 text-right" style={{ color: "#6B7280" }}>{formatMoney(Number(item.price || 0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" style={{ color: "#1A1410" }}>{formatMoney(Number(item.subtotal || item.price || 0))}</td>
+                        <td className="px-4 py-3 text-center" data-label="Qtd." style={{ color: "#6B7280" }}>{item.quantity || 1}</td>
+                        <td className="px-4 py-3 text-right" data-label="Preco" style={{ color: "#6B7280" }}>{formatMoney(Number(item.price || 0))}</td>
+                        <td className="px-4 py-3 text-right font-bold" data-label="Subtotal" style={{ color: "#1A1410" }}>{formatMoney(Number(item.subtotal || item.price || 0))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -231,46 +231,46 @@ export default function OrderReceiptPage() {
           </div>
 
           <div className="space-y-6">
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC", background: "linear-gradient(180deg, #FFF8F5 0%, #FFFFFF 100%)" }}>
-              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC", background: "linear-gradient(180deg, #FFF8F5 0%, #FFFFFF 100%)" }}>
+              <h2 className="text-lg font-black sm:text-xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
                 {isExternal ? "Resumo financeiro detalhado" : "Resumo financeiro"}
               </h2>
 
               {isExternal && order?.quote ? (
                 <div className="mt-4 space-y-3 text-sm">
                   {externalBreakdown.map((line) => (
-                    <div key={line.label} className="flex items-center justify-between gap-4">
-                      <span style={{ color: line.accent ? RED : "#6B7280", fontWeight: line.highlight ? 700 : 500 }}>{line.label}</span>
-                      <strong style={{ color: line.accent ? RED : "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(line.value)}</strong>
+                    <div key={line.label} className="receipt-info-row flex items-start justify-between gap-4">
+                      <span className="min-w-0 break-words" style={{ color: line.accent ? RED : "#6B7280", fontWeight: line.highlight ? 700 : 500 }}>{line.label}</span>
+                      <strong className="shrink-0 text-right" style={{ color: line.accent ? RED : "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(line.value)}</strong>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Subtotal dos itens</span><strong style={{ color: "#1A1410" }}>{formatMoney(summary.itemsTotal)}</strong></div>
-                  <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Entrega</span><strong style={{ color: "#1A1410" }}>{formatMoney(summary.deliveryFee)}</strong></div>
+                  <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Subtotal dos itens</span><strong className="shrink-0 text-right" style={{ color: "#1A1410" }}>{formatMoney(summary.itemsTotal)}</strong></div>
+                  <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Entrega</span><strong className="shrink-0 text-right" style={{ color: "#1A1410" }}>{formatMoney(summary.deliveryFee)}</strong></div>
                   <div className="h-px" style={{ background: "#F2D4CC" }} />
-                  <div className="flex items-center justify-between text-base"><span style={{ color: RED }}>Total pago</span><strong style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(summary.total)}</strong></div>
+                  <div className="receipt-info-row flex items-start justify-between gap-4 text-base"><span className="min-w-0 break-words" style={{ color: RED }}>Total pago</span><strong className="shrink-0 text-right" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(summary.total)}</strong></div>
                 </div>
               )}
             </article>
 
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC" }}>
-              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Pagamento</h2>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <h2 className="text-lg font-black sm:text-xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Pagamento</h2>
               <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Metodo</span><strong style={{ color: "#1A1410" }}>{humanize(order?.payment?.method)}</strong></div>
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Estado</span><strong style={{ color: GREEN }}>{humanize(order?.payment?.status || order?.status)}</strong></div>
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Referencia</span><strong style={{ color: "#1A1410" }}>{order?.payment?.transactionId || "--"}</strong></div>
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Pagador</span><strong style={{ color: "#1A1410" }}>{order?.payment?.payerName || order?.customerFullName || "--"}</strong></div>
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Telefone do pagamento</span><strong style={{ color: "#1A1410" }}>{order?.payment?.payerPhone || order?.primaryPhoneNumber || "--"}</strong></div>
-                <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Data</span><strong style={{ color: "#1A1410" }}>{formatDate(order?.payment?.paymentDate || order?.paymentDate || order?.deliveryDate || order?.orderDate)}</strong></div>
-                {isExternal ? <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Valor total pago</span><strong style={{ color: "#1A1410" }}>{formatMoney(orderVisibleTotal(order))}</strong></div> : null}
-                {isExternal && order?.quote?.currency ? <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Moeda de compra</span><strong style={{ color: "#1A1410" }}>{order.quote.currency}</strong></div> : null}
-                {isExternal && (order?.quote?.exchangeRate ?? order?.exchangeRate) ? <div className="flex items-center justify-between"><span style={{ color: "#6B7280" }}>Câmbio usado</span><strong style={{ color: "#1A1410" }}>1 {order?.quote?.currency || "ZAR"} = {Number(order?.quote?.exchangeRate ?? order?.exchangeRate ?? 0).toFixed(2)} MZN</strong></div> : null}
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Metodo</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>{humanize(order?.payment?.method)}</strong></div>
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Estado</span><strong className="min-w-0 break-words text-right" style={{ color: GREEN }}>{humanize(order?.payment?.status || order?.status)}</strong></div>
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Referencia</span><strong className="min-w-0 break-all text-right" style={{ color: "#1A1410" }}>{order?.payment?.transactionId || "--"}</strong></div>
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Pagador</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>{order?.payment?.payerName || order?.customerFullName || "--"}</strong></div>
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Telefone do pagamento</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>{order?.payment?.payerPhone || order?.primaryPhoneNumber || "--"}</strong></div>
+                <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Data</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>{formatDate(order?.payment?.paymentDate || order?.paymentDate || order?.deliveryDate || order?.orderDate)}</strong></div>
+                {isExternal ? <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Valor total pago</span><strong className="shrink-0 text-right" style={{ color: "#1A1410" }}>{formatMoney(orderVisibleTotal(order))}</strong></div> : null}
+                {isExternal && order?.quote?.currency ? <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Moeda de compra</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>{order.quote.currency}</strong></div> : null}
+                {isExternal && (order?.quote?.exchangeRate ?? order?.exchangeRate) ? <div className="receipt-info-row flex items-start justify-between gap-4"><span className="min-w-0 break-words" style={{ color: "#6B7280" }}>Câmbio usado</span><strong className="min-w-0 break-words text-right" style={{ color: "#1A1410" }}>1 {order?.quote?.currency || "ZAR"} = {Number(order?.quote?.exchangeRate ?? order?.exchangeRate ?? 0).toFixed(2)} MZN</strong></div> : null}
               </div>
             </article>
 
-            <article className="rounded-[28px] border p-5" style={{ borderColor: "#F2D4CC" }}>
+            <article className="min-w-0 rounded-[24px] border p-4 sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
               <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "#9CA3AF" }}>Nota</p>
               <p className="mt-3 text-sm leading-6" style={{ color: "#6B7280" }}>
                 Este recibo pode ser guardado em PDF pelo botao acima. No navegador, sera aberta a caixa de impressao e podes escolher a opcao Guardar como PDF.
@@ -281,6 +281,66 @@ export default function OrderReceiptPage() {
       </section>
 
       <style jsx global>{`
+        @media (max-width: 640px) {
+          .receipt-items-table,
+          .receipt-items-table thead,
+          .receipt-items-table tbody,
+          .receipt-items-table tr,
+          .receipt-items-table th,
+          .receipt-items-table td {
+            display: block;
+            width: 100%;
+          }
+
+          .receipt-items-table thead {
+            display: none;
+          }
+
+          .receipt-items-table tr {
+            padding: 0.75rem 0;
+          }
+
+          .receipt-items-table tr + tr {
+            border-top: 1px solid #f2d4cc !important;
+          }
+
+          .receipt-items-table td {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.35rem 1rem;
+            text-align: right;
+            word-break: break-word;
+          }
+
+          .receipt-items-table td::before {
+            content: attr(data-label);
+            flex: 0 0 auto;
+            max-width: 42%;
+            text-align: left;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #9ca3af;
+          }
+
+          .receipt-items-table td[data-label="Item"] {
+            display: block;
+            text-align: left;
+          }
+
+          .receipt-items-table td[data-label="Item"]::before {
+            display: block;
+            max-width: 100%;
+            margin-bottom: 0.25rem;
+          }
+
+          .receipt-info-row {
+            flex-wrap: wrap;
+          }
+        }
+
         @media print {
           body {
             background: white !important;
