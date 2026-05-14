@@ -9,15 +9,14 @@ import { Logo } from "@/components/logo";
 type AuthTab = "login" | "register";
 
 type LoginResponse = {
-  token?: string;
-  refreshToken?: string;
+  authenticated?: boolean;
   user?: unknown;
   message?: string;
+  mustChangePassword?: boolean;
 };
 
 type RegisterResponse = {
-  token?: string;
-  refreshToken?: string;
+  authenticated?: boolean;
   user?: unknown;
   message?: string;
   messages?: Record<string, string>;
@@ -132,7 +131,6 @@ function LoginPageContent() {
 
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    console.log("[LOGIN] handleLoginSubmit called", { identifier: loginEmail, hasPassword: !!loginPassword });
 
     if (!loginEmail.trim() || !loginPassword) {
       setLoginError("Preencha o email ou telefone e a senha para continuar.");
@@ -154,16 +152,16 @@ function LoginPageContent() {
         }),
       });
 
-      const payload = (await response.json().catch(() => ({}))) as LoginResponse & { mustChangePassword?: boolean };
+      const payload = (await response.json().catch(() => ({}))) as LoginResponse;
 
-      if (!response.ok || !payload.token) {
+      if (!response.ok || !payload.authenticated) {
         if (response.status === 401) {
           throw new Error(payload.message || "Email/telefone ou senha incorretos.");
         }
         throw new Error(payload.message || "Nao foi possivel entrar na conta.");
       }
 
-      login(payload.token, payload.refreshToken);
+      login();
 
       if (payload.mustChangePassword) {
         router.replace("/profile/change-password?forced=1");
@@ -180,7 +178,6 @@ function LoginPageContent() {
 
   const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    console.log("[LOGIN] handleRegisterSubmit called", { email: registerEmail });
 
     if (!firstName.trim() || !lastName.trim() || !registerEmail.trim() || !phone.trim() || !registerPassword) {
       setRegisterError("Preencha todos os campos obrigatorios.");
@@ -216,7 +213,7 @@ function LoginPageContent() {
 
       const payload = (await response.json().catch(() => ({}))) as RegisterResponse;
 
-      if (!response.ok || !payload.token) {
+      if (!response.ok || !payload.authenticated) {
         if (response.status === 400) {
           throw new Error(getRegisterError(payload));
         }
@@ -224,7 +221,7 @@ function LoginPageContent() {
       }
 
       setRegisterSuccess("Conta criada com sucesso. A redirecionar...");
-      login(payload.token, payload.refreshToken);
+      login();
       window.setTimeout(() => {
         router.replace(redirectTo);
         router.refresh();
@@ -237,7 +234,6 @@ function LoginPageContent() {
   };
 
   const handleGoogleLogin = () => {
-    console.log("[LOGIN] handleGoogleLogin called");
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("google_auth_redirect", redirectTo);
       window.location.href = `${BACKEND_PUBLIC_URL}/oauth2/authorization/google`;
@@ -300,7 +296,7 @@ function LoginPageContent() {
             <div className="mb-8 flex border-b border-[#F3D8CE]">
               <button
                 type="button"
-                onClick={() => { console.log("[LOGIN] tab → login"); setActiveTab("login"); }}
+                onClick={() => setActiveTab("login")}
                 className={`relative flex-1 pb-4 text-sm font-bold transition ${activeTab === "login" ? "text-[#E8431A]" : "text-[#8E837D] hover:text-[#4E403B]"}`}
               >
                 Entrar
@@ -308,7 +304,7 @@ function LoginPageContent() {
               </button>
               <button
                 type="button"
-                onClick={() => { console.log("[LOGIN] tab → register"); setActiveTab("register"); }}
+                onClick={() => setActiveTab("register")}
                 className={`relative flex-1 pb-4 text-sm font-bold transition ${activeTab === "register" ? "text-[#E8431A]" : "text-[#8E837D] hover:text-[#4E403B]"}`}
               >
                 Criar conta
@@ -549,4 +545,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-

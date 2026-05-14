@@ -586,7 +586,6 @@ export default function ProfilePage() {
       formData.append("file", file);
       const response = await fetch("/api/xdigital/users/me/avatar", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (!response.ok) {

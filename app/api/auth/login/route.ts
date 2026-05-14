@@ -80,8 +80,7 @@ export async function POST(request: Request) {
 
     const nextResponse = NextResponse.json(
       {
-        token,
-        refreshToken,
+        authenticated: true,
         mustChangePassword: payload.mustChangePassword ?? false,
       },
       { status: 200 }

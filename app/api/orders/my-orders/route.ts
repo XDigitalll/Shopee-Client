@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
 async function loadOrders(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
+  const token = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
   const url = new URL(request.url);
   const backendUrl = new URL(`${BACKEND_URL}/orders/me`);
   backendUrl.searchParams.set("page", "0");
   backendUrl.searchParams.set("size", "100");
 
   const response = await fetch(backendUrl, {
-    headers: authorization ? { Authorization: authorization } : undefined,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     cache: "no-store",
   });
 

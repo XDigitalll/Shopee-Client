@@ -94,10 +94,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     }
 
     try {
-      const response = await fetch("/api/cart", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
+      const response = await fetch("/api/cart", { cache: "no-store" });
       if (!response.ok) return;
       const cart = await response.json() as Cart;
       setCartCount((cart.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0));

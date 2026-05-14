@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/session";
+import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
@@ -11,16 +11,11 @@ async function forward(request: NextRequest, path: string[]) {
   backendUrl.search = url.search;
 
   const headers = new Headers();
-  const authorization = request.headers.get("authorization");
   const contentType = request.headers.get("content-type") ?? "";
 
-  if (authorization) {
-    headers.set("Authorization", authorization);
-  } else {
-    const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
-    if (cookieToken) {
-      headers.set("Authorization", `Bearer ${cookieToken}`);
-    }
+  const cookieToken = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
+  if (cookieToken) {
+    headers.set("Authorization", `Bearer ${cookieToken}`);
   }
 
   if (contentType) {

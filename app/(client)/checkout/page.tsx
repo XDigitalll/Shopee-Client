@@ -51,9 +51,8 @@ function isCheckoutResponse(payload: CheckoutResponse | Order | null): payload i
   );
 }
 
-async function fetchWithAuth<T>(url: string, token: string, init?: RequestInit) {
+async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
-  headers.set("Authorization", `Bearer ${token}`);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const response = await fetch(url, { ...init, headers, cache: "no-store" });
   if (response.status === 204) return null as T;

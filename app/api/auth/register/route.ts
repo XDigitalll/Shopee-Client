@@ -83,8 +83,7 @@ export async function POST(request: Request) {
 
     const nextResponse = NextResponse.json(
       {
-        token,
-        refreshToken,
+        authenticated: true,
         user: payload.user ?? null,
       },
       { status: 200 }

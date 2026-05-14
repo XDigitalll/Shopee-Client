@@ -1,20 +1,29 @@
-﻿export const TOKEN_KEY = "shopee_client_token";
-export const REFRESH_TOKEN_KEY = "shopee_client_refresh_token";
 export const AUTH_CHANGE_EVENT = "shopeex-auth-change";
 
-// Cookie names (read-only client access; httpOnly cookies are set by the server)
 export const PROFILE_COOKIE = "shopee_client_profile";
 
-// Legacy keys from before the rename — kept only for one-time migration on bootstrap.
-const LEGACY_TOKEN_KEY = "shopee_admin_token";
-const LEGACY_REFRESH_TOKEN_KEY = "shopee_refresh_token";
+const LEGACY_TOKEN_KEYS = [
+  "shopee_client_token",
+  "shopee_client_refresh_token",
+  "shopee_admin_token",
+  "shopee_refresh_token",
+];
 
-type StoredSession = {
-  token: string;
-  refreshToken: string;
+export type ClientSessionProfile = {
+  displayName?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  avatarUrl?: string;
+  phoneNumber?: string;
+  provider?: string;
+  roles?: unknown[];
+  mustChangePassword?: boolean;
+  profileIncomplete?: boolean;
+  accountCompletionPercentage?: number;
+  expiresAt?: number | null;
 };
-
-let refreshPromise: Promise<StoredSession | null> | null = null;
 
 function emitAuthChange() {
   if (typeof window === "undefined") {
@@ -24,68 +33,22 @@ function emitAuthChange() {
   window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
 }
 
-export function getStoredToken() {
-  if (typeof window === "undefined") return null;
-
-  const token = window.localStorage.getItem(TOKEN_KEY);
-  if (token) return token;
-
-  // One-time migration: promote legacy key to new key and drop the old one.
-  const legacy = window.localStorage.getItem(LEGACY_TOKEN_KEY);
-  if (legacy) {
-    window.localStorage.setItem(TOKEN_KEY, legacy);
-    window.localStorage.removeItem(LEGACY_TOKEN_KEY);
-    return legacy;
-  }
-
-  return null;
-}
-
-export function getStoredRefreshToken() {
-  if (typeof window === "undefined") return null;
-
-  const token = window.localStorage.getItem(REFRESH_TOKEN_KEY);
-  if (token) return token;
-
-  // One-time migration: promote legacy key to new key and drop the old one.
-  const legacy = window.localStorage.getItem(LEGACY_REFRESH_TOKEN_KEY);
-  if (legacy) {
-    window.localStorage.setItem(REFRESH_TOKEN_KEY, legacy);
-    window.localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
-    return legacy;
-  }
-
-  return null;
-}
-
-export function storeSession(token: string, refreshToken: string) {
+export function clearLegacyAuthStorage({ emit = false }: { emit?: boolean } = {}) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(TOKEN_KEY, token);
-  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-  emitAuthChange();
-}
-
-export function storeToken(token: string) {
-  const refreshToken = getStoredRefreshToken();
-  if (!refreshToken) {
-    return;
+  for (const key of LEGACY_TOKEN_KEYS) {
+    window.localStorage.removeItem(key);
   }
 
-  storeSession(token, refreshToken);
+  if (emit) {
+    emitAuthChange();
+  }
 }
 
 export function clearStoredSession() {
-  if (typeof window === "undefined") return;
-
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
-  // Also remove legacy keys so logout is always clean regardless of migration state.
-  window.localStorage.removeItem(LEGACY_TOKEN_KEY);
-  window.localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
-  emitAuthChange();
+  clearLegacyAuthStorage({ emit: true });
 }
 
 export function clearStoredToken() {
@@ -105,47 +68,37 @@ export function getProfileCookie(): Record<string, unknown> | null {
   }
 }
 
-export async function refreshStoredSession() {
-  if (typeof window === "undefined") {
+export async function loadSessionProfile() {
+  clearLegacyAuthStorage();
+
+  const response = await fetch("/api/auth/me", {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
     return null;
   }
 
-  if (refreshPromise) {
-    return refreshPromise;
-  }
+  return (await response.json().catch(() => null)) as ClientSessionProfile | null;
+}
 
-  const refreshToken = getStoredRefreshToken();
-  // If no localStorage refresh token, still attempt cookie-based refresh via the dedicated route
-  if (!refreshToken && !document.cookie.includes("shopee_client_refresh=")) {
+export async function refreshStoredSession() {
+  clearLegacyAuthStorage();
+
+  const response = await fetch("/api/auth/refresh", {
+    method: "POST",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
     clearStoredSession();
     return null;
   }
 
-  refreshPromise = fetch("/api/auth/refresh", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: refreshToken ? JSON.stringify({ refreshToken }) : undefined,
-    cache: "no-store",
-  })
-    .then(async (response) => {
-      const payload = (await response.json().catch(() => null)) as StoredSession | null;
-      if (!response.ok || !payload?.token || !payload.refreshToken) {
-        clearStoredSession();
-        return null;
-      }
+  return loadSessionProfile();
+}
 
-      storeSession(payload.token, payload.refreshToken);
-      return payload;
-    })
-    .catch(() => {
-      clearStoredSession();
-      return null;
-    })
-    .finally(() => {
-      refreshPromise = null;
-    });
-
-  return refreshPromise;
+export function notifyAuthChanged() {
+  emitAuthChange();
 }

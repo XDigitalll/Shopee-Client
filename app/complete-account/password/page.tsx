@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
 import { apiFetch } from "@/lib/api-client";
-import { refreshStoredSession } from "@/lib/auth";
 
 const RED = "#E8431A";
 const TEXT = "#1A1410";
@@ -54,14 +53,11 @@ export default function CompleteAccountPasswordPage() {
 
     setSaving(true);
     try {
-      console.log("[force-change-password] sending request, hasToken:", !!token);
       await apiFetch<{ success: boolean; mustChangePassword: boolean; profileIncomplete: boolean }>("auth/force-change-password", {
         method: "POST",
         token,
         body: JSON.stringify({ newPassword, confirmPassword }),
       });
-      console.log("[force-change-password] success, refreshing session");
-      await refreshStoredSession();
       router.push("/complete-account/profile");
     } catch (error) {
       console.error("[force-change-password] error:", error);
