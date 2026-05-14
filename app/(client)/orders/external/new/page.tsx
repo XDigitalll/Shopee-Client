@@ -15,6 +15,26 @@ const BORDER = "#F2D4CC";
 const SOFT = "#FFF0EC";
 const PHONE_PATTERN = /^\+258(82|83|84|85|86|87)\d{7}$/;
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
+const STORE_OPTIONS = [
+  { id: "SHEIN", label: "Shein" },
+  { id: "AMAZON", label: "Amazon" },
+  { id: "TEMU", label: "Temu" },
+  { id: "ALI_EXPRESS", label: "AliExpress" },
+  { id: "ALI_BABA", label: "Alibaba" },
+  { id: "MR_PRICE", label: "Mr Price" },
+  { id: "MAKRO", label: "Makro" },
+  { id: "BASH", label: "Bash" },
+  { id: "BUFFALO", label: "Buffalo" },
+  { id: "ZARA", label: "Zara" },
+  { id: "ASOS", label: "ASOS" },
+  { id: "EBAY", label: "eBay" },
+];
+
+function normalizeStore(value: string | null): string {
+  if (!value) return "SHEIN";
+  const normalized = value.trim().toUpperCase().replace(/[-\s]+/g, "_");
+  return STORE_OPTIONS.some((store) => store.id === normalized) ? normalized : "SHEIN";
+}
 
 function looksLikeUrl(value: string): boolean {
   const trimmed = value.trim();
@@ -51,6 +71,7 @@ export default function NewExternalOrderPage() {
   const isLoggedIn = Boolean(token);
 
   const [productLink, setProductLink] = useState("");
+  const [selectedStore, setSelectedStore] = useState("SHEIN");
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState(() => userPhone || "+258");
@@ -75,6 +96,15 @@ export default function NewExternalOrderPage() {
       setPhoneNumber(userPhone);
     }
   }, [userPhone]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const initialLink = params.get("link")?.trim();
+    setSelectedStore(normalizeStore(params.get("store")));
+    if (initialLink) {
+      setProductLink(initialLink);
+    }
+  }, []);
 
   function normalizePhone(value: string) {
     let digits = value.replace(/\D/g, "");
@@ -161,6 +191,7 @@ export default function NewExternalOrderPage() {
     body.set("cartLink", cleanLink);
     body.set("productLink", cleanLink);
     body.set("link", cleanLink);
+    body.set("sourceStore", selectedStore);
     body.set("requestInputType", looksLikeUrl(cleanLink) ? "LINK" : "DESCRIPTION");
     body.set("quantity", String(quantity));
     body.set("primaryPhoneNumber", cleanPhone);
@@ -429,6 +460,31 @@ export default function NewExternalOrderPage() {
 
             <form onSubmit={(event) => void handleSubmit(event)} className="rounded-[28px] border bg-white p-4 shadow-sm sm:p-6" style={{ borderColor: BORDER }}>
               <div className="grid gap-5">
+                <label className="block">
+                  <span className="text-sm font-black">Loja</span>
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                    {STORE_OPTIONS.map((store) => {
+                      const active = selectedStore === store.id;
+                      return (
+                        <button
+                          key={store.id}
+                          type="button"
+                          onClick={() => setSelectedStore(store.id)}
+                          disabled={isSubmitting}
+                          className="shrink-0 rounded-full border px-4 py-2 text-sm font-black transition"
+                          style={{
+                            borderColor: active ? RED : BORDER,
+                            background: active ? SOFT : "#FFFDFC",
+                            color: active ? RED : TEXT,
+                          }}
+                        >
+                          {store.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </label>
+
                 <label className="block">
                   <span className="text-sm font-black">
                     {productLink.trim() && !looksLikeUrl(productLink)
