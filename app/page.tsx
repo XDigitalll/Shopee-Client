@@ -45,6 +45,10 @@ const STORES_META = [
   { id: "MAKRO",       label: "Makro",      color: "#003087", abbr: "MK", hint: "makro.co.za" },
   { id: "BASH",        label: "Bash",       color: "#2D2D3F", abbr: "BS", hint: "bash.com" },
   { id: "BUFFALO",     label: "Buffalo",    color: "#7B3F00", abbr: "BF", hint: "buffalo.com" },
+  { id: "ZARA",        label: "Zara",       color: "#000000", abbr: "ZR", hint: "zara.com" },
+  { id: "ASOS",        label: "ASOS",       color: "#2D2D2D", abbr: "AS", hint: "asos.com" },
+  { id: "EBAY",        label: "eBay",       color: "#86B817", abbr: "EB", hint: "ebay.com" },
+  { id: "OTHER",       label: "Outras",     color: "#6B7280", abbr: "OU", hint: "outra loja" },
 ];
 
 // â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -278,8 +282,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
 
   return (
     <section
-      className="relative overflow-hidden"
-      style={{ minHeight: "clamp(420px, 62vh, 560px)" }}
+      className="hero-banner-section relative overflow-hidden"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -289,13 +292,13 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
           {banners.map((b, i) => (
             <div
               key={b.id}
-              className="absolute inset-0 transition-opacity duration-700"
+              className="hero-banner-slide absolute inset-0 transition-opacity duration-700"
               style={{ opacity: i === current ? 1 : 0, zIndex: 0 }}
             >
               <img
                 src={b.imageUrl}
                 alt={b.title}
-                className="h-full w-full object-cover"
+                className="hero-banner-image h-full w-full"
                 style={{ position: "absolute", inset: 0 }}
               />
             </div>
@@ -335,7 +338,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
       )}
 
       {/* Content */}
-      <div className="relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 lg:py-20" style={{ zIndex: 2, minHeight: "clamp(420px, 62vh, 560px)" }}>
+      <div className="hero-banner-content relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 lg:py-20" style={{ zIndex: 2 }}>
         <div className="max-w-2xl space-y-5 text-white">
           <div
             className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-xs font-bold"
@@ -680,7 +683,7 @@ function ExternalOrderBanner() {
     const params = new URLSearchParams();
     params.set("store", selectedStore);
     if (link.trim()) {
-      params.set("link", link.trim());
+      params.set("input", link.trim());
     }
     router.push(`/comprar-do-estrangeiro?${params.toString()}`);
   };
@@ -744,10 +747,10 @@ function ExternalOrderBanner() {
           className="mx-auto flex max-w-lg flex-col gap-3 sm:flex-row"
         >
           <input
-            type="url"
+            type="text"
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder={`https://www.${store.hint}/...`}
+            placeholder="Cole o link ou descreva o produto"
             className="flex-1 rounded-2xl px-4 py-3.5 text-sm outline-none"
             style={{
               background: "rgba(255,255,255,0.10)",
@@ -778,6 +781,7 @@ type FeedbackState = { msg: string; type: "success" | "error" } | null;
 type ProductCardProps = {
   product: Product;
   token: string | null;
+  authReady: boolean;
   onLoginClick: () => void;
   onFeedback: (msg: string, type: "success" | "error") => void;
 };
@@ -786,7 +790,7 @@ function canAddToCart(product: Product) {
   return product.madeToOrder || typeof product.stock !== "number" || product.stock > 0;
 }
 
-function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardProps) {
+function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: ProductCardProps) {
   const [adding, setAdding] = useState(false);
   const img =
     product.primaryThumbnailUrl ||
@@ -805,7 +809,12 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
   const handleAdd = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!token) { onLoginClick(); return; }
+    if (!authReady) return;
+    if (!token) {
+      onFeedback("Inicia sessão para adicionar ao carrinho.", "error");
+      onLoginClick();
+      return;
+    }
     setAdding(true);
     try {
       await apiFetch("cart/add", {
@@ -898,17 +907,17 @@ function ProductCard({ product, token, onLoginClick, onFeedback }: ProductCardPr
         <button
           type="button"
           onClick={(e) => void handleAdd(e)}
-          disabled={adding || !canAdd}
+          disabled={adding || !canAdd || !authReady}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition-all"
           style={{
-            background: adding || !canAdd ? "#9CA3AF" : RED,
-            cursor: adding || !canAdd ? "not-allowed" : "pointer",
+            background: adding || !canAdd || !authReady ? "#9CA3AF" : RED,
+            cursor: adding || !canAdd || !authReady ? "not-allowed" : "pointer",
           }}
-          onMouseEnter={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED_HOVER; }}
-          onMouseLeave={(e) => { if (!adding && canAdd) e.currentTarget.style.background = RED; }}
+          onMouseEnter={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED_HOVER; }}
+          onMouseLeave={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED; }}
         >
           <CartIconSvg size={16} />
-          {adding ? "A adicionar..." : canAdd ? "Carrinho" : "Sem stock"}
+          {adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"}
         </button>
       </div>
     </Link>
@@ -960,6 +969,7 @@ type ProductsSectionProps = {
   isLoading: boolean;
   hasError: boolean;
   token: string | null;
+  authReady: boolean;
   onLoginClick: () => void;
   searchQuery: string;
   onSearch: (v: string) => void;
@@ -968,7 +978,7 @@ type ProductsSectionProps = {
 };
 
 function ProductsSection({
-  products, isLoading, hasError, token, onLoginClick,
+  products, isLoading, hasError, token, authReady, onLoginClick,
   searchQuery, onSearch, onSearchSubmit, searchActive,
 }: ProductsSectionProps) {
   const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -1088,6 +1098,7 @@ function ProductsSection({
                   key={p.id}
                   product={p}
                   token={token}
+                  authReady={authReady}
                   onLoginClick={onLoginClick}
                   onFeedback={(msg, type) => setFeedback({ msg, type })}
                 />
@@ -1199,7 +1210,7 @@ function OrderTracker({ order }: { order: Order }) {
 // â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function Home() {
-  const { token, login } = useAuth();
+  const { token, isReady, login } = useAuth();
 
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1286,6 +1297,7 @@ export default function Home() {
         isLoading={loadingProducts}
         hasError={productsError}
         token={token}
+        authReady={isReady}
         onLoginClick={openLogin}
         searchQuery={searchQuery}
         onSearch={handleSearchChange}

@@ -28,12 +28,13 @@ const STORE_OPTIONS = [
   { id: "ZARA", label: "Zara" },
   { id: "ASOS", label: "ASOS" },
   { id: "EBAY", label: "eBay" },
+  { id: "OTHER", label: "Outras" },
 ];
 
 function normalizeStore(value: string | null): string {
   if (!value) return "SHEIN";
   const normalized = value.trim().toUpperCase().replace(/[-\s]+/g, "_");
-  return STORE_OPTIONS.some((store) => store.id === normalized) ? normalized : "SHEIN";
+  return STORE_OPTIONS.some((store) => store.id === normalized) ? normalized : "OTHER";
 }
 
 function looksLikeUrl(value: string): boolean {
@@ -44,6 +45,7 @@ function looksLikeUrl(value: string): boolean {
   const spaceCount = (trimmed.match(/\s/g) ?? []).length;
   return spaceCount < 3 && trimmed.includes(".");
 }
+
 const TELEGRAM_BOT_URL = process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL ?? "https://t.me/shopeexdigital_bot";
 
 function buildTelegramUrl(orderReference?: string) {
@@ -75,6 +77,9 @@ export default function NewExternalOrderPage() {
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState(() => userPhone || "+258");
+  // WhatsApp / communication channel
+  const [whatsappSameAsPrimary, setWhatsappSameAsPrimary] = useState<boolean | null>(null);
+  const [communicationPhone, setCommunicationPhone] = useState("+258");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -99,10 +104,11 @@ export default function NewExternalOrderPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const initialLink = params.get("link")?.trim();
+    // "input" is the current param; "link" kept for backward compat
+    const initialInput = params.get("input")?.trim() || params.get("link")?.trim();
     setSelectedStore(normalizeStore(params.get("store")));
-    if (initialLink) {
-      setProductLink(initialLink);
+    if (initialInput) {
+      setProductLink(initialInput);
     }
   }, []);
 
@@ -122,7 +128,7 @@ export default function NewExternalOrderPage() {
 
   function validateForm() {
     if (!productLink.trim()) {
-      return "Cola o link do produto ou carrinho.";
+      return "Cola o link ou descreve o produto que queres comprar.";
     }
 
     if (!Number.isFinite(quantity) || quantity < 1) {
@@ -130,11 +136,24 @@ export default function NewExternalOrderPage() {
     }
 
     if (!phoneNumber.trim()) {
-      return "Indica o teu numero de telefone.";
+      return "Indica o teu numero de telefone principal.";
     }
 
     if (!PHONE_PATTERN.test(normalizePhone(phoneNumber))) {
       return "Usa um telefone valido de Mocambique. Ex: +25884xxxxxxx.";
+    }
+
+    if (whatsappSameAsPrimary === null) {
+      return "Indica se recebes WhatsApp neste mesmo numero.";
+    }
+
+    if (whatsappSameAsPrimary === false) {
+      if (!communicationPhone.trim() || communicationPhone.trim() === "+258") {
+        return "Indica o numero WhatsApp para receber mensagens.";
+      }
+      if (!PHONE_PATTERN.test(normalizePhone(communicationPhone))) {
+        return "Numero WhatsApp invalido. Ex: +25884xxxxxxx.";
+      }
     }
 
     return null;
@@ -186,6 +205,8 @@ export default function NewExternalOrderPage() {
     const cleanLink = productLink.trim();
     const cleanVariant = variant.trim();
     const cleanPhone = normalizePhone(phoneNumber);
+    const cleanCommPhone = whatsappSameAsPrimary ? cleanPhone : normalizePhone(communicationPhone);
+
     const body = new FormData();
     body.set("externalCartUrl", cleanLink);
     body.set("cartLink", cleanLink);
@@ -196,6 +217,9 @@ export default function NewExternalOrderPage() {
     body.set("quantity", String(quantity));
     body.set("primaryPhoneNumber", cleanPhone);
     body.set("phoneNumber", cleanPhone);
+    body.set("communicationChannel", "WHATSAPP");
+    body.set("whatsappSameAsPrimary", String(Boolean(whatsappSameAsPrimary)));
+    body.set("communicationPhone", cleanCommPhone);
     if (cleanVariant) {
       body.set("variant", cleanVariant);
       body.set("variantDetails", cleanVariant);
@@ -239,6 +263,8 @@ export default function NewExternalOrderPage() {
       setVariant("");
       setQuantity(1);
       setPhoneNumber(phoneToKeep);
+      setWhatsappSameAsPrimary(null);
+      setCommunicationPhone("+258");
       setScreenshot(null);
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
@@ -258,18 +284,18 @@ export default function NewExternalOrderPage() {
     <>
       <ClientFeedbackDock feedback={feedback} onClose={() => setFeedback(null)} placement="center" />
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 lg:py-10" style={{ color: TEXT }}>
+      <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 lg:py-10" style={{ color: TEXT }}>
         <section className="mb-6">
           <p className="text-xs font-black uppercase tracking-[0.22em]" style={{ color: RED }}>
             Compra internacional
           </p>
-          <h1 className="mt-2 max-w-3xl font-[family-name:var(--font-sora)] text-3xl font-black leading-tight sm:text-5xl">
+          <h1 className="mt-2 font-[family-name:var(--font-sora)] text-3xl font-black leading-tight sm:text-4xl">
             {isLoggedIn ? "Pede cotacao do estrangeiro" : "Pede cotacao sem criar conta"}
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7" style={{ color: MUTED }}>
+          <p className="mt-3 text-sm leading-7" style={{ color: MUTED }}>
             {isLoggedIn
-              ? "Cola o link e confirma o telefone para contacto. A equipa valida preco, disponibilidade e prazo antes do pagamento."
-              : "Cola o link, deixa o teu telefone e a equipa confirma o resto contigo antes de qualquer pagamento."}
+              ? "Cola o link ou descreve o produto. A equipa valida preco, disponibilidade e prazo antes do pagamento."
+              : "Cola o link ou descreve o produto, deixa o teu telefone e a equipa confirma o resto antes de qualquer pagamento."}
           </p>
         </section>
 
@@ -285,7 +311,7 @@ export default function NewExternalOrderPage() {
                   ? "O teu pedido ja entrou para analise."
                   : "Ja encontramos uma conta associada a este telefone."}
             </h2>
-            <p className="mt-4 max-w-3xl whitespace-pre-line text-base font-semibold leading-8" style={{ color: MUTED }}>
+            <p className="mt-4 whitespace-pre-line text-base font-semibold leading-8" style={{ color: MUTED }}>
               {successOrder.authenticatedOrder
                 ? "A equipa vai analisar o preco, disponibilidade e prazo. Podes acompanhar tudo na pagina de pedidos."
                 : successOrder.firstGuestOrder
@@ -451,18 +477,20 @@ export default function NewExternalOrderPage() {
                       A processar o teu pedido...
                     </p>
                     <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
-                      Estamos a enviar o link, telefone e screenshot para a equipa. Mantem esta pagina aberta ate aparecer a referencia do pedido.
+                      Estamos a enviar os detalhes para a equipa. Mantem esta pagina aberta ate aparecer a referencia do pedido.
                     </p>
                   </div>
                 </div>
               </div>
             ) : null}
 
-            <form onSubmit={(event) => void handleSubmit(event)} className="rounded-[28px] border bg-white p-4 shadow-sm sm:p-6" style={{ borderColor: BORDER }}>
-              <div className="grid gap-5">
-                <label className="block">
+            <form onSubmit={(event) => void handleSubmit(event)} className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-7" style={{ borderColor: BORDER }}>
+              <div className="grid gap-6">
+
+                {/* Store chips — wrap on mobile */}
+                <div>
                   <span className="text-sm font-black">Loja</span>
-                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {STORE_OPTIONS.map((store) => {
                       const active = selectedStore === store.id;
                       return (
@@ -471,7 +499,7 @@ export default function NewExternalOrderPage() {
                           type="button"
                           onClick={() => setSelectedStore(store.id)}
                           disabled={isSubmitting}
-                          className="shrink-0 rounded-full border px-4 py-2 text-sm font-black transition"
+                          className="rounded-full border px-4 py-2 text-sm font-black transition"
                           style={{
                             borderColor: active ? RED : BORDER,
                             background: active ? SOFT : "#FFFDFC",
@@ -483,20 +511,21 @@ export default function NewExternalOrderPage() {
                       );
                     })}
                   </div>
-                </label>
+                </div>
 
-                <label className="block">
-                  <span className="text-sm font-black">
-                    {productLink.trim() && !looksLikeUrl(productLink)
-                      ? "Link ou descrição do produto"
-                      : "Link do produto ou carrinho"}
-                  </span>
-                  <input
+                {/* Product input — text, not URL */}
+                <div>
+                  <label htmlFor="productInput" className="text-sm font-black">
+                    Link ou descrição do produto
+                  </label>
+                  <textarea
+                    id="productInput"
                     value={productLink}
                     onChange={(event) => setProductLink(event.target.value)}
                     disabled={isSubmitting}
+                    rows={3}
                     placeholder="Cole o link da loja ou descreva o produto que quer comprar"
-                    className="mt-2 w-full rounded-2xl border px-4 py-4 text-base outline-none"
+                    className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none"
                     style={{
                       borderColor: productLink.trim() && !looksLikeUrl(productLink) ? "#FCD34D" : BORDER,
                       background: "#FFFDFC",
@@ -507,7 +536,7 @@ export default function NewExternalOrderPage() {
                       <svg className="mt-px shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                       </svg>
-                      Parece que isto não é um link. Podes enviar assim mesmo, mas se tiveres o link da loja ajuda-nos a cotar mais rápido.
+                      Se tiver link, cole o endereço completo. Se não tiver, descreva o produto.
                     </p>
                   )}
                   {productLink.trim() && looksLikeUrl(productLink) && (
@@ -518,55 +547,108 @@ export default function NewExternalOrderPage() {
                       Link reconhecido.
                     </p>
                   )}
-                </label>
+                </div>
 
-                <div className="grid gap-5 sm:grid-cols-[1fr_180px]">
-                  <label className="block">
-                    <span className="text-sm font-black">
-                      {isLoggedIn ? "Telefone para contacto deste pedido" : "Telefone"}
-                    </span>
+                {/* Quantity + variant row */}
+                <div className="grid gap-5 sm:grid-cols-[1fr_160px]">
+                  <div>
+                    <label htmlFor="variantInput" className="text-sm font-black">
+                      Variante <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
+                    </label>
                     <input
-                      value={phoneNumber}
-                      onChange={(event) => setPhoneNumber(event.target.value)}
+                      id="variantInput"
+                      value={variant}
+                      onChange={(event) => setVariant(event.target.value)}
                       disabled={isSubmitting}
-                      placeholder="+25884xxxxxxx"
-                      className="mt-2 w-full rounded-2xl border px-4 py-4 text-base font-bold outline-none"
+                      placeholder="Ex: tamanho M, cor preta, 128GB"
+                      className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base outline-none"
                       style={{ borderColor: BORDER, background: "#FFFDFC" }}
                     />
-                    {isLoggedIn && (
-                      <p className="mt-1 text-xs font-semibold" style={{ color: MUTED }}>
-                        Se usares outro numero, ele sera usado apenas para este pedido.
-                      </p>
-                    )}
-                  </label>
+                  </div>
 
-                  <label className="block">
-                    <span className="text-sm font-black">Quantidade</span>
+                  <div>
+                    <label htmlFor="quantityInput" className="text-sm font-black">Quantidade</label>
                     <input
+                      id="quantityInput"
                       type="number"
                       min={1}
                       value={quantity}
                       onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
                       disabled={isSubmitting}
-                      className="mt-2 w-full rounded-2xl border px-4 py-4 text-base font-black outline-none"
+                      className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-black outline-none"
                       style={{ borderColor: BORDER, background: "#FFFDFC" }}
                     />
-                  </label>
+                  </div>
                 </div>
 
-                <label className="block">
-                  <span className="text-sm font-black">Variante <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
+                {/* Primary phone */}
+                <div>
+                  <label htmlFor="phoneInput" className="text-sm font-black">
+                    Telefone principal / pagamento
+                  </label>
                   <input
-                    value={variant}
-                    onChange={(event) => setVariant(event.target.value)}
+                    id="phoneInput"
+                    value={phoneNumber}
+                    onChange={(event) => setPhoneNumber(event.target.value)}
                     disabled={isSubmitting}
-                    placeholder="Ex: tamanho M, cor preta, 128GB"
-                    className="mt-2 w-full rounded-2xl border px-4 py-4 text-base outline-none"
+                    placeholder="+25884xxxxxxx"
+                    className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
                     style={{ borderColor: BORDER, background: "#FFFDFC" }}
                   />
-                </label>
+                  <p className="mt-1 text-xs font-semibold" style={{ color: MUTED }}>
+                    Usado para chamadas, M-Pesa/eMola e identificação do pedido.
+                  </p>
+                </div>
 
-                <label className="block">
+                {/* WhatsApp same-as-primary question */}
+                <div>
+                  <p className="text-sm font-black">Recebe WhatsApp neste mesmo número?</p>
+                  <div className="mt-2 flex gap-3">
+                    {[
+                      { value: true, label: "Sim" },
+                      { value: false, label: "Não" },
+                    ].map(({ value, label }) => {
+                      const active = whatsappSameAsPrimary === value;
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          disabled={isSubmitting}
+                          onClick={() => setWhatsappSameAsPrimary(value)}
+                          className="rounded-2xl border px-6 py-2.5 text-sm font-black transition"
+                          style={{
+                            borderColor: active ? RED : BORDER,
+                            background: active ? SOFT : "#FFFDFC",
+                            color: active ? RED : TEXT,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Alternative WhatsApp number — shown only when Não */}
+                {whatsappSameAsPrimary === false && (
+                  <div>
+                    <label htmlFor="commPhoneInput" className="text-sm font-black">
+                      Número WhatsApp para receber mensagens
+                    </label>
+                    <input
+                      id="commPhoneInput"
+                      value={communicationPhone}
+                      onChange={(event) => setCommunicationPhone(event.target.value)}
+                      disabled={isSubmitting}
+                      placeholder="+25884xxxxxxx"
+                      className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
+                      style={{ borderColor: BORDER, background: "#FFFDFC" }}
+                    />
+                  </div>
+                )}
+
+                {/* Screenshot */}
+                <div>
                   <span className="text-sm font-black">Foto ou screenshot <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
                   <div className="mt-2 rounded-2xl border px-4 py-4" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
                     <input
@@ -580,12 +662,12 @@ export default function NewExternalOrderPage() {
                     />
                     {screenshot ? (
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: SOFT }}>
-                        <span className="text-sm font-bold" style={{ color: TEXT }}>{screenshot.name}</span>
+                        <span className="text-sm font-bold truncate" style={{ color: TEXT }}>{screenshot.name}</span>
                         <button
                           type="button"
                           onClick={() => handleScreenshotChange(null)}
                           disabled={isSubmitting}
-                          className="text-sm font-black"
+                          className="shrink-0 text-sm font-black"
                           style={{ color: RED }}
                         >
                           Remover
@@ -593,12 +675,12 @@ export default function NewExternalOrderPage() {
                       </div>
                     ) : null}
                   </div>
-                </label>
+                </div>
 
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="rounded-2xl px-5 py-4 text-base font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-2xl px-5 py-4 text-base font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ background: RED }}
                 >
                   {isSubmitting ? "A processar pedido..." : "Pedir cotacao"}

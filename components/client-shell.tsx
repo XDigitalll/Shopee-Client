@@ -94,7 +94,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     }
 
     try {
-      const response = await fetch("/api/cart", { cache: "no-store" });
+      const response = await fetch("/api/cart", { cache: "no-store", credentials: "same-origin" });
       if (!response.ok) return;
       const cart = await response.json() as Cart;
       setCartCount((cart.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0));

@@ -298,7 +298,7 @@ function StarRow({ rating }: { rating: number }) {
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, isReady } = useAuth();
   const productId = Number(params.id);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -458,8 +458,10 @@ export default function ProductDetailPage() {
   };
 
   const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
+    if (!isReady) return;
     if (!token) {
-      setFeedback({ type: "info", msg: "Podes ver o produto sem conta. Para guardar carrinho e finalizar compra, entra na tua conta." });
+      setFeedback({ type: "info", msg: "Inicia sessão para adicionar ao carrinho." });
+      router.push(`/login?redirect=${encodeURIComponent(`/store/${productId}`)}`);
       return;
     }
     setBusyAction(mode);
@@ -887,10 +889,10 @@ export default function ProductDetailPage() {
 
             {/* CTAs */}
             <div className="hidden gap-3 lg:grid lg:grid-cols-2">
-              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canAdd ? RED : "#E5E7EB", color: canAdd ? RED : "#9CA3AF", background: canAdd ? "white" : "#F9FAFB" }}>
-                {busyAction === "add" ? "A adicionar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
+              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd || !isReady} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canAdd && isReady ? RED : "#E5E7EB", color: canAdd && isReady ? RED : "#9CA3AF", background: canAdd && isReady ? "white" : "#F9FAFB" }}>
+                {busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
               </button>
-              <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canAdd ? RED : "#9CA3AF" }}>
+              <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd || !isReady} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canAdd && isReady ? RED : "#9CA3AF" }}>
                 {busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
               </button>
             </div>
@@ -1124,8 +1126,8 @@ export default function ProductDetailPage() {
                         <p className="text-sm font-black" style={{ color: RED }}>{formatMoney(itemPrice)}</p>
                         {itemOriginal > itemPrice && <p className="text-xs line-through" style={{ color: "#9CA3AF" }}>{formatMoney(itemOriginal)}</p>}
                       </div>
-                      <button type="button" onClick={() => void addToCart(item.id, "add", undefined, 1)} className="w-full rounded-xl py-2 text-xs font-black text-white transition hover:opacity-90" style={{ background: RED }}>
-                        Adicionar
+                      <button type="button" onClick={() => void addToCart(item.id, "add", undefined, 1)} disabled={!isReady || busyAction !== null} className="w-full rounded-xl py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-60" style={{ background: isReady ? RED : "#9CA3AF" }}>
+                        {!isReady ? "A preparar..." : "Adicionar"}
                       </button>
                     </div>
                   </article>
@@ -1143,11 +1145,11 @@ export default function ProductDetailPage() {
             <p className="line-clamp-1 text-xs font-semibold" style={{ color: "#6B7280" }}>{product.name}</p>
             <p className="text-base font-black" style={{ color: RED }}>{formatMoney(price)}</p>
           </div>
-          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canAdd ? RED : "#E5E7EB", color: canAdd ? RED : "#9CA3AF" }}>
-            {busyAction === "add" ? "..." : "Carrinho"}
+          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd || !isReady} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canAdd && isReady ? RED : "#E5E7EB", color: canAdd && isReady ? RED : "#9CA3AF" }}>
+            {busyAction === "add" || !isReady ? "..." : "Carrinho"}
           </button>
-          <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canAdd ? RED : "#9CA3AF" }}>
-            {busyAction === "buy" ? "..." : "Comprar"}
+          <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd || !isReady} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canAdd && isReady ? RED : "#9CA3AF" }}>
+            {busyAction === "buy" || !isReady ? "..." : "Comprar"}
           </button>
         </div>
       </div>

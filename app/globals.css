@@ -71,3 +71,47 @@ textarea {
 ::-webkit-scrollbar-thumb:hover {
   background: #CC3315;
 }
+
+.hero-banner-section,
+.hero-banner-content {
+  min-height: clamp(420px, 62svh, 560px);
+}
+
+.hero-banner-slide {
+  background: #080b14;
+}
+
+.hero-banner-image {
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (max-width: 1023px) {
+  .hero-banner-section,
+  .hero-banner-content {
+    min-height: clamp(460px, 70svh, 620px);
+  }
+
+  .hero-banner-image {
+    object-position: center;
+  }
+}
+
+@media (max-width: 767px) {
+  .hero-banner-section,
+  .hero-banner-content {
+    min-height: clamp(520px, 82svh, 700px);
+  }
+
+  .hero-banner-image {
+    object-fit: contain;
+    object-position: top center;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-banner-section,
+  .hero-banner-content {
+    min-height: clamp(560px, 88svh, 740px);
+  }
+}
