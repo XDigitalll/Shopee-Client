@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -28,11 +29,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const { orderId } = await context.params;
   const backendUrl = `${BACKEND_URL}/api/payments/${encodeURIComponent(orderId)}/submit`;
   const headers = new Headers();
-  const authorization = request.headers.get("authorization");
   const cookie = request.headers.get("cookie");
+  const cookieToken = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
 
-  if (authorization) {
-    headers.set("Authorization", authorization);
+  if (cookieToken) {
+    headers.set("Authorization", `Bearer ${cookieToken}`);
   }
   if (cookie) {
     headers.set("Cookie", cookie);

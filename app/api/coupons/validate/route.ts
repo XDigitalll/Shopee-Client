@@ -1,13 +1,14 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
 export async function POST(request: NextRequest) {
-  const authorization = request.headers.get("authorization");
+  const token = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
   const body = await request.text();
   const response = await fetch(`${BACKEND_URL}/coupons/validate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(authorization ? { Authorization: authorization } : {}) },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body,
     cache: "no-store",
   });

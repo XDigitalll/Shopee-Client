@@ -11,8 +11,6 @@ function GoogleCallbackContent() {
   const [message, setMessage] = useState("A concluir login com Google...");
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    const refreshToken = searchParams.get("refreshToken");
     const error = searchParams.get("error");
 
     if (error) {
@@ -20,25 +18,32 @@ function GoogleCallbackContent() {
       return;
     }
 
-    if (!token || !refreshToken) {
-      router.replace("/login?error=Nao foi possivel concluir o login com Google.");
-      return;
-    }
+    const finishLogin = async () => {
+      const response = await fetch("/api/auth/me", { cache: "no-store" });
 
-    login(token, refreshToken);
+      if (!response.ok) {
+        router.replace("/login?error=Nao foi possivel concluir o login com Google.");
+        return;
+      }
 
-    const redirectTo =
-      typeof window !== "undefined"
-        ? window.sessionStorage.getItem("google_auth_redirect") || "/"
-        : "/";
+      login();
 
-    if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem("google_auth_redirect");
-    }
+      const redirectTo =
+        typeof window !== "undefined"
+          ? window.sessionStorage.getItem("google_auth_redirect") || "/"
+          : "/";
 
-    setMessage("Login concluido. A redirecionar...");
-    router.replace(redirectTo);
-    router.refresh();
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem("google_auth_redirect");
+        window.history.replaceState(null, "", "/login/google/callback");
+      }
+
+      setMessage("Login concluido. A redirecionar...");
+      router.replace(redirectTo);
+      router.refresh();
+    };
+
+    void finishLogin();
   }, [login, router, searchParams]);
 
   return (

@@ -9,6 +9,7 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
 } from "@/lib/session";
+import { XSRF_COOKIE } from "@/lib/csrf";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -77,14 +78,30 @@ export async function POST(request: Request) {
     cookieStore.set(REFRESH_COOKIE_NAME, refreshToken, cookieOpts(true, REFRESH_MAX_AGE));
     cookieStore.set(PROFILE_COOKIE, buildProfileJson(token), cookieOpts(false, SESSION_MAX_AGE));
 
-    return NextResponse.json(
+    const nextResponse = NextResponse.json(
       {
-        token,
-        refreshToken,
+        authenticated: true,
         mustChangePassword: payload.mustChangePassword ?? false,
       },
       { status: 200 }
     );
+
+    // Forward XSRF-TOKEN cookie from Spring Boot so JS can read it immediately
+    // after login and include it in subsequent mutation requests.
+    const setCookieValues: string[] =
+      typeof response.headers.getSetCookie === "function"
+        ? response.headers.getSetCookie()
+        : response.headers.get("set-cookie")
+          ? [response.headers.get("set-cookie")!]
+          : [];
+
+    for (const value of setCookieValues) {
+      if (value.startsWith(`${XSRF_COOKIE}=`)) {
+        nextResponse.headers.append("Set-Cookie", value);
+      }
+    }
+
+    return nextResponse;
   } catch {
     return NextResponse.json(
       {

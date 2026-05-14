@@ -1,12 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { decodeJwtPayload, SESSION_COOKIE } from "@/lib/session";
+import { BACKEND_ACCESS_COOKIE, decodeJwtPayload, SESSION_COOKIE } from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
 export async function GET() {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(BACKEND_ACCESS_COOKIE)?.value;
 
   if (!token) {
     return NextResponse.json({ message: "Nao autenticado." }, { status: 401 });

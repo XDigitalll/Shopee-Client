@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   createContext,
@@ -13,29 +13,18 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import {
   AUTH_CHANGE_EVENT,
-  TOKEN_KEY,
-  REFRESH_TOKEN_KEY,
   clearStoredSession,
-  getStoredRefreshToken,
-  getStoredToken,
+  loadSessionProfile,
+  notifyAuthChanged,
   refreshStoredSession,
-  storeSession,
+  type ClientSessionProfile,
 } from "@/lib/auth";
 
-type SessionProfile = {
-  displayName?: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  avatarUrl?: string;
-  phoneNumber?: string;
-  profileIncomplete?: boolean;
-  accountCompletionPercentage?: number;
-};
+type SessionProfile = ClientSessionProfile;
 
 type AuthContextValue = {
   token: string | null;
+  isAuthenticated: boolean;
   isReady: boolean;
   userLabel: string;
   userInitials: string;
@@ -46,36 +35,13 @@ type AuthContextValue = {
   mustChangePassword: boolean;
   profileIncomplete: boolean;
   accountCompletionPercentage: number;
-  login: (nextToken: string, nextRefreshToken?: string | null) => void;
+  login: (_nextToken?: string | null, _nextRefreshToken?: string | null) => void;
   logout: () => void;
   refreshProfile: () => Promise<void>;
 };
 
+const AUTHENTICATED_MARKER = "cookie-session";
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-function decodeJwtPayload(token: string | null) {
-  if (!token) return null;
-
-  try {
-    const [, payload] = token.split(".");
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-    return JSON.parse(decoded) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function getTokenExpirationMs(token: string | null) {
-  const payload = decodeJwtPayload(token);
-  const exp = payload?.exp;
-  if (typeof exp !== "number") {
-    return null;
-  }
-
-  return exp * 1000;
-}
 
 function toDisplayName(value: string) {
   return value
@@ -127,20 +93,19 @@ function isAuthRequiredPath(pathname: string | null) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [sessionProfile, setSessionProfile] = useState<SessionProfile | null>(null);
   const [isReady, setIsReady] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const lastActivityRefreshRef = useRef(0);
-  const isRefreshingRef = useRef(false);
-  const currentRefreshPromiseRef = useRef<ReturnType<typeof refreshStoredSession> | null>(null);
   const refreshFailureHandledRef = useRef(false);
+  const currentRefreshPromiseRef = useRef<ReturnType<typeof refreshStoredSession> | null>(null);
 
-  const syncSessionFromStorage = useCallback(() => {
-    setToken(getStoredToken());
-    setRefreshToken(getStoredRefreshToken());
+  const isAuthenticated = Boolean(sessionProfile);
+  const token = isAuthenticated ? AUTHENTICATED_MARKER : null;
+
+  const refreshProfile = useCallback(async () => {
+    const profile = await loadSessionProfile();
+    setSessionProfile(profile);
   }, []);
 
   const handleRefreshFailureOnce = useCallback((reason: string) => {
@@ -150,104 +115,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     refreshFailureHandledRef.current = true;
     currentRefreshPromiseRef.current = null;
-    isRefreshingRef.current = false;
     clearStoredSession();
     setSessionProfile(null);
-    syncSessionFromStorage();
 
     if (process.env.NODE_ENV !== "production") {
-      console.log("[auth] refresh failed: logout controlled", reason);
+      console.debug("[auth] refresh failed", reason);
     }
 
     if (isAuthRequiredPath(pathname)) {
       router.replace("/login?expired=1");
     }
-  }, [pathname, router, syncSessionFromStorage]);
+  }, [pathname, router]);
 
   const safeRefresh = useCallback((reason = "unknown") => {
-    if (refreshFailureHandledRef.current) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[auth] refresh skipped: failure already handled", reason);
-      }
-      return Promise.resolve(null);
-    }
-
     if (currentRefreshPromiseRef.current) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[auth] refresh skipped: already refreshing", reason);
-      }
       return currentRefreshPromiseRef.current;
     }
 
-    if (isRefreshingRef.current) {
-      if (process.env.NODE_ENV !== "production") {
-        console.log("[auth] refresh skipped: already refreshing", reason);
-      }
-      return currentRefreshPromiseRef.current ?? Promise.resolve(null);
-    }
-
-    isRefreshingRef.current = true;
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[auth] refresh started", reason);
-    }
-
     const refreshPromise = refreshStoredSession()
-      .then((session) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.log(session ? "[auth] refresh completed" : "[auth] refresh failed", reason);
-        }
-        if (session) {
+      .then((profile) => {
+        if (profile) {
           refreshFailureHandledRef.current = false;
+          setSessionProfile(profile);
         } else {
           handleRefreshFailureOnce(reason);
         }
-        return session;
+        return profile;
       })
-      .catch((error) => {
-        if (process.env.NODE_ENV !== "production") {
-          console.log("[auth] refresh failed", reason, error);
-        }
+      .catch(() => {
         handleRefreshFailureOnce(reason);
         return null;
       })
       .finally(() => {
-        isRefreshingRef.current = false;
         currentRefreshPromiseRef.current = null;
-        syncSessionFromStorage();
       });
 
     currentRefreshPromiseRef.current = refreshPromise;
     return refreshPromise;
-  }, [handleRefreshFailureOnce, syncSessionFromStorage]);
+  }, [handleRefreshFailureOnce]);
 
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      // Read directly from localStorage — not from state (which starts as null on server)
-      const storedToken = getStoredToken();
-      const storedRefreshToken = getStoredRefreshToken();
+      const profile = await loadSessionProfile();
+      if (cancelled) return;
 
-      setToken(storedToken);
-      setRefreshToken(storedRefreshToken);
-
-      if (storedToken) {
-        setIsReady(true);
-        return;
-      }
-
-      if (!storedRefreshToken) {
+      if (profile) {
+        setSessionProfile(profile);
         setIsReady(true);
         return;
       }
 
       const refreshed = await safeRefresh("bootstrap");
       if (!cancelled) {
-        if (!refreshed) {
-          clearStoredSession();
-          setSessionProfile(null);
-        }
-        syncSessionFromStorage();
+        setSessionProfile(refreshed);
         setIsReady(true);
       }
     };
@@ -255,30 +177,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap();
 
     const handleAuthChange = () => {
-      syncSessionFromStorage();
-    };
-
-    const handleStorage = (event: StorageEvent) => {
-      if (
-        event.key === null ||
-        event.key === TOKEN_KEY ||
-        event.key === REFRESH_TOKEN_KEY ||
-        event.key === "shopee_admin_token" ||
-        event.key === "shopee_refresh_token"
-      ) {
-        syncSessionFromStorage();
-      }
+      void refreshProfile();
     };
 
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
-    window.addEventListener("storage", handleStorage);
 
     return () => {
       cancelled = true;
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
-      window.removeEventListener("storage", handleStorage);
     };
-  }, [safeRefresh, syncSessionFromStorage]);
+  }, [refreshProfile, safeRefresh]);
 
   useEffect(() => {
     const isProtectedRoute = isAuthRequiredPath(pathname);
@@ -287,164 +195,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (!token && isProtectedRoute) {
+    if (!isAuthenticated && isProtectedRoute) {
       router.replace(`/login?redirect=${encodeURIComponent(pathname || "/")}`);
     }
-  }, [isReady, pathname, router, token]);
-
-  const payload = useMemo(() => decodeJwtPayload(token), [token]);
+  }, [isAuthenticated, isReady, pathname, router]);
 
   useEffect(() => {
-    if (!isReady || !token) return;
-    const mustChange = payload?.mustChangePassword === true;
+    if (!isReady || !isAuthenticated) return;
+    const mustChange = sessionProfile?.mustChangePassword === true;
     if (!mustChange) return;
     if (pathname?.startsWith("/complete-account/password")) return;
     if (pathname === "/login") return;
     router.replace("/complete-account/password");
-  }, [isReady, token, payload, pathname, router]);
+  }, [isAuthenticated, isReady, pathname, router, sessionProfile?.mustChangePassword]);
 
   useEffect(() => {
-    if (!token || !refreshToken) {
+    if (!sessionProfile?.expiresAt) {
       return;
     }
 
-    const expirationMs = getTokenExpirationMs(token);
-    if (!expirationMs) {
-      return;
-    }
-
-    const remainingMs = expirationMs - Date.now();
+    const remainingMs = sessionProfile.expiresAt - Date.now();
     const timeoutMs = Math.max(remainingMs - 60_000, 0);
 
-    const timeoutId = window.setTimeout(async () => {
-      const refreshed = await safeRefresh("scheduled");
-      if (!refreshed) {
-        setSessionProfile(null);
-        if (isAuthRequiredPath(pathname)) {
-          router.replace("/login?expired=1");
-        } else {
-          clearStoredSession();
-          syncSessionFromStorage();
-        }
-      }
+    const timeoutId = window.setTimeout(() => {
+      void safeRefresh("scheduled");
     }, timeoutMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [pathname, refreshToken, router, safeRefresh, syncSessionFromStorage, token]);
+  }, [safeRefresh, sessionProfile?.expiresAt]);
 
-  useEffect(() => {
-    if (!refreshToken) {
-      return;
-    }
-
-    const attemptRefresh = async () => {
-      const currentToken = getStoredToken();
-      const expirationMs = getTokenExpirationMs(currentToken);
-      if (!expirationMs) {
-        return;
-      }
-
-      const now = Date.now();
-      if (expirationMs - now > 5 * 60_000) {
-        return;
-      }
-
-      if (now - lastActivityRefreshRef.current < 30_000) {
-        return;
-      }
-
-      lastActivityRefreshRef.current = now;
-      const refreshed = await safeRefresh("activity");
-      if (!refreshed && pathname?.startsWith("/") && pathname !== "/login") {
-        setSessionProfile(null);
-        if (isAuthRequiredPath(pathname)) {
-          router.replace("/login?expired=1");
-        } else {
-          clearStoredSession();
-          syncSessionFromStorage();
-        }
-      }
-    };
-
-    const handlePointer = () => {
-      void attemptRefresh();
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void attemptRefresh();
-      }
-    };
-
-    window.addEventListener("focus", handlePointer);
-    window.addEventListener("pointerdown", handlePointer);
-    window.addEventListener("keydown", handlePointer);
-    window.addEventListener("touchstart", handlePointer);
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      window.removeEventListener("focus", handlePointer);
-      window.removeEventListener("pointerdown", handlePointer);
-      window.removeEventListener("keydown", handlePointer);
-      window.removeEventListener("touchstart", handlePointer);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [pathname, refreshToken, router, safeRefresh, syncSessionFromStorage]);
-
-  useEffect(() => {
-    if (!token) {
-      setSessionProfile(null);
-      return;
-    }
-
-    let active = true;
-
-    const loadProfile = async () => {
-      try {
-        const response = await fetch("/api/xdigital/users/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: "no-store",
-        });
-
-        if (response.status === 401) {
-          const refreshed = await safeRefresh("profile-401");
-          if (!refreshed) {
-            clearStoredSession();
-            if (active) {
-              setSessionProfile(null);
-            }
-            return;
-          }
-          if (!active) {
-            return;
-          }
-          syncSessionFromStorage();
-          return;
-        }
-
-        if (!response.ok) {
-          return;
-        }
-
-        const payload = (await response.json().catch(() => null)) as SessionProfile | null;
-        if (active && payload) {
-          setSessionProfile(payload);
-        }
-      } catch {
-      }
-    };
-
-    void loadProfile();
-
-    return () => {
-      active = false;
-    };
-  }, [safeRefresh, syncSessionFromStorage, token]);
-
-  const { userLabel, userInitials, userAvatarUrl, userEmail, userPhone, authSource, mustChangePassword, profileIncomplete, accountCompletionPercentage } = useMemo(() => {
-    const jwtPayload = decodeJwtPayload(token);
+  const {
+    userLabel,
+    userInitials,
+    userAvatarUrl,
+    userEmail,
+    userPhone,
+    authSource,
+    mustChangePassword,
+    profileIncomplete,
+    accountCompletionPercentage,
+  } = useMemo(() => {
     const profileFullName = [sessionProfile?.firstName, sessionProfile?.lastName]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
       .join(" ")
@@ -452,37 +242,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const rawName = profileFullName
       ? profileFullName
       : typeof sessionProfile?.displayName === "string" && sessionProfile.displayName.trim()
-      ? sessionProfile.displayName
-      : typeof sessionProfile?.name === "string" && sessionProfile.name.trim()
-        ? sessionProfile.name
-        : typeof jwtPayload?.name === "string" && jwtPayload.name.trim()
-          ? jwtPayload.name
-          : typeof jwtPayload?.sub === "string" && jwtPayload.sub.trim()
-            ? jwtPayload.sub
+        ? sessionProfile.displayName
+        : typeof sessionProfile?.name === "string" && sessionProfile.name.trim()
+          ? sessionProfile.name
+          : typeof sessionProfile?.email === "string" && sessionProfile.email.trim()
+            ? sessionProfile.email
             : "Cliente ShopeeX";
     const rawEmail = typeof sessionProfile?.email === "string" && sessionProfile.email.trim()
       ? sessionProfile.email.trim()
-      : typeof jwtPayload?.email === "string" && jwtPayload.email.trim()
-        ? jwtPayload.email.trim()
-        : typeof jwtPayload?.sub === "string" && jwtPayload.sub.includes("@")
-          ? jwtPayload.sub.trim()
-          : "";
+      : "";
     const emailValue = rawEmail.endsWith("@xdigital.local") ? "" : rawEmail;
-    const providerValue = typeof jwtPayload?.provider === "string" && jwtPayload.provider.trim()
-      ? jwtPayload.provider.trim().toUpperCase()
+    const providerValue = typeof sessionProfile?.provider === "string" && sessionProfile.provider.trim()
+      ? sessionProfile.provider.trim().toUpperCase()
       : "LOCAL";
     const avatarUrlValue = typeof sessionProfile?.avatarUrl === "string" && sessionProfile.avatarUrl.trim()
       ? sessionProfile.avatarUrl.trim()
-      : typeof jwtPayload?.avatarUrl === "string" && jwtPayload.avatarUrl.trim()
-        ? jwtPayload.avatarUrl.trim()
-        : "";
+      : "";
     const userLabelValue = toDisplayName(rawName) || "Cliente ShopeeX";
-
-    const mustChangePasswordValue = jwtPayload?.mustChangePassword === true;
-    const profileIncompleteValue = sessionProfile?.profileIncomplete === true;
-    const accountCompletionPercentageValue = typeof sessionProfile?.accountCompletionPercentage === "number"
-      ? sessionProfile.accountCompletionPercentage
-      : 0;
     const phoneValue = typeof sessionProfile?.phoneNumber === "string" && sessionProfile.phoneNumber.trim()
       ? sessionProfile.phoneNumber.trim()
       : "";
@@ -494,14 +270,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userEmail: emailValue,
       userPhone: phoneValue,
       authSource: providerValue,
-      mustChangePassword: mustChangePasswordValue,
-      profileIncomplete: profileIncompleteValue,
-      accountCompletionPercentage: accountCompletionPercentageValue,
+      mustChangePassword: sessionProfile?.mustChangePassword === true,
+      profileIncomplete: sessionProfile?.profileIncomplete === true,
+      accountCompletionPercentage: typeof sessionProfile?.accountCompletionPercentage === "number"
+        ? sessionProfile.accountCompletionPercentage
+        : 0,
     };
-  }, [sessionProfile, token]);
+  }, [sessionProfile]);
 
   const value = {
     token,
+    isAuthenticated,
     isReady,
     userLabel,
     userInitials,
@@ -512,44 +291,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mustChangePassword,
     profileIncomplete,
     accountCompletionPercentage,
-    login: (nextToken: string, nextRefreshToken?: string | null) => {
-      const safeRefreshToken = nextRefreshToken?.trim() || getStoredRefreshToken();
-      if (!safeRefreshToken) {
-        return;
-      }
+    login: () => {
       refreshFailureHandledRef.current = false;
       currentRefreshPromiseRef.current = null;
-      isRefreshingRef.current = false;
-      storeSession(nextToken, safeRefreshToken);
-      syncSessionFromStorage();
+      notifyAuthChanged();
+      void refreshProfile();
     },
     logout: () => {
       refreshFailureHandledRef.current = true;
       currentRefreshPromiseRef.current = null;
-      isRefreshingRef.current = false;
       clearStoredSession();
       setSessionProfile(null);
-      syncSessionFromStorage();
       void fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
       router.replace("/login");
     },
-    refreshProfile: async () => {
-      const activeToken = getStoredToken();
-      if (!activeToken) return;
-      const response = await fetch("/api/xdigital/users/me", {
-        headers: {
-          Authorization: `Bearer ${activeToken}`,
-        },
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        return;
-      }
-      const payload = (await response.json().catch(() => null)) as SessionProfile | null;
-      if (payload) {
-        setSessionProfile(payload);
-      }
-    },
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

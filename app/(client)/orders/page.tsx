@@ -320,9 +320,8 @@ function compositeHeadline(orders: Order[]) {
   return "Esta compra foi dividida automaticamente para manter a entrega local e a compra internacional bem organizadas.";
 }
 
-async function fetchWithToken<T>(url: string, token: string) {
+async function fetchWithToken<T>(url: string, _token: string) {
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);

@@ -15,9 +15,8 @@ const RED = "#E8431A";
 const GREEN = "#2E8B57";
 const paymentMethods = ["MPESA", "EMOLA", "VISA", "MASTERCARD", "BANK_TRANSFER"];
 
-async function fetchWithToken<T>(url: string, token: string) {
+async function fetchWithToken<T>(url: string, _token: string) {
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);

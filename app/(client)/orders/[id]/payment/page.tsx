@@ -41,9 +41,8 @@ const METHODS: Array<{ key: PaymentMethodType; label: string; icon: string; hint
   { key: "VISA_MANUAL", label: "Visa / Cartao", icon: "V", hint: "Manual" },
 ];
 
-async function fetchWithToken<T>(url: string, token: string) {
+async function fetchWithToken<T>(url: string, _token: string) {
   const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   const payload = await response.json().catch(() => null);
@@ -294,7 +293,6 @@ export default function OrderPaymentPage() {
     try {
       const response = await fetch(`/api/payments/${order.id}/submit`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
         cache: "no-store",
       });

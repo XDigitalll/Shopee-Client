@@ -91,7 +91,7 @@ function FilterIcon() {
 type LoginModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (token: string, refreshToken?: string) => void;
+  onSuccess: () => void;
 };
 
 function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
@@ -116,9 +116,9 @@ function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = (await res.json()) as { token?: string; refreshToken?: string; message?: string };
-      if (!res.ok || !data.token) throw new Error(data.message || "Credenciais invalidas.");
-      onSuccess(data.token, data.refreshToken ?? undefined);
+      const data = (await res.json()) as { authenticated?: boolean; message?: string };
+      if (!res.ok || !data.authenticated) throw new Error(data.message || "Credenciais invalidas.");
+      onSuccess();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao ligar ao servidor.");
@@ -1279,7 +1279,7 @@ export default function Home() {
     if (!v) { setSearchActive(false); void loadPublicData(); }
   };
 
-  const handleLoginSuccess = (t: string, rt?: string) => { login(t, rt ?? null); setLoginModalOpen(false); };
+  const handleLoginSuccess = () => { login(); setLoginModalOpen(false); };
   const openLogin = () => setLoginModalOpen(true);
 
   return (

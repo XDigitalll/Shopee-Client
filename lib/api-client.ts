@@ -1,4 +1,5 @@
-import { clearStoredSession, getStoredRefreshToken, refreshStoredSession } from "@/lib/auth";
+import { clearStoredSession, refreshStoredSession } from "@/lib/auth";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
 export const CLIENT_DATA_CHANGED_EVENT = "client:data-changed";
 
@@ -58,7 +59,7 @@ function statusFallbackMessage(status: number): string {
   return "Nao foi possivel concluir a operacao.";
 }
 
-async function performRequest(path: string, options: ApiOptions = {}, tokenOverride?: string | null) {
+async function performRequest(path: string, options: ApiOptions = {}) {
   const headers = new Headers(options.headers);
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
 
@@ -66,9 +67,14 @@ async function performRequest(path: string, options: ApiOptions = {}, tokenOverr
     headers.set("Content-Type", "application/json");
   }
 
-  const token = tokenOverride ?? options.token;
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+  headers.delete("Authorization");
+
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers.set(XSRF_HEADER, csrfToken);
+    }
   }
 
   return fetch(`/api/xdigital/${path.replace(/^\/+/, "")}`, {
@@ -81,10 +87,10 @@ async function performRequest(path: string, options: ApiOptions = {}, tokenOverr
 export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   let response = await performRequest(path, options);
 
-  if (response.status === 401 && getStoredRefreshToken() && path !== "auth/refresh") {
+  if (response.status === 401 && path !== "auth/refresh") {
     const refreshed = await refreshStoredSession();
-    if (refreshed?.token) {
-      response = await performRequest(path, options, refreshed.token);
+    if (refreshed) {
+      response = await performRequest(path, options);
     }
   }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/session";
+import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -10,20 +11,30 @@ async function forward(request: NextRequest, path: string[]) {
   backendUrl.search = url.search;
 
   const headers = new Headers();
-  const authorization = request.headers.get("authorization");
   const contentType = request.headers.get("content-type") ?? "";
 
-  if (authorization) {
-    headers.set("Authorization", authorization);
-  } else {
-    const cookieToken = request.cookies.get(SESSION_COOKIE)?.value;
-    if (cookieToken) {
-      headers.set("Authorization", `Bearer ${cookieToken}`);
-    }
+  const cookieToken = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
+  if (cookieToken) {
+    headers.set("Authorization", `Bearer ${cookieToken}`);
   }
 
   if (contentType) {
     headers.set("Content-Type", contentType);
+  }
+
+  // Forward X-XSRF-TOKEN header from browser to Spring Boot
+  const xsrfToken = request.headers.get(XSRF_HEADER.toLowerCase()) ??
+    request.headers.get(XSRF_HEADER);
+  if (xsrfToken) {
+    headers.set(XSRF_HEADER, xsrfToken);
+  }
+
+  // Forward XSRF-TOKEN cookie from browser to Spring Boot
+  const xsrfCookieValue = request.cookies.get(XSRF_COOKIE)?.value;
+  if (xsrfCookieValue) {
+    const existingCookie = headers.get("Cookie") ?? "";
+    const xsrfCookiePair = `${XSRF_COOKIE}=${xsrfCookieValue}`;
+    headers.set("Cookie", existingCookie ? `${existingCookie}; ${xsrfCookiePair}` : xsrfCookiePair);
   }
 
   const init: RequestInit = {
@@ -62,12 +73,29 @@ async function forward(request: NextRequest, path: string[]) {
     );
   }
 
-  return new NextResponse(text, {
+  const nextResponse = new NextResponse(text, {
     status: backendResponse.status,
     headers: {
       "Content-Type": backendResponse.headers.get("Content-Type") || "application/json",
     },
   });
+
+  // Forward XSRF-TOKEN Set-Cookie from Spring Boot to the browser so JS can
+  // read it and include it as X-XSRF-TOKEN on subsequent mutation requests.
+  const setCookieValues: string[] =
+    typeof backendResponse.headers.getSetCookie === "function"
+      ? backendResponse.headers.getSetCookie()
+      : backendResponse.headers.get("set-cookie")
+        ? [backendResponse.headers.get("set-cookie")!]
+        : [];
+
+  for (const value of setCookieValues) {
+    if (value.startsWith(`${XSRF_COOKIE}=`)) {
+      nextResponse.headers.append("Set-Cookie", value);
+    }
+  }
+
+  return nextResponse;
 }
 
 type RouteContext = {

@@ -1,6 +1,13 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { cookieOpts, PROFILE_COOKIE, REFRESH_COOKIE_NAME, SESSION_COOKIE } from "@/lib/session";
+import {
+  BACKEND_ACCESS_COOKIE,
+  BACKEND_REFRESH_COOKIE,
+  cookieOpts,
+  PROFILE_COOKIE,
+  REFRESH_COOKIE_NAME,
+  SESSION_COOKIE,
+} from "@/lib/session";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -9,8 +16,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const cookieStore = await cookies();
-    const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value;
-    const accessToken = cookieStore.get(SESSION_COOKIE)?.value;
+    const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value || cookieStore.get(BACKEND_REFRESH_COOKIE)?.value;
+    const accessToken = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(BACKEND_ACCESS_COOKIE)?.value;
 
     await fetch(`${BACKEND_URL}/auth/logout`, {
       method: "POST",
@@ -27,6 +34,8 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies();
     cookieStore.set(SESSION_COOKIE, "", cookieOpts(true, 0));
     cookieStore.set(REFRESH_COOKIE_NAME, "", cookieOpts(true, 0));
+    cookieStore.set(BACKEND_ACCESS_COOKIE, "", cookieOpts(true, 0));
+    cookieStore.set(BACKEND_REFRESH_COOKIE, "", cookieOpts(true, 0));
     cookieStore.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
   }
 

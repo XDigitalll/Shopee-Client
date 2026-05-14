@@ -1,6 +1,8 @@
 export const SESSION_COOKIE = "shopee_client_session";
 export const REFRESH_COOKIE_NAME = "shopee_client_refresh";
 export const PROFILE_COOKIE = "shopee_client_profile";
+export const BACKEND_ACCESS_COOKIE = "access_token";
+export const BACKEND_REFRESH_COOKIE = "refresh_token";
 
 export const SESSION_MAX_AGE = 86_400;    // 1 day
 export const REFRESH_MAX_AGE = 2_592_000; // 30 days
