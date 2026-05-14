@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +12,7 @@ import type { Category, Order, Product } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientShell } from "@/components/client-shell";
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Constants
 
 const RED = "#E8431A";
 const RED_HOVER = "#C0360F";
@@ -51,7 +51,7 @@ const STORES_META = [
   { id: "OTHER",       label: "Outras",     color: "#6B7280", abbr: "OU", hint: "outra loja" },
 ];
 
-// â”€â”€ Icons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Icons
 
 function SearchIcon() {
   return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m16 16 4 4" /></svg>;
@@ -90,7 +90,7 @@ function FilterIcon() {
   return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="11" y1="18" x2="13" y2="18" /></svg>;
 }
 
-// â”€â”€ Login Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Login Modal
 
 type LoginModalProps = {
   isOpen: boolean;
@@ -228,16 +228,28 @@ function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   );
 }
 
-// â”€â”€ Hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Hero
 
 type HeroBanner = {
   id: number;
   title: string;
   subtitle: string;
   imageUrl: string;
+  imageFocus?: "center" | "top" | "bottom" | "left" | "right";
   ctaText?: string;
   ctaUrl?: string;
 };
+
+function bannerObjectPosition(focus?: HeroBanner["imageFocus"]) {
+  const positions: Record<NonNullable<HeroBanner["imageFocus"]>, string> = {
+    center: "center",
+    top: "top center",
+    bottom: "bottom center",
+    left: "left center",
+    right: "right center",
+  };
+  return positions[focus ?? "center"];
+}
 
 function HeroSection({ token, onLoginClick }: { token: string | null; onLoginClick: () => void }) {
   const scrollTo = (id: string) => {
@@ -248,6 +260,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
   const [current, setCurrent] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [failedBannerIds, setFailedBannerIds] = useState<Set<number>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -295,22 +308,21 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
               className="hero-banner-slide absolute inset-0 transition-opacity duration-700"
               style={{ opacity: i === current ? 1 : 0, zIndex: 0 }}
             >
-              <img
-                src={b.imageUrl}
-                alt={b.title}
-                className="hero-banner-image h-full w-full"
-                style={{ position: "absolute", inset: 0 }}
-              />
+              {failedBannerIds.has(b.id) ? (
+                <div className="hero-banner-fallback absolute inset-0" />
+              ) : (
+                <img
+                  src={b.imageUrl}
+                  alt={b.title}
+                  className="hero-banner-image h-full w-full"
+                  style={{ position: "absolute", inset: 0, objectPosition: bannerObjectPosition(b.imageFocus) }}
+                  onError={() => setFailedBannerIds((currentIds) => new Set(currentIds).add(b.id))}
+                />
+              )}
             </div>
           ))}
           {/* Dark gradient overlay for text readability */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: "linear-gradient(90deg, rgba(10,5,3,0.78) 0%, rgba(10,5,3,0.55) 50%, rgba(10,5,3,0.18) 100%)",
-              zIndex: 1,
-            }}
-          />
+          <div className="hero-banner-overlay absolute inset-0" style={{ zIndex: 1 }} />
           {/* Bottom gradient for dots */}
           <div
             className="absolute bottom-0 left-0 right-0 h-28"
@@ -477,7 +489,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
   );
 }
 
-// â”€â”€ Trust strip â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Trust strip
 
 function TrustStrip() {
   const items = [
@@ -517,7 +529,7 @@ function TrustStrip() {
   );
 }
 
-// â”€â”€ How it works â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// How it works
 
 function HowItWorks() {
   const steps = [
@@ -592,7 +604,7 @@ function HowItWorks() {
   );
 }
 
-// â”€â”€ Categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Categories
 
 type CategoriesSectionProps = {
   categories: Category[];
@@ -668,7 +680,7 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
   );
 }
 
-// â”€â”€ External Order Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// External Order Banner
 
 function ExternalOrderBanner() {
   const router = useRouter();
@@ -774,7 +786,7 @@ function ExternalOrderBanner() {
   );
 }
 
-// â”€â”€ Product Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Product Card
 
 type FeedbackState = { msg: string; type: "success" | "error" } | null;
 
@@ -924,7 +936,7 @@ function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: Pr
   );
 }
 
-// â”€â”€ Products Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Products Section
 
 function productGroup(product: Product) {
   const category = (product.category?.name || "").toLowerCase();
@@ -1124,7 +1136,7 @@ function ProductsSection({
   );
 }
 
-// â”€â”€ Order Tracker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Order Tracker
 
 function OrderTracker({ order }: { order: Order }) {
   const currentStep = STATUS_STEP[order.status] ?? 0;
@@ -1207,7 +1219,7 @@ function OrderTracker({ order }: { order: Order }) {
   );
 }
 
-// â”€â”€ Main Page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Main Page
 
 export default function Home() {
   const { token, isReady, login } = useAuth();
@@ -1309,3 +1321,6 @@ export default function Home() {
     </ClientShell>
   );
 }
+
+
+

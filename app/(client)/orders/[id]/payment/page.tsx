@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { emitClientDataChanged } from "@/lib/api-client";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
@@ -44,6 +45,7 @@ const METHODS: Array<{ key: PaymentMethodType; label: string; icon: string; hint
 async function fetchWithToken<T>(url: string, _token: string) {
   const response = await fetch(url, {
     cache: "no-store",
+    credentials: "same-origin",
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel carregar o pedido.");
@@ -73,8 +75,8 @@ function statusCopy(status?: string, adminMessage?: string) {
       border: "#FED7AA",
     },
     PAYMENT_SUBMITTED: {
-      title: "Pagamento submetido",
-      body: "Aguarde a validacao. A nossa equipa financeira vai confirmar o pagamento e avisar assim que estiver tudo certo.",
+      title: "Pagamento submetido para validação",
+      body: "Recebemos os dados do pagamento. A equipa financeira vai validar e avisar assim que estiver tudo certo.",
       color: "#1D4ED8",
       bg: "#EFF6FF",
       border: "#BFDBFE",
@@ -293,8 +295,10 @@ export default function OrderPaymentPage() {
     try {
       const response = await fetch(`/api/payments/${order.id}/submit`, {
         method: "POST",
+        headers: getCsrfToken() ? { [XSRF_HEADER]: getCsrfToken() } : undefined,
         body: formData,
         cache: "no-store",
+        credentials: "same-origin",
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
@@ -349,7 +353,7 @@ export default function OrderPaymentPage() {
           </div>
         ) : null}
 
-        {isLocked && orderStatus !== "PAYMENT_SUBMITTED" ? (
+        {isLocked ? (
           <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
             <p className="text-sm font-semibold" style={{ color: "#6B7280" }}>
               Nao e preciso submeter outro comprovativo agora. Quando a validacao terminar, o estado do pedido sera actualizado automaticamente.

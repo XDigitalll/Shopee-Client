@@ -120,9 +120,15 @@ export type Cart = {
 export type CouponValidation = {
   valid: boolean;
   code?: string;
+  name?: string;
+  description?: string;
   message?: string;
   discountType?: string;
+  discountValue?: number;
   discountAmount?: number;
+  totalBeforeDiscount?: number;
+  totalAfterDiscount?: number;
+  appliesTo?: "INTERNAL_PRODUCTS" | "EXTERNAL_ORDERS" | "ALL";
 };
 
 export type Quote = {
@@ -191,6 +197,10 @@ export type Order = {
   urgentSurchargeAmount?: number;
   exchangeRate?: number;
   totalAmount?: number;
+  couponCode?: string;
+  discountAmount?: number;
+  totalBeforeDiscount?: number;
+  totalAfterDiscount?: number;
   customerFullName?: string;
   primaryPhoneNumber?: string;
   alternativePhoneNumber?: string;

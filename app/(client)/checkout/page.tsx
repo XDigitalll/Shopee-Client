@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
-import type { Cart, CartItem, CheckoutResponse, CustomerProfile, Order, UserAddress } from "@/lib/types";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
+import type { Cart, CartItem, CheckoutResponse, CouponValidation, CustomerProfile, Order, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { addressMatchesForm, applySavedAddress, createAddressLabel, createPrefilledAddress, createPrefilledContact } from "@/lib/address-book";
 
@@ -51,13 +52,24 @@ function isCheckoutResponse(payload: CheckoutResponse | Order | null): payload i
   );
 }
 
+function getInternalOrderForPayment(result: CheckoutResponse) {
+  if (result.localOrder?.id) return result.localOrder;
+  if (result.primaryOrder?.type === "INTERNAL" && result.primaryOrder.id) return result.primaryOrder;
+  return result.orders?.find((order) => order.type === "INTERNAL" && order.id) ?? null;
+}
+
 async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit) {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await fetch(url, { ...init, headers, cache: "no-store" });
+  const method = String(init?.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) headers.set(XSRF_HEADER, csrfToken);
+  }
+  const response = await fetch(url, { ...init, headers, cache: "no-store", credentials: "same-origin" });
   if (response.status === 204) return null as T;
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel concluir a operacao.");
+  if (!response.ok) throw new Error(payload?.message || payload?.error || "Não foi possível concluir a operação.");
   return payload as T;
 }
 
@@ -74,6 +86,9 @@ export default function CheckoutPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState({ primary: false, alternative: false });
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<CouponValidation | null>(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   useEffect(() => {
     const loadCheckout = async () => {
@@ -118,7 +133,7 @@ export default function CheckoutPage() {
           }
         }
       } catch (error) {
-        setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar o checkout." });
+        setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível carregar o checkout." });
       } finally {
         setIsLoading(false);
       }
@@ -151,6 +166,8 @@ export default function CheckoutPage() {
   const localSubtotal = localItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
   const estimatedDelivery = form.deliveryMethod === "DELIVERY" && localSubtotal > 0 ? DELIVERY_FEE : 0;
   const total = localSubtotal + estimatedDelivery;
+  const discountAmount = coupon?.valid ? Number(coupon.discountAmount || 0) : 0;
+  const totalAfterDiscount = Math.max(total - discountAmount, 0);
   const primaryPhoneError = getPhoneError(form.primaryPhoneNumber, true);
   const alternativePhoneError = getPhoneError(form.alternativePhoneNumber, false);
   const hasPhoneErrors = Boolean(primaryPhoneError || alternativePhoneError);
@@ -164,7 +181,7 @@ export default function CheckoutPage() {
       return;
     }
     setIsSubmitting(true);
-    setFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e fechar esta compra com seguranca." });
+    setFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     try {
       const checkoutResult = await fetchWithAuth<CheckoutResponse | Order>("/api/xdigital/orders/from-cart", token, {
         method: "POST",
@@ -173,6 +190,7 @@ export default function CheckoutPage() {
           primaryPhoneNumber: form.primaryPhoneNumber.trim(),
           alternativePhoneNumber: form.alternativePhoneNumber.trim(),
           selectedItemIds: checkoutItems.map((item) => item.itemId),
+          couponCode: coupon?.valid ? coupon.code : undefined,
         }),
       });
       if (
@@ -195,7 +213,7 @@ export default function CheckoutPage() {
             }),
           });
         } catch {
-          // nao bloqueia a compra se falhar ao guardar a morada
+          // não bloqueia a compra se falhar ao guardar a morada
         }
       }
       if (typeof window !== "undefined") {
@@ -213,16 +231,26 @@ export default function CheckoutPage() {
       const primaryOrder = result.primaryOrder;
       const localOrder = result.localOrder;
       const externalOrder = result.externalOrder;
+      const internalOrderForPayment = getInternalOrderForPayment(result);
+
+      if (internalOrderForPayment?.id) {
+        setFeedback({
+          type: "success",
+          msg: result.mixedCheckout && externalOrder
+            ? `Pedido local ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento; a compra internacional ${orderDisplayCode(externalOrder)} fica em análise separada.`
+            : `Pedido ${orderDisplayCode(internalOrderForPayment)} criado. A abrir pagamento...`,
+        });
+        router.push(`/orders/${internalOrderForPayment.id}/payment`);
+        return;
+      }
 
       setFeedback({
         type: "success",
-        msg: result.mixedCheckout && externalOrder
-          ? `Pedido local ${orderDisplayCode(localOrder ?? primaryOrder)} criado. A compra internacional ${orderDisplayCode(externalOrder)} sera tratada numa proposta separada.`
-          : `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso!`,
+        msg: `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso. A proposta será analisada pela equipa.`,
       });
       router.push("/orders");
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel criar o pedido." });
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível criar o pedido." });
     } finally {
       setIsSubmitting(false);
     }
@@ -233,6 +261,40 @@ export default function CheckoutPage() {
     background: hasError ? "#FFF5F5" : "#FFFDFC",
     color: "#1A1410",
   } as const);
+
+  const applyCoupon = async () => {
+    if (!token || !couponCode.trim()) return;
+    if (localItems.length === 0 || total <= 0) {
+      setCoupon(null);
+      setFeedback({ type: "info", msg: "Cupões para pedidos externos são validados quando a cotação tiver total final." });
+      return;
+    }
+    setIsApplyingCoupon(true);
+    setFeedback(null);
+    try {
+      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, {
+        method: "POST",
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          subtotal: total,
+          appliesTo: "INTERNAL_PRODUCTS",
+        }),
+      });
+      setCoupon(payload);
+      setCouponCode(payload.code || couponCode.trim().toUpperCase());
+      setFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
+    } catch (error) {
+      setCoupon(null);
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível validar o cupão." });
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCoupon(null);
+    setCouponCode("");
+  };
 
   return (
     <div className="min-h-screen">
@@ -266,7 +328,7 @@ export default function CheckoutPage() {
                       <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
                         {savedAddresses.length
                           ? "Escolhe uma morada guardada ou usa preenchimento manual."
-                          : "Ainda nao tens moradas guardadas. A primeira que preencheres pode ser salva no teu perfil."}
+                          : "Ainda não tens moradas guardadas. A primeira que preencheres pode ser salva no teu perfil."}
                       </p>
                     </div>
                     {savedAddresses.length ? (
@@ -345,21 +407,21 @@ export default function CheckoutPage() {
                   </p>
                 </div>
                 <div><label className="mb-2 block text-sm font-semibold">Email</label><input type="email" value={form.email} onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Receber como</label><select value={form.deliveryMethod} onChange={(e) => setForm((current) => ({ ...current, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}><option value="DELIVERY">Entrega ao domicilio</option><option value="STORE_PICKUP">Levantar na loja</option></select></div>
+                <div><label className="mb-2 block text-sm font-semibold">Receber como</label><select value={form.deliveryMethod} onChange={(e) => setForm((current) => ({ ...current, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}><option value="DELIVERY">Entrega ao domicílio</option><option value="STORE_PICKUP">Levantar na loja</option></select></div>
                 <div><label className="mb-2 block text-sm font-semibold">Cidade</label><input value={form.city} onChange={(e) => setForm((current) => ({ ...current, city: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Bairro</label><input value={form.neighborhood} onChange={(e) => setForm((current) => ({ ...current, neighborhood: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Rua / Avenida</label><input value={form.street} onChange={(e) => setForm((current) => ({ ...current, street: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Casa / Numero</label><input value={form.houseNumber} onChange={(e) => setForm((current) => ({ ...current, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
               </div>
               <div className="mt-4 grid gap-4">
-                <div><label className="mb-2 block text-sm font-semibold">Referencia</label><textarea value={form.deliveryReference} onChange={(e) => setForm((current) => ({ ...current, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={form.deliveryMethod === "DELIVERY"} /></div>
+                <div><label className="mb-2 block text-sm font-semibold">Referência</label><textarea value={form.deliveryReference} onChange={(e) => setForm((current) => ({ ...current, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Google Maps</label><input value={form.googleMapsLink} onChange={(e) => setForm((current) => ({ ...current, googleMapsLink: e.target.value }))} className={fieldClass} style={getFieldStyle()} placeholder="https://maps.google.com/..." /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Notas</label><textarea value={form.customerNotes} onChange={(e) => setForm((current) => ({ ...current, customerNotes: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 110 }} placeholder="Instrucoes para a entrega, horarios ou observacoes." /></div>
+                <div><label className="mb-2 block text-sm font-semibold">Notas</label><textarea value={form.customerNotes} onChange={(e) => setForm((current) => ({ ...current, customerNotes: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 110 }} placeholder="Instruções para a entrega, horários ou observações." /></div>
                 {form.deliveryMethod === "DELIVERY" ? (
                   <label className="inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }}>
                     <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
                     {savedAddresses.length === 0
-                      ? "Guardar esta primeira morada no meu perfil para usar nas proximas compras"
+                      ? "Guardar esta primeira morada no meu perfil para usar nas próximas compras"
                       : "Guardar esta morada no meu perfil"}
                   </label>
                 ) : null}
@@ -369,7 +431,7 @@ export default function CheckoutPage() {
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z" /><circle cx="12" cy="10" r="3" />
                     </svg>
                     <p className="text-sm" style={{ color: "#0C4A6E" }}>
-                      Guarda a morada agora e nas proximas compras o checkout fica pre-preenchido automaticamente.{" "}
+                      Guarda a morada agora e nas próximas compras o checkout fica pré-preenchido automaticamente.{" "}
                       <Link href="/profile#addresses" className="font-bold underline" style={{ color: "#0284C7" }}>
                         Gerir moradas no perfil
                       </Link>
@@ -380,7 +442,9 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white transition" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>{isSubmitting ? "A finalizar..." : externalItems.length > 0 && localItems.length > 0 ? "Criar compra composta" : "Criar pedido"}</button>
+              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white transition" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
+                {isSubmitting ? "A preparar pagamento..." : localItems.length > 0 ? "Confirmar e pagar" : "Criar proposta"}
+              </button>
               <Link href="/cart" className="rounded-2xl border px-5 py-3.5 text-sm font-bold transition" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Voltar ao carrinho</Link>
             </div>
           </form>
@@ -393,7 +457,7 @@ export default function CheckoutPage() {
             {isLoading ? (
               <ClientSectionSkeleton
                 title="A montar o resumo"
-                message="O total, os itens e a separacao da compra composta aparecem ja a seguir."
+                message="O total, os itens e a separação da compra composta aparecem já a seguir."
                 rows={2}
               />
             ) : (
@@ -401,8 +465,41 @@ export default function CheckoutPage() {
                 <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Itens locais</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{localItems.length}</strong></div>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(localSubtotal)}</strong></div>
-                  <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{form.deliveryMethod === "DELIVERY" ? formatMoney(estimatedDelivery) : "—"}</strong></div>
-                  <div className="flex items-center justify-between text-sm"><span style={{ color: RED }}>Total</span><strong style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(total)}</strong></div>
+                  <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{form.deliveryMethod === "DELIVERY" ? formatMoney(estimatedDelivery) : "-"}</strong></div>
+                  {discountAmount > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Total antes</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(total)}</strong></div>
+                      <div className="flex items-center justify-between text-sm"><span style={{ color: "#059669" }}>Desconto {coupon?.code}</span><strong style={{ color: "#059669", fontFamily: "'Sora', sans-serif" }}>-{formatMoney(discountAmount)}</strong></div>
+                    </>
+                  ) : null}
+                  <div className="flex items-center justify-between text-sm"><span style={{ color: RED }}>Total</span><strong style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAfterDiscount)}</strong></div>
+                </div>
+
+                <div className="rounded-2xl border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
+                  <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>Cupão</label>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={couponCode}
+                      onChange={(event) => {
+                        setCouponCode(event.target.value.toUpperCase());
+                        if (coupon) setCoupon(null);
+                      }}
+                      placeholder="Ex.: BEMVINDO10"
+                      className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "#F2D4CC", color: "#1A1410" }}
+                    />
+                    {coupon?.valid ? (
+                      <button type="button" onClick={removeCoupon} className="rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>
+                        Remover
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim() || isLoading} className="rounded-2xl px-4 py-3 text-sm font-bold text-white" style={{ background: isApplyingCoupon || !couponCode.trim() || isLoading ? "#FDB8A7" : RED }}>
+                        {isApplyingCoupon ? "A aplicar..." : "Aplicar"}
+                      </button>
+                    )}
+                  </div>
+                  {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
+                  {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
                 </div>
 
                 <div className="space-y-3">
@@ -412,16 +509,28 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
-                  <p className="font-semibold">Compra internacional em paralelo</p>
-                  <p>{externalItems.length} item(ns) serao tratados numa proposta separada com preco final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
-                </div>
+                {externalItems.length > 0 ? (
+                  <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
+                    <p className="font-semibold">Compra internacional em paralelo</p>
+                    <p>{externalItems.length} item(ns) serão tratados numa proposta separada com preço final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#6B7280" }}>
                   <p className="font-semibold" style={{ color: "#1A1410" }}>Depois de confirmar</p>
-                  <p className="mt-2">1. O pedido local sera criado agora.</p>
-                  <p className="mt-1">2. A compra internacional vai aparecer no teu painel como proposta em analise.</p>
-                  <p className="mt-1">3. Recebes tudo no mesmo painel, cada parte com o seu proximo passo.</p>
+                  {localItems.length > 0 ? (
+                    <>
+                      <p className="mt-2">1. Criamos o teu pedido.</p>
+                      <p className="mt-1">2. Vais direto para o pagamento.</p>
+                      <p className="mt-1">3. Depois validamos e seguimos com a entrega.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2">1. Criamos a tua proposta de compra internacional.</p>
+                      <p className="mt-1">2. A equipa analisa preço, frete e prazo.</p>
+                      <p className="mt-1">3. Depois recebes a cotação para aprovar.</p>
+                    </>
+                  )}
                 </div>
               </>
             )}

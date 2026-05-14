@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { XSRF_HEADER } from "@/lib/csrf";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const backendUrl = `${BACKEND_URL}/api/payments/${encodeURIComponent(orderId)}/submit`;
   const headers = new Headers();
   const cookie = request.headers.get("cookie");
+  const csrfToken = request.headers.get(XSRF_HEADER.toLowerCase()) ?? request.headers.get(XSRF_HEADER);
   const cookieToken = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
 
   if (cookieToken) {
@@ -37,6 +39,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
   if (cookie) {
     headers.set("Cookie", cookie);
+  }
+  if (csrfToken) {
+    headers.set(XSRF_HEADER, csrfToken);
   }
 
   let backendResponse: Response;
