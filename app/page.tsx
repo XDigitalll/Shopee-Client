@@ -667,7 +667,7 @@ function CategoriesSection({ categories }: CategoriesSectionProps) {
 
 // â”€â”€ External Order Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function ExternalOrderBanner({ token, onLoginClick }: { token: string | null; onLoginClick: () => void }) {
+function ExternalOrderBanner() {
   const router = useRouter();
   const [link, setLink] = useState("");
   const [selectedStore, setSelectedStore] = useState("SHEIN");
@@ -676,12 +676,14 @@ function ExternalOrderBanner({ token, onLoginClick }: { token: string | null; on
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-      if (!token) { onLoginClick(); return; }
-      setSubmitting(true);
-      sessionStorage.setItem("pendingExternalLink", link.trim());
-      sessionStorage.setItem("pendingExternalStore", selectedStore);
-      router.push("/orders/external/new");
-    };
+    setSubmitting(true);
+    const params = new URLSearchParams();
+    params.set("store", selectedStore);
+    if (link.trim()) {
+      params.set("link", link.trim());
+    }
+    router.push(`/comprar-do-estrangeiro?${params.toString()}`);
+  };
 
   return (
     <section id="pedido-externo" className="py-16 px-4 sm:px-6" style={{ background: BLUE_DARK }}>
@@ -704,8 +706,7 @@ function ExternalOrderBanner({ token, onLoginClick }: { token: string | null; on
           Compra no estrangeiro com apoio local em Mocambique
         </h2>
         <p className="mb-8 max-w-xl mx-auto text-sm leading-7 text-white/70">
-          Escolhe a loja, cola o link do produto ou carrinho e nos tratamos da compra, importacao e entrega:
-          importacao, alfandega e entrega na tua porta.
+          Cola o link agora. Depois confirmamos quantidade, variante e contacto no fluxo oficial.
         </p>
 
         {/* Store buttons */}
@@ -758,27 +759,13 @@ function ExternalOrderBanner({ token, onLoginClick }: { token: string | null; on
           />
           <button
             type="submit"
-            disabled={submitting || !link.trim()}
+            disabled={submitting}
             className="shrink-0 rounded-2xl px-6 py-3.5 text-sm font-bold text-white transition-all disabled:opacity-50"
             style={{ background: store.color }}
           >
-            {submitting ? "A redirecionar..." : `Continuar com ${store.label}`}
+            {submitting ? "A redirecionar..." : "Comecar pedido"}
           </button>
         </form>
-
-        {!token && (
-          <p className="mt-4 text-xs text-white/40">
-            Precisas de{" "}
-            <button
-              type="button"
-              onClick={onLoginClick}
-              className="font-semibold text-white/70 underline hover:text-white"
-            >
-              criar conta
-            </button>{" "}
-            para submeter pedidos
-          </p>
-        )}
       </div>
     </section>
   );
@@ -1292,7 +1279,7 @@ export default function Home() {
 
       <CategoriesSection categories={categories} />
 
-      <ExternalOrderBanner token={token} onLoginClick={openLogin} />
+      <ExternalOrderBanner />
 
       <ProductsSection
         products={products}

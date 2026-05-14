@@ -16,6 +16,29 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Google OAuth
+
+For local development, `shopee-client/.env.local` should point to the local backend:
+
+```env
+BACKEND_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=http://localhost:8080
+```
+
+The backend must redirect OAuth back to the local client:
+
+```env
+APP_FRONTEND_URL=http://localhost:3000
+```
+
+In production, configure the backend with the client URL deployed on Vercel:
+
+```env
+APP_FRONTEND_URL=https://client-vercel-url
+```
+
+Do not hardcode Render or localhost in source code. Use environment variables for each environment.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
