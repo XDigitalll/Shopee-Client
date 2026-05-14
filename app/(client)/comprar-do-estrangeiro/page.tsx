@@ -14,13 +14,14 @@ export default async function ComprarDoEstrangeiroPage({
   const params = await searchParams;
   const target = new URLSearchParams();
   const store = firstParam(params.store);
-  const link = firstParam(params.link);
+  // "input" is the new param; "link" is kept for backward compatibility
+  const input = firstParam(params.input) ?? firstParam(params.link);
 
   if (store) {
     target.set("store", store);
   }
-  if (link) {
-    target.set("link", link);
+  if (input) {
+    target.set("input", input);
   }
 
   const query = target.toString();
