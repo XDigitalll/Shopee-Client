@@ -1,4 +1,5 @@
 import { clearStoredSession, getStoredRefreshToken, refreshStoredSession } from "@/lib/auth";
+import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
 export const CLIENT_DATA_CHANGED_EVENT = "client:data-changed";
 
@@ -69,6 +70,15 @@ async function performRequest(path: string, options: ApiOptions = {}, tokenOverr
   const token = tokenOverride ?? options.token;
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  // Attach CSRF token for all state-mutating requests
+  const method = String(options.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers.set(XSRF_HEADER, csrfToken);
+    }
   }
 
   return fetch(`/api/xdigital/${path.replace(/^\/+/, "")}`, {
