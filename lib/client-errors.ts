@@ -20,19 +20,22 @@ function isUnsafeMessage(message: string) {
 
 export function normalizeClientError(
   error: unknown,
-  fallback = "Não conseguimos concluir agora. Tenta novamente."
+  fallback = "Não conseguimos concluir agora. Tenta novamente.",
+  status?: number
 ): NormalizedClientError {
   const message = rawMessage(error).trim();
   const lower = message.toLowerCase();
 
-  if (
-    /não tem permissão|nao tem permissao|sem permiss|forbidden|unauthorized|401|403|sess[aã]o expirada|login novamente/.test(lower)
-  ) {
+  if (status === 401 || /unauthorized|401|sess[aã]o expirada|login novamente/.test(lower)) {
     return { kind: "session", message: "A tua sessão expirou. Inicia sessão novamente para continuar." };
   }
 
-  if (/csrf|xsrf/.test(lower)) {
-    return { kind: "session", message: "A tua sessão expirou. Inicia sessão novamente para continuar." };
+  if (/csrf|xsrf|forbidden csrf|invalid csrf|missing csrf/.test(lower)) {
+    return { kind: "validation", message: "Atualiza a página e tenta novamente." };
+  }
+
+  if (status === 403 || /não tem permissão|nao tem permissao|sem permiss|forbidden|403/.test(lower)) {
+    return { kind: "validation", message: "Não tens permissão para esta ação." };
   }
 
   if (/cup[aã]o/.test(lower) && /inv[aá]lido|expir|inativo|mínimo|minimo/.test(lower)) {
