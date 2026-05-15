@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 type ClientFeedbackTone = "success" | "error" | "info" | "loading";
 
 function clientFeedbackPalette(tone: ClientFeedbackTone) {
@@ -64,6 +66,84 @@ export function ClientFeedbackBanner({
           </p>
           <p className="mt-1">{message}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function ClientActionFeedback({
+  feedback,
+  onClose,
+  actionLabel,
+  actionHref,
+  onAction,
+}: {
+  feedback: { type: ClientFeedbackTone; msg: string } | null;
+  onClose?: () => void;
+  actionLabel?: string;
+  actionHref?: string;
+  onAction?: () => void;
+}) {
+  if (!feedback) {
+    return null;
+  }
+
+  const isLoading = feedback.type === "loading";
+  const palette = clientFeedbackPalette(feedback.type);
+  const title = isLoading
+    ? "Estamos a processar"
+    : feedback.type === "success"
+      ? "Tudo certo"
+      : feedback.type === "error"
+        ? "Precisamos da tua atenção"
+        : "Atenção";
+
+  const actionClassName = "mt-3 inline-flex rounded-2xl px-4 py-2 text-sm font-black text-white";
+
+  return (
+    <div
+      className="mt-3 rounded-2xl border px-4 py-3 text-sm shadow-sm"
+      style={palette}
+      role={feedback.type === "error" ? "alert" : "status"}
+      aria-live={feedback.type === "error" ? "assertive" : "polite"}
+      aria-busy={isLoading}
+    >
+      <div className="flex items-start gap-3">
+        {isLoading ? (
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FFF0EC]">
+            <ClientLoadingPulse compact />
+          </div>
+        ) : (
+          <span
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-black"
+            style={{
+              background: feedback.type === "success" ? "#DCFCE7" : feedback.type === "error" ? "#FEE2E2" : "#FEF3C7",
+              color: palette.color,
+            }}
+          >
+            {feedback.type === "success" ? "OK" : feedback.type === "error" ? "!" : "i"}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+            {title}
+          </p>
+          <p className="mt-1 leading-5">{feedback.msg}</p>
+          {actionLabel && actionHref ? (
+            <Link href={actionHref} className={actionClassName} style={{ background: "#E8431A", fontFamily: "'Sora', sans-serif" }}>
+              {actionLabel}
+            </Link>
+          ) : actionLabel && onAction ? (
+            <button type="button" onClick={onAction} className={actionClassName} style={{ background: "#E8431A", fontFamily: "'Sora', sans-serif" }}>
+              {actionLabel}
+            </button>
+          ) : null}
+        </div>
+        {onClose && !isLoading ? (
+          <button type="button" onClick={onClose} className="shrink-0 rounded-full px-2 py-1 text-xs font-bold" style={{ color: palette.color, background: "rgba(255,255,255,0.62)" }}>
+            Fechar
+          </button>
+        ) : null}
       </div>
     </div>
   );

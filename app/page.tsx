@@ -8,6 +8,7 @@ import { CategoryIcon } from "@/lib/category-icons";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
+import { normalizeClientError } from "@/lib/client-errors";
 import type { Category, Order, Product } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientShell } from "@/components/client-shell";
@@ -804,6 +805,7 @@ function canAddToCart(product: Product) {
 
 function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: ProductCardProps) {
   const [adding, setAdding] = useState(false);
+  const [cardFeedback, setCardFeedback] = useState<FeedbackState>(null);
   const img =
     product.primaryThumbnailUrl ||
     product.primaryImageUrl ||
@@ -823,6 +825,7 @@ function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: Pr
     e.stopPropagation();
     if (!authReady) return;
     if (!token) {
+      setCardFeedback({ msg: "Inicia sessão para adicionar ao carrinho.", type: "error" });
       onFeedback("Inicia sessão para adicionar ao carrinho.", "error");
       onLoginClick();
       return;
@@ -834,9 +837,12 @@ function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: Pr
         token,
         body: JSON.stringify({ productId: product.id, quantity: 1 }),
       });
+      setCardFeedback({ msg: "Produto adicionado ao carrinho!", type: "success" });
       onFeedback("Produto adicionado ao carrinho!", "success");
     } catch (err) {
-      onFeedback(err instanceof Error ? err.message : "Erro ao adicionar.", "error");
+      const message = normalizeClientError(err, "Não foi possível adicionar ao carrinho. Tenta novamente.").message;
+      setCardFeedback({ msg: message, type: "error" });
+      onFeedback(message, "error");
     } finally {
       setAdding(false);
     }
@@ -931,6 +937,14 @@ function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: Pr
           <CartIconSvg size={16} />
           {adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"}
         </button>
+        {cardFeedback ? (
+          <p className="rounded-xl px-3 py-2 text-xs font-semibold" style={{
+            background: cardFeedback.type === "success" ? "#F0FFF4" : "#FFF5F5",
+            color: cardFeedback.type === "success" ? "#166534" : "#B42318",
+          }}>
+            {cardFeedback.msg}
+          </p>
+        ) : null}
       </div>
     </Link>
   );

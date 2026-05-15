@@ -5,16 +5,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { ClientConfirmDialog, ClientFeedbackDock, ClientSectionSkeleton } from "@/components/client-feedback-state";
+import { ClientActionFeedback, ClientConfirmDialog, ClientFeedbackDock, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { formatMoney } from "@/lib/format";
 import type { Cart, CartItem, CouponValidation } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
+import { normalizeClientError } from "@/lib/client-errors";
 
 const RED = "#E8431A";
 const RED_PALE = "#FCEBEB";
 const GREEN = "#2E8B57";
-const DELIVERY_FEE = 150;
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
 
 const passthroughImageLoader = ({ src }: ImageLoaderProps) => src;
@@ -54,6 +54,8 @@ export default function CartPage() {
   const [cart, setCart] = useState<Cart | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
+  const [couponFeedback, setCouponFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
+  const [checkoutFeedback, setCheckoutFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,8 +104,7 @@ export default function CartPage() {
   const selectedExternalItems = selectedItems.filter((item) => item.itemType === "EXTERNAL" || item.madeToOrder);
   const selectedLocalSubtotal = selectedLocalItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
   const discountAmount = Number(coupon?.discountAmount || 0);
-  const estimatedDelivery = selectedLocalSubtotal > 0 ? DELIVERY_FEE : 0;
-  const finalTotal = Math.max(selectedLocalSubtotal + estimatedDelivery - discountAmount, 0);
+  const finalTotal = Math.max(selectedLocalSubtotal - discountAmount, 0);
   const allSelected = cart?.items?.length ? cart.items.every((item) => selectedIds.includes(item.itemId)) : false;
 
   const patchLocalItem = (productId: number, quantity: number) => {
@@ -168,13 +169,14 @@ export default function CartPage() {
   const applyCoupon = async () => {
     if (!token || !couponCode.trim()) return;
     setIsApplyingCoupon(true);
+    setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
     try {
       const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, { method: "POST", body: JSON.stringify({ code: couponCode.trim(), subtotal: selectedLocalSubtotal, appliesTo: "INTERNAL_PRODUCTS" }) });
       setCoupon(payload);
-      setFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
-    } catch (error) {
+      setCouponFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
+    } catch (error: any) {
       setCoupon(null);
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível validar o cupão." });
+      setCouponFeedback({ type: "error", msg: normalizeClientError(error, "Cupão inválido ou expirado.").message });
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -187,7 +189,7 @@ export default function CartPage() {
     }
 
     if (!selectedItems.length) {
-      setFeedback({ type: "error", msg: "Seleciona pelo menos um item antes de finalizar." });
+      setCheckoutFeedback({ type: "error", msg: "Seleciona pelo menos um item antes de finalizar." });
       return;
     }
 
@@ -306,7 +308,7 @@ export default function CartPage() {
 
             <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
               <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal local</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
-              <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Entrega estimada</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(estimatedDelivery)}</strong></div>
+              <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong className="text-right" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>A definir</strong></div>
               <div className="flex items-center justify-between text-sm"><span style={{ color: GREEN }}>Desconto aplicado</span><strong style={{ color: GREEN, fontFamily: "'Sora', sans-serif" }}>- {formatMoney(discountAmount)}</strong></div>
             </div>
 
@@ -316,6 +318,7 @@ export default function CartPage() {
                 <input value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Ex.: BEMVINDO10" className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }} />
                 <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim()} className="rounded-2xl px-4 py-3 text-sm font-bold text-white transition" style={{ background: isApplyingCoupon || !couponCode.trim() ? "#FDB8A7" : RED, cursor: isApplyingCoupon || !couponCode.trim() ? "not-allowed" : "pointer" }}>{isApplyingCoupon ? "..." : "Aplicar"}</button>
               </div>
+              <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
               {coupon?.valid && <p className="text-sm font-medium" style={{ color: GREEN }}>{coupon.message}</p>}
             </div>
 
@@ -337,6 +340,7 @@ export default function CartPage() {
 
             <div className="grid gap-3">
               <button type="button" onClick={proceedToCheckout} className="rounded-2xl px-5 py-3.5 text-center text-sm font-black text-white transition" style={{ background: selectedItems.length ? RED : "#FDB8A7", fontFamily: "'Sora', sans-serif", cursor: selectedItems.length ? "pointer" : "not-allowed" }}>{selectedExternalItems.length > 0 && selectedLocalItems.length > 0 ? "Continuar compra composta" : "Finalizar compra"}</button>
+              <ClientActionFeedback feedback={checkoutFeedback} onClose={() => setCheckoutFeedback(null)} />
               <Link href="/" className="rounded-2xl border px-5 py-3.5 text-center text-sm font-bold transition" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Continuar a comprar</Link>
             </div>
 

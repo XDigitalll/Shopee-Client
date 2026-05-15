@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { ClientFeedbackDock } from "@/components/client-feedback-state";
+import { ClientActionFeedback, ClientFeedbackDock } from "@/components/client-feedback-state";
 import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api-client";
+import { normalizeClientError } from "@/lib/client-errors";
 import type { Order } from "@/lib/types";
 
 const RED = "#E8431A";
@@ -199,6 +200,11 @@ export default function NewExternalOrderPage() {
     const validationMessage = validateForm();
     if (validationMessage) {
       setFeedback({ type: "error", msg: validationMessage });
+      requestAnimationFrame(() => {
+        const target = document.querySelector<HTMLInputElement | HTMLTextAreaElement>("textarea:invalid, input:invalid, #productInput, #phoneInput");
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        target?.focus();
+      });
       return;
     }
 
@@ -273,7 +279,7 @@ export default function NewExternalOrderPage() {
     } catch (error) {
       setFeedback({
         type: "error",
-        msg: error instanceof Error ? error.message : "Nao foi possivel enviar o pedido.",
+        msg: normalizeClientError(error, "Não foi possível enviar o pedido. Tenta novamente.").message,
       });
     } finally {
       setIsSubmitting(false);
@@ -282,7 +288,7 @@ export default function NewExternalOrderPage() {
 
   return (
     <>
-      <ClientFeedbackDock feedback={feedback} onClose={() => setFeedback(null)} placement="center" />
+      <ClientFeedbackDock feedback={feedback?.type === "success" || feedback?.type === "loading" ? feedback : null} onClose={() => setFeedback(null)} placement="center" />
 
       <main className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 lg:py-10" style={{ color: TEXT }}>
         <section className="mb-6">
@@ -685,6 +691,12 @@ export default function NewExternalOrderPage() {
                 >
                   {isSubmitting ? "A processar pedido..." : "Pedir cotacao"}
                 </button>
+                <ClientActionFeedback
+                  feedback={feedback && feedback.type !== "success" ? feedback : null}
+                  onClose={() => setFeedback(null)}
+                  actionLabel={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "Entrar novamente" : undefined}
+                  actionHref={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "/login?redirect=%2Forders%2Fexternal%2Fnew" : undefined}
+                />
               </div>
             </form>
           </>
