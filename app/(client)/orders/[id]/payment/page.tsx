@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { emitClientDataChanged } from "@/lib/api-client";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
@@ -180,23 +180,35 @@ export default function OrderPaymentPage() {
   const [isBusy, setIsBusy] = useState(false);
   const [submission, setSubmission] = useState<SubmissionResponse | null>(null);
 
-  useEffect(() => {
-    const loadOrder = async () => {
-      if (!token || !orderId) return;
-      try {
-        const orders = await fetchWithToken<Order[]>("/api/orders/my-orders", token);
-        setAllOrders(orders);
-        const currentOrder = orders.find((item) => item.id === orderId) || null;
-        setOrder(currentOrder);
+  const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!token || !orderId) return;
+    try {
+      const orders = await fetchWithToken<Order[]>("/api/orders/my-orders", token);
+      setAllOrders(orders);
+      const currentOrder = orders.find((item) => item.id === orderId) || null;
+      setOrder(currentOrder);
+      if (!silent) {
         setPayerName(currentOrder?.customerFullName || "");
         setPayerPhone(currentOrder?.primaryPhoneNumber || "");
-      } catch (error) {
+      }
+    } catch (error) {
+      if (!silent) {
         setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar o pedido." });
       }
-    };
-
-    void loadOrder();
+    }
   }, [orderId, token]);
+
+  useEffect(() => {
+    void loadOrder();
+  }, [loadOrder]);
+
+  useEffect(() => {
+    if (!token || !orderId) return;
+    const interval = window.setInterval(() => {
+      void loadOrder({ silent: true });
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [loadOrder, orderId, token]);
 
   useEffect(() => {
     if (!file || !file.type.startsWith("image/")) {
