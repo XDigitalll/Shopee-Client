@@ -7,6 +7,7 @@ import { CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
+import { cleanDisplayText } from "@/lib/text";
 import type { Order, OrderItem, OrderStats } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 
@@ -718,7 +719,7 @@ export default function OrdersPage() {
         {order.adminMessageForClient && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#93C5FD" }}>
             <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: "#1D4ED8" }}>Mensagem da ShopeeX</p>
-            <p className="mt-2 text-sm" style={{ color: "#1D4ED8", whiteSpace: "pre-wrap" }}>{order.adminMessageForClient}</p>
+            <p className="mt-2 text-sm" style={{ color: "#1D4ED8", whiteSpace: "pre-wrap" }}>{cleanDisplayText(order.adminMessageForClient)}</p>
           </div>
         )}
 

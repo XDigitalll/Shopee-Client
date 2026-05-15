@@ -8,8 +8,11 @@ import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
+import { cleanDisplayText } from "@/lib/text";
+import { normalizeClientError } from "@/lib/client-errors";
 import type { Order } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
+import { ClientActionFeedback } from "@/components/client-feedback-state";
 import { RelatedPurchasePanel } from "@/components/orders/related-purchase-panel";
 
 const RED = "#E8431A";
@@ -48,7 +51,7 @@ async function fetchWithToken<T>(url: string, _token: string) {
     credentials: "same-origin",
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel carregar o pedido.");
+  if (!response.ok) throw new Error(normalizeClientError(payload?.message || payload?.error || "Não foi possível carregar o pedido.").message);
   return payload as T;
 }
 
@@ -69,7 +72,7 @@ function statusCopy(status?: string, adminMessage?: string) {
   const map: Record<string, { title: string; body: string; color: string; bg: string; border: string }> = {
     PENDING_PAYMENT: {
       title: "Pagamento pendente",
-      body: "Escolhe o metodo, faz o pagamento e submete os dados para analise.",
+      body: "Escolhe o método, faz o pagamento e submete os dados para análise.",
       color: "#9A3412",
       bg: "#FFF7ED",
       border: "#FED7AA",
@@ -82,22 +85,22 @@ function statusCopy(status?: string, adminMessage?: string) {
       border: "#BFDBFE",
     },
     PAYMENT_UNDER_REVIEW: {
-      title: "Pagamento em analise",
-      body: "A equipa financeira esta a rever os dados enviados.",
+      title: "Pagamento em análise",
+      body: "A equipa financeira está a rever os dados enviados.",
       color: "#5B21B6",
       bg: "#F5F3FF",
       border: "#DDD6FE",
     },
     PAYMENT_REJECTED: {
       title: "Pagamento recusado",
-      body: adminMessage || "Revise os dados e submeta novamente o pagamento.",
+      body: cleanDisplayText(adminMessage) || "Revê os dados e submete novamente o pagamento.",
       color: "#991B1B",
       bg: "#FFF5F5",
       border: "#FECACA",
     },
     PAID: {
       title: "Pagamento confirmado",
-      body: "O pagamento foi validado e o pedido segue para a proxima etapa.",
+      body: "O pagamento foi validado e o pedido segue para a próxima etapa.",
       color: "#166534",
       bg: "#F0FDF4",
       border: "#86EFAC",
@@ -221,10 +224,10 @@ export default function OrderPaymentPage() {
     if (!nextFile) return null;
     const extension = `.${nextFile.name.split(".").pop()?.toLowerCase() || ""}`;
     if (!ACCEPTED_TYPES.includes(nextFile.type) && !ACCEPTED_EXTENSIONS.includes(extension)) {
-      return "Formato invalido. Usa jpg, jpeg, png, webp ou pdf.";
+      return "Formato inválido. Usa jpg, jpeg, png, webp ou pdf.";
     }
     if (nextFile.size > MAX_FILE_SIZE) {
-      return "O comprovativo deve ter no maximo 10MB.";
+      return "O comprovativo deve ter no máximo 10MB.";
     }
     return null;
   }
@@ -310,7 +313,7 @@ export default function OrderPaymentPage() {
       emitClientDataChanged();
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Erro ao submeter pagamento." });
+      setFeedback({ type: "error", msg: normalizeClientError(error, "Não foi possível validar o pagamento. Tenta novamente.").message });
     } finally {
       setIsBusy(false);
     }
@@ -332,7 +335,7 @@ export default function OrderPaymentPage() {
               Pedido {orderDisplayCode(order ?? { id: orderId })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
-              Submete o pagamento para a equipa financeira validar antes do pedido avancar.
+              Submete o pagamento para a equipa financeira validar antes do pedido avançar.
             </p>
           </div>
           <div className="rounded-[24px] border px-5 py-4" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>
@@ -356,7 +359,7 @@ export default function OrderPaymentPage() {
         {isLocked ? (
           <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
             <p className="text-sm font-semibold" style={{ color: "#6B7280" }}>
-              Nao e preciso submeter outro comprovativo agora. Quando a validacao terminar, o estado do pedido sera actualizado automaticamente.
+              Não é preciso submeter outro comprovativo agora. Quando a validação terminar, o estado do pedido será actualizado automaticamente.
             </p>
           </div>
         ) : null}
@@ -364,7 +367,7 @@ export default function OrderPaymentPage() {
         {canSubmit ? (
           <form onSubmit={handleSubmit} className="mt-6 space-y-6">
             <section>
-              <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Escolhe o metodo</p>
+              <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Escolhe o método</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {METHODS.map((item) => {
                   const active = method === item.key;
@@ -445,7 +448,7 @@ export default function OrderPaymentPage() {
                       <div>
                         <p className="text-sm font-black">Comprovativo</p>
                         <p className="mt-1 text-xs" style={{ color: "#6B7280" }}>
-                          {method === "BANK_TRANSFER" ? "Obrigatorio para transferencia bancaria." : "Recomendado para acelerar a validacao."}
+                          {method === "BANK_TRANSFER" ? "Obrigatório para transferência bancária." : "Recomendado para acelerar a validação."}
                         </p>
                       </div>
                       <label className="inline-flex cursor-pointer justify-center rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
@@ -481,12 +484,24 @@ export default function OrderPaymentPage() {
               <button type="submit" disabled={isBusy} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy ? "#FDB8A7" : RED }}>
                 {isBusy ? "A submeter..." : "Submeter pagamento"}
               </button>
+              <ClientActionFeedback
+                feedback={feedback}
+                onClose={() => setFeedback(null)}
+                actionLabel={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "Entrar novamente" : undefined}
+                actionHref={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? `/login?redirect=%2Forders%2F${orderId}%2Fpayment` : undefined}
+              />
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden" style={{ borderColor: "#F2D4CC" }}>
               <button type="submit" disabled={isBusy} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy ? "#FDB8A7" : RED }}>
                 {isBusy ? "A submeter..." : "Submeter pagamento"}
               </button>
+              <ClientActionFeedback
+                feedback={feedback}
+                onClose={() => setFeedback(null)}
+                actionLabel={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "Entrar novamente" : undefined}
+                actionHref={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? `/login?redirect=%2Forders%2F${orderId}%2Fpayment` : undefined}
+              />
             </div>
           </form>
         ) : null}

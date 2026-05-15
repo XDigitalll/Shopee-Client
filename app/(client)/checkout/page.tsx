@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
+import { ClientActionFeedback, ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
+import { normalizeClientError } from "@/lib/client-errors";
 import type { Cart, CartItem, CheckoutResponse, CouponValidation, CustomerProfile, Order, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { addressMatchesForm, applySavedAddress, createAddressLabel, createPrefilledAddress, createPrefilledContact } from "@/lib/address-book";
 
 const RED = "#E8431A";
-const DELIVERY_FEE = 150;
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
 const PHONE_PATTERN = /^\+258(82|83|84|85|86|87)\d{7}$/;
 
@@ -40,7 +40,7 @@ function isValidPhone(value: string) {
 function getPhoneError(value: string, required: boolean) {
   const trimmed = value.trim();
   if (!trimmed) return required ? "Usa o formato +2588xxxxxxxx." : "";
-  return isValidPhone(trimmed) ? "" : "Numero invalido. Usa o formato +2588xxxxxxxx.";
+  return isValidPhone(trimmed) ? "" : "Número inválido. Usa o formato +2588xxxxxxxx.";
 }
 
 function isCheckoutResponse(payload: CheckoutResponse | Order | null): payload is CheckoutResponse {
@@ -83,12 +83,16 @@ export default function CheckoutPage() {
   const [selectedItemIds, setSelectedItemIds] = useState<number[] | null>(null);
   const [form, setForm] = useState(initialForm);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
+  const [submitFeedback, setSubmitFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
+  const [couponFeedback, setCouponFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState({ primary: false, alternative: false });
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const primaryPhoneRef = useRef<HTMLInputElement | null>(null);
+  const alternativePhoneRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const loadCheckout = async () => {
@@ -164,8 +168,7 @@ export default function CheckoutPage() {
   const localItems = useMemo(() => checkoutItems.filter((item) => item.itemType !== "EXTERNAL" && !item.madeToOrder), [checkoutItems]);
   const externalItems = useMemo(() => checkoutItems.filter((item) => item.itemType === "EXTERNAL" || item.madeToOrder), [checkoutItems]);
   const localSubtotal = localItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
-  const estimatedDelivery = form.deliveryMethod === "DELIVERY" && localSubtotal > 0 ? DELIVERY_FEE : 0;
-  const total = localSubtotal + estimatedDelivery;
+  const total = localSubtotal;
   const discountAmount = coupon?.valid ? Number(coupon.discountAmount || 0) : 0;
   const totalAfterDiscount = Math.max(total - discountAmount, 0);
   const primaryPhoneError = getPhoneError(form.primaryPhoneNumber, true);
@@ -177,11 +180,17 @@ export default function CheckoutPage() {
     if (!token) return;
     if (hasPhoneErrors) {
       setPhoneTouched({ primary: true, alternative: true });
-      setFeedback({ type: "error", msg: "Corrige os numeros de telefone antes de finalizar." });
+      setSubmitFeedback({ type: "error", msg: "Revê os campos destacados antes de continuar." });
+      setTimeout(() => {
+        const target = primaryPhoneError ? primaryPhoneRef.current : alternativePhoneRef.current;
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        target?.focus();
+      }, 0);
       return;
     }
     setIsSubmitting(true);
-    setFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
+    setSubmitFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
+    setFeedback(null);
     try {
       const checkoutResult = await fetchWithAuth<CheckoutResponse | Order>("/api/xdigital/orders/from-cart", token, {
         method: "POST",
@@ -249,8 +258,8 @@ export default function CheckoutPage() {
         msg: `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso. A proposta será analisada pela equipa.`,
       });
       router.push("/orders");
-    } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível criar o pedido." });
+    } catch (error: any) {
+      setSubmitFeedback({ type: "error", msg: normalizeClientError(error, "Não conseguimos criar o pedido agora. Tenta novamente.").message });
     } finally {
       setIsSubmitting(false);
     }
@@ -266,10 +275,11 @@ export default function CheckoutPage() {
     if (!token || !couponCode.trim()) return;
     if (localItems.length === 0 || total <= 0) {
       setCoupon(null);
-      setFeedback({ type: "info", msg: "Cupões para pedidos externos são validados quando a cotação tiver total final." });
+      setCouponFeedback({ type: "info", msg: "Cupões para pedidos externos são validados quando a cotação tiver total final." });
       return;
     }
     setIsApplyingCoupon(true);
+    setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
     setFeedback(null);
     try {
       const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, {
@@ -282,10 +292,10 @@ export default function CheckoutPage() {
       });
       setCoupon(payload);
       setCouponCode(payload.code || couponCode.trim().toUpperCase());
-      setFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
-    } catch (error) {
+      setCouponFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
+    } catch (error: any) {
       setCoupon(null);
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível validar o cupão." });
+      setCouponFeedback({ type: "error", msg: normalizeClientError(error, "Cupão inválido ou expirado.").message });
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -294,23 +304,24 @@ export default function CheckoutPage() {
   const removeCoupon = () => {
     setCoupon(null);
     setCouponCode("");
+    setCouponFeedback({ type: "info", msg: "Cupão removido." });
   };
 
   return (
     <div className="min-h-screen">
 
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-4 px-3 py-4 sm:gap-6 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:px-8">
         <section className="space-y-4">
-          <div className="rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
-            <h1 className="text-2xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Finalizar compra</h1>
+          <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+            <h1 className="text-xl font-black sm:text-2xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Finalizar compra</h1>
             <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Confirma os teus dados e revê claramente o que fecha agora e o que segue como proposta internacional.</p>
           </div>
 
           {feedback ? <ClientFeedbackBanner message={feedback.msg} tone={feedback.type} /> : null}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+            <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
               {isLoading ? (
                 <div className="mb-5">
                   <ClientSectionSkeleton
@@ -321,7 +332,7 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
               {form.deliveryMethod === "DELIVERY" ? (
-                <div className="mb-5 rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
+                <div className="mb-5 rounded-[20px] border p-4 sm:rounded-[24px]" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Morada de entrega</p>
@@ -352,7 +363,7 @@ export default function CheckoutPage() {
                             key={address.id}
                             type="button"
                             onClick={() => setSelectedAddressId(address.id)}
-                            className="rounded-[22px] border p-4 text-left transition"
+                            className="min-w-0 rounded-[20px] border p-4 text-left transition sm:rounded-[22px]"
                             style={{
                               borderColor: active ? RED : "#F2D4CC",
                               background: active ? "#FFF0EC" : "#FFFFFF",
@@ -381,6 +392,7 @@ export default function CheckoutPage() {
                   <label className="mb-2 block text-sm font-semibold">Telefone principal</label>
                   <input
                     required
+                    ref={primaryPhoneRef}
                     value={form.primaryPhoneNumber}
                     onChange={(e) => setForm((current) => ({ ...current, primaryPhoneNumber: e.target.value }))}
                     onBlur={() => setPhoneTouched((current) => ({ ...current, primary: true }))}
@@ -395,6 +407,7 @@ export default function CheckoutPage() {
                 <div>
                   <label className="mb-2 block text-sm font-semibold">Telefone alternativo</label>
                   <input
+                    ref={alternativePhoneRef}
                     value={form.alternativePhoneNumber}
                     onChange={(e) => setForm((current) => ({ ...current, alternativePhoneNumber: e.target.value }))}
                     onBlur={() => setPhoneTouched((current) => ({ ...current, alternative: true }))}
@@ -411,7 +424,7 @@ export default function CheckoutPage() {
                 <div><label className="mb-2 block text-sm font-semibold">Cidade</label><input value={form.city} onChange={(e) => setForm((current) => ({ ...current, city: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Bairro</label><input value={form.neighborhood} onChange={(e) => setForm((current) => ({ ...current, neighborhood: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
                 <div><label className="mb-2 block text-sm font-semibold">Rua / Avenida</label><input value={form.street} onChange={(e) => setForm((current) => ({ ...current, street: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Casa / Numero</label><input value={form.houseNumber} onChange={(e) => setForm((current) => ({ ...current, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
+                <div><label className="mb-2 block text-sm font-semibold">Casa / Número</label><input value={form.houseNumber} onChange={(e) => setForm((current) => ({ ...current, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
               </div>
               <div className="mt-4 grid gap-4">
                 <div><label className="mb-2 block text-sm font-semibold">Referência</label><textarea value={form.deliveryReference} onChange={(e) => setForm((current) => ({ ...current, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={form.deliveryMethod === "DELIVERY"} /></div>
@@ -441,17 +454,23 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white transition" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white transition sm:w-auto" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
                 {isSubmitting ? "A preparar pagamento..." : localItems.length > 0 ? "Confirmar e pagar" : "Criar proposta"}
               </button>
-              <Link href="/cart" className="rounded-2xl border px-5 py-3.5 text-sm font-bold transition" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Voltar ao carrinho</Link>
+              <Link href="/cart" className="w-full rounded-2xl border px-5 py-3.5 text-center text-sm font-bold transition sm:w-auto" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Voltar ao carrinho</Link>
             </div>
+            <ClientActionFeedback
+              feedback={submitFeedback}
+              onClose={() => setSubmitFeedback(null)}
+              actionLabel={submitFeedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(submitFeedback.msg) ? "Entrar novamente" : undefined}
+              actionHref={submitFeedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(submitFeedback.msg) ? "/login?redirect=%2Fcheckout" : undefined}
+            />
           </form>
         </section>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
-          <div className="space-y-4 rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+        <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+          <div className="space-y-4 rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
             <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Resumo</h2>
 
             {isLoading ? (
@@ -465,19 +484,19 @@ export default function CheckoutPage() {
                 <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Itens locais</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{localItems.length}</strong></div>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(localSubtotal)}</strong></div>
-                  <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{form.deliveryMethod === "DELIVERY" ? formatMoney(estimatedDelivery) : "-"}</strong></div>
+                  <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong className="text-right" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>A definir</strong></div>
                   {discountAmount > 0 ? (
                     <>
                       <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Total antes</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(total)}</strong></div>
                       <div className="flex items-center justify-between text-sm"><span style={{ color: "#059669" }}>Desconto {coupon?.code}</span><strong style={{ color: "#059669", fontFamily: "'Sora', sans-serif" }}>-{formatMoney(discountAmount)}</strong></div>
                     </>
                   ) : null}
-                  <div className="flex items-center justify-between text-sm"><span style={{ color: RED }}>Total</span><strong style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAfterDiscount)}</strong></div>
+                  <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: RED }}>Total</span><strong className="text-right" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAfterDiscount)}</strong></div>
                 </div>
 
                 <div className="rounded-2xl border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
                   <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>Cupão</label>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                     <input
                       value={couponCode}
                       onChange={(event) => {
@@ -489,23 +508,24 @@ export default function CheckoutPage() {
                       style={{ borderColor: "#F2D4CC", color: "#1A1410" }}
                     />
                     {coupon?.valid ? (
-                      <button type="button" onClick={removeCoupon} className="rounded-2xl border px-4 py-3 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>
+                      <button type="button" onClick={removeCoupon} className="w-full rounded-2xl border px-4 py-3 text-sm font-bold sm:w-auto" style={{ borderColor: "#F2D4CC", color: RED }}>
                         Remover
                       </button>
                     ) : (
-                      <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim() || isLoading} className="rounded-2xl px-4 py-3 text-sm font-bold text-white" style={{ background: isApplyingCoupon || !couponCode.trim() || isLoading ? "#FDB8A7" : RED }}>
+                      <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim() || isLoading} className="w-full rounded-2xl px-4 py-3 text-sm font-bold text-white sm:w-auto" style={{ background: isApplyingCoupon || !couponCode.trim() || isLoading ? "#FDB8A7" : RED }}>
                         {isApplyingCoupon ? "A aplicar..." : "Aplicar"}
                       </button>
                     )}
                   </div>
+                  <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
                   {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
                   {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold" style={{ color: "#1A1410" }}>Produtos incluidos</p>
+                  <p className="text-sm font-semibold" style={{ color: "#1A1410" }}>Produtos incluídos</p>
                   <div className="space-y-2">
-                    {localItems.map((item: CartItem) => <div key={item.itemId} className="flex items-center justify-between rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFFDFC" }}><span className="truncate pr-3">{item.productName} x{item.quantity}</span><strong style={{ fontFamily: "'Sora', sans-serif" }}>{formatMoney(item.subTotal)}</strong></div>)}
+                    {localItems.map((item: CartItem) => <div key={item.itemId} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFFDFC" }}><span className="min-w-0 break-words">{item.productName} x{item.quantity}</span><strong className="shrink-0 text-right" style={{ fontFamily: "'Sora', sans-serif" }}>{formatMoney(item.subTotal)}</strong></div>)}
                   </div>
                 </div>
 

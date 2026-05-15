@@ -1,4 +1,5 @@
 import { clearStoredSession, refreshStoredSession } from "@/lib/auth";
+import { normalizeClientError } from "@/lib/client-errors";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
 export const CLIENT_DATA_CHANGED_EVENT = "client:data-changed";
@@ -53,14 +54,14 @@ function getApiErrorMessage(payload: unknown) {
 }
 
 function statusFallbackMessage(status: number): string {
-  if (status === 401) return "Sessao expirada. Faz login novamente.";
-  if (status === 403) return "Sem permissao para realizar esta operacao.";
-  if (status === 404) return "Recurso nao encontrado no servidor.";
-  if (status === 409) return "Ja existe uma conta com estes dados.";
-  if (status === 429) return "Muitas tentativas num curto periodo. Aguarda um pouco e tenta novamente.";
-  if (status === 502) return "Backend inacessivel. Confirma se o servidor esta a correr na porta 8080.";
-  if (status >= 500) return "Erro interno do servidor.";
-  return "Nao foi possivel concluir a operacao.";
+  if (status === 401) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
+  if (status === 403) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
+  if (status === 404) return "Não encontrámos esse recurso.";
+  if (status === 409) return "Já existe uma conta com estes dados.";
+  if (status === 429) return "Muitas tentativas. Aguarda um pouco e tenta novamente.";
+  if (status === 502) return "Não conseguimos contactar o servidor agora. Tenta novamente.";
+  if (status >= 500) return "Não conseguimos concluir agora. Tenta novamente.";
+  return "Não foi possível concluir a operação.";
 }
 
 async function performRequest(path: string, options: ApiOptions = {}) {
@@ -127,7 +128,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
 
   if (!response.ok) {
     const apiMessage = getApiErrorMessage(payload);
-    const message = apiMessage ?? statusFallbackMessage(response.status);
+    const message = normalizeClientError(apiMessage ?? statusFallbackMessage(response.status), statusFallbackMessage(response.status)).message;
     throw new Error(message);
   }
 
