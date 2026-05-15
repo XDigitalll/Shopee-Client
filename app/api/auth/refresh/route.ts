@@ -11,6 +11,8 @@ import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
 } from "@/lib/session";
+import { XSRF_COOKIE } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -49,5 +51,7 @@ export async function POST() {
   cookieStore.set(REFRESH_COOKIE_NAME, newRefreshToken, cookieOpts(true, REFRESH_MAX_AGE));
   cookieStore.set(PROFILE_COOKIE, buildProfileJson(newToken), cookieOpts(false, SESSION_MAX_AGE));
 
-  return NextResponse.json({ authenticated: true }, { status: 200 });
+  const nextResponse = NextResponse.json({ authenticated: true }, { status: 200 });
+  forwardNamedSetCookies(nextResponse, backendResponse.headers, [XSRF_COOKIE]);
+  return nextResponse;
 }
