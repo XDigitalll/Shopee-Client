@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { XSRF_COOKIE } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -35,7 +37,9 @@ async function loadOrders(request: NextRequest) {
     return typeMatch && statusMatch;
   });
 
-  return NextResponse.json(orders);
+  const nextResponse = NextResponse.json(orders);
+  forwardNamedSetCookies(nextResponse, response.headers, [XSRF_COOKIE]);
+  return nextResponse;
 }
 
 export async function GET(request: NextRequest) {
