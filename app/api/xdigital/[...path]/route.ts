@@ -58,7 +58,7 @@ async function forward(request: NextRequest, path: string[]) {
   } catch (err) {
     console.error("[proxy] Backend unreachable:", backendUrl.toString(), err);
     return NextResponse.json(
-      { message: "Backend inacessivel. Confirma se o servidor esta a correr na porta 8080." },
+      { message: "Nao conseguimos contactar o servidor. Tenta atualizar a pagina." },
       { status: 502 }
     );
   }
