@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   } catch {
     return NextResponse.json(
       {
-        message: "Nao foi possivel carregar os pedidos do cliente. Confirma se o backend esta a correr na porta 8080.",
+        message: "Nao conseguimos carregar os teus pedidos. Tenta atualizar a pagina.",
       },
       { status: 502 }
     );
