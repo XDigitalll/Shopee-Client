@@ -10,6 +10,7 @@ import {
   SESSION_MAX_AGE,
 } from "@/lib/session";
 import { XSRF_COOKIE } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -88,18 +89,7 @@ export async function POST(request: Request) {
 
     // Forward XSRF-TOKEN cookie from Spring Boot so JS can read it immediately
     // after login and include it in subsequent mutation requests.
-    const setCookieValues: string[] =
-      typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : response.headers.get("set-cookie")
-          ? [response.headers.get("set-cookie")!]
-          : [];
-
-    for (const value of setCookieValues) {
-      if (value.startsWith(`${XSRF_COOKIE}=`)) {
-        nextResponse.headers.append("Set-Cookie", value);
-      }
-    }
+    forwardNamedSetCookies(nextResponse, response.headers, [XSRF_COOKIE]);
 
     return nextResponse;
   } catch {

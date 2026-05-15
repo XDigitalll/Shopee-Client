@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -25,18 +26,7 @@ async function proxyResponse(response: Response) {
     status: response.status,
     headers: { "Content-Type": response.headers.get("Content-Type") || "application/json" },
   });
-  const setCookieValues: string[] =
-    typeof response.headers.getSetCookie === "function"
-      ? response.headers.getSetCookie()
-      : response.headers.get("set-cookie")
-        ? [response.headers.get("set-cookie")!]
-        : [];
-
-  for (const value of setCookieValues) {
-    if (value.startsWith(`${XSRF_COOKIE}=`)) {
-      nextResponse.headers.append("Set-Cookie", value);
-    }
-  }
+  forwardNamedSetCookies(nextResponse, response.headers, [XSRF_COOKIE]);
   return nextResponse;
 }
 

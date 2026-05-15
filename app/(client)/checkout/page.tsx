@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClientActionFeedback, ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
+import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
@@ -192,7 +193,7 @@ export default function CheckoutPage() {
     setSubmitFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     setFeedback(null);
     try {
-      const checkoutResult = await fetchWithAuth<CheckoutResponse | Order>("/api/xdigital/orders/from-cart", token, {
+      const checkoutResult = await apiFetch<CheckoutResponse | Order>("orders/from-cart", {
         method: "POST",
         body: JSON.stringify({
           ...form,
@@ -208,7 +209,7 @@ export default function CheckoutPage() {
         !savedAddresses.some((address) => addressMatchesForm(address, form))
       ) {
         try {
-          await fetchWithAuth<UserAddress>("/api/xdigital/users/me/addresses", token, {
+          await apiFetch<UserAddress>("users/me/addresses", {
             method: "POST",
             body: JSON.stringify({
               label: createAddressLabel(form),

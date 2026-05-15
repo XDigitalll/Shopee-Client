@@ -55,7 +55,7 @@ function getApiErrorMessage(payload: unknown) {
 
 function statusFallbackMessage(status: number): string {
   if (status === 401) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
-  if (status === 403) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
+  if (status === 403) return "Não tens permissão para esta ação.";
   if (status === 404) return "Não encontrámos esse recurso.";
   if (status === 409) return "Já existe uma conta com estes dados.";
   if (status === 429) return "Muitas tentativas. Aguarda um pouco e tenta novamente.";
@@ -128,7 +128,11 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
 
   if (!response.ok) {
     const apiMessage = getApiErrorMessage(payload);
-    const message = normalizeClientError(apiMessage ?? statusFallbackMessage(response.status), statusFallbackMessage(response.status)).message;
+    const message = normalizeClientError(
+      apiMessage ?? statusFallbackMessage(response.status),
+      statusFallbackMessage(response.status),
+      response.status
+    ).message;
     throw new Error(message);
   }
 

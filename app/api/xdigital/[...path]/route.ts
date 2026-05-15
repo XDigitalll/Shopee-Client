@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -62,6 +63,17 @@ async function forward(request: NextRequest, path: string[]) {
     );
   }
 
+  if (process.env.NODE_ENV !== "production" && !backendResponse.ok) {
+    console.warn("[proxy:xdigital]", {
+      status: backendResponse.status,
+      endpoint: `/${path.join("/")}`,
+      method: request.method,
+      hasAuthCookie: Boolean(cookieToken),
+      hasXsrfHeader: Boolean(xsrfToken),
+      hasXsrfCookie: Boolean(xsrfCookieValue),
+    });
+  }
+
   let text: string;
   try {
     text = await backendResponse.text();
@@ -82,18 +94,7 @@ async function forward(request: NextRequest, path: string[]) {
 
   // Forward XSRF-TOKEN Set-Cookie from Spring Boot to the browser so JS can
   // read it and include it as X-XSRF-TOKEN on subsequent mutation requests.
-  const setCookieValues: string[] =
-    typeof backendResponse.headers.getSetCookie === "function"
-      ? backendResponse.headers.getSetCookie()
-      : backendResponse.headers.get("set-cookie")
-        ? [backendResponse.headers.get("set-cookie")!]
-        : [];
-
-  for (const value of setCookieValues) {
-    if (value.startsWith(`${XSRF_COOKIE}=`)) {
-      nextResponse.headers.append("Set-Cookie", value);
-    }
-  }
+  forwardNamedSetCookies(nextResponse, backendResponse.headers, [XSRF_COOKIE]);
 
   return nextResponse;
 }
