@@ -460,7 +460,8 @@ export default function OrdersPage() {
       setFeedback({ type: "success", msg: `Pedido ${orderLabel} cancelado com sucesso.` });
       await loadOrders();
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel recusar o pedido." });
+      console.error("[cancel order]", error);
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível cancelar o pedido." });
     } finally {
       setBusyOrderId(null);
     }

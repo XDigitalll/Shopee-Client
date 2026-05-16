@@ -57,7 +57,7 @@ function statusFallbackMessage(status: number): string {
   if (status === 401) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
   if (status === 403) return "Não tens permissão para esta ação.";
   if (status === 404) return "Não encontrámos esse recurso.";
-  if (status === 409) return "Já existe uma conta com estes dados.";
+  if (status === 409) return "Não foi possível completar a operação. Verifica os dados e tenta novamente.";
   if (status === 429) return "Muitas tentativas. Aguarda um pouco e tenta novamente.";
   if (status === 502) return "Não conseguimos contactar o servidor agora. Tenta novamente.";
   if (status >= 500) return "Não conseguimos concluir agora. Tenta novamente.";
