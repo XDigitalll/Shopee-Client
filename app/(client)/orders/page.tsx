@@ -234,6 +234,14 @@ function canScheduleDelivery(order: Order) {
   return order.status === "ARRIVED" && order.deliveryMethod !== "STORE_PICKUP" && Number(order.deliveryFee || 0) > 0;
 }
 
+function canCustomerCancel(status: string) {
+  return ["CREATED", "PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(status);
+}
+
+function isInProcessingCannotCancel(status: string) {
+  return ["PAYMENT_SUBMITTED", "PAYMENT_UNDER_REVIEW"].includes(status);
+}
+
 function deliveryIssueLabel(order: Order) {
   const type = String(order.lastIssueType || "").toUpperCase();
   return DELIVERY_ISSUE_LABELS[type] ?? (type || "Incidente na entrega");
@@ -338,7 +346,7 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
-  const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "received"; orderId: number } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
   const [deliveryFormOrderId, setDeliveryFormOrderId] = useState<number | null>(null);
   const [deliveryForms, setDeliveryForms] = useState<Record<number, DeliveryFormState>>({});
 
@@ -449,7 +457,7 @@ export default function OrdersPage() {
     setBusyOrderId(orderId);
     try {
       await apiFetch(`orders/${orderId}/cancel`, { method: "PUT", token });
-      setFeedback({ type: "success", msg: `Pedido ${orderLabel} recusado com sucesso.` });
+      setFeedback({ type: "success", msg: `Pedido ${orderLabel} cancelado com sucesso.` });
       await loadOrders();
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel recusar o pedido." });
@@ -723,6 +731,12 @@ export default function OrdersPage() {
           </div>
         )}
 
+        {isInProcessingCannotCancel(status) && (
+          <div className="mt-4 rounded-[24px] border px-4 py-3 text-sm" style={{ background: "#F9FAFB", borderColor: "#E5E7EB", color: "#6B7280" }}>
+            Este pedido ja entrou em processamento e nao pode ser cancelado pelo portal. Fala connosco pelo suporte.
+          </div>
+        )}
+
         <div className="mt-5 flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" ? "Total pago" : "Valor do pedido"}</p>
@@ -745,6 +759,17 @@ export default function OrdersPage() {
             )}
             {status === "DELIVERED" && <Link href={`/orders/${order.id}/receipt`} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>Ver recibo</Link>}
             {status === "DELIVERED" && <Link href="/store" className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>Repetir pedido</Link>}
+            {canCustomerCancel(status) && (
+              <button
+                type="button"
+                onClick={() => setConfirmAction({ kind: "cancel_order", orderId: order.id })}
+                disabled={busyOrderId === order.id}
+                className="rounded-2xl border px-4 py-2.5 text-sm font-bold"
+                style={{ borderColor: "#FCA5A5", color: "#B91C1C", background: "#FEF2F2" }}
+              >
+                {busyOrderId === order.id ? "A cancelar..." : "Cancelar pedido"}
+              </button>
+            )}
           </div>
         </div>
       </article>
@@ -904,20 +929,28 @@ export default function OrdersPage() {
       <ClientFeedbackDock feedback={feedback} onClose={() => setFeedback(null)} />
       <ClientConfirmDialog
         open={Boolean(confirmAction)}
-        title={confirmAction?.kind === "cancel" ? "Recusar esta proposta?" : "Confirmar recebimento?"}
+        title={
+          confirmAction?.kind === "cancel" ? "Recusar esta proposta?" :
+          confirmAction?.kind === "cancel_order" ? "Cancelar este pedido?" :
+          "Confirmar recebimento?"
+        }
         message={
           confirmAction?.kind === "cancel"
             ? `O pedido ${orderDisplayCode(orders.find((order) => order.id === confirmAction.orderId))} sera marcado como recusado e a equipa sera informada.`
+            : confirmAction?.kind === "cancel_order"
+            ? "Esta acao nao pode ser desfeita. O pedido sera cancelado e a equipa sera informada."
             : `Vamos marcar o pedido ${orderDisplayCode(orders.find((order) => order.id === confirmAction?.orderId))} como recebido para fechar esta etapa.`
         }
-        confirmLabel={confirmAction?.kind === "cancel" ? "Recusar pedido" : "Confirmar recebido"}
-        danger={confirmAction?.kind === "cancel"}
+        confirmLabel={
+          confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order" ? "Cancelar pedido" : "Confirmar recebido"
+        }
+        danger={confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order"}
         pending={busyOrderId === confirmAction?.orderId}
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
           if (!confirmAction) return;
           const action =
-            confirmAction.kind === "cancel"
+            confirmAction.kind === "cancel" || confirmAction.kind === "cancel_order"
               ? handleCancel(confirmAction.orderId)
               : handleConfirmReceived(confirmAction.orderId);
           void action.finally(() => setConfirmAction(null));
