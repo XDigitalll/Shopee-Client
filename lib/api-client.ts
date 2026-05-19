@@ -4,6 +4,20 @@ import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
 export const CLIENT_DATA_CHANGED_EVENT = "client:data-changed";
 
+export class ApiRequestError extends Error {
+  status?: number;
+  code?: string;
+  channel?: string;
+
+  constructor(message: string, status?: number, code?: string, channel?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.channel = channel;
+  }
+}
+
 export function emitClientDataChanged() {
   if (typeof window === "undefined") {
     return;
@@ -129,6 +143,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   }
 
   if (!response.ok) {
+    const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
     const apiMessage = getApiErrorMessage(payload);
     const shouldUseBackendMessage =
       Boolean(apiMessage) && (response.status === 400 || response.status === 422);
@@ -138,7 +153,12 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
       fallback,
       response.status
     ).message;
-    throw new Error(message);
+    throw new ApiRequestError(
+      message,
+      response.status,
+      typeof record.code === "string" ? record.code : undefined,
+      typeof record.channel === "string" ? record.channel : undefined,
+    );
   }
 
   if (mutation) {

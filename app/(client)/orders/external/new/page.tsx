@@ -448,7 +448,7 @@ export default function NewExternalOrderPage() {
                         color: accountCompletionPercentage === 100 ? "#166534" : RED,
                       }}
                     >
-                      {accountCompletionPercentage === 100 ? "Conta verificada" : `Perfil ${accountCompletionPercentage}% completo`}
+                      {accountCompletionPercentage === 100 ? "Perfil completo" : `Perfil ${accountCompletionPercentage}% completo`}
                     </span>
                     {profileIncomplete && (
                       <p className="mt-1 text-xs" style={{ color: MUTED }}>

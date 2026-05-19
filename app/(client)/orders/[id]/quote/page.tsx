@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-client";
+import { ApiRequestError, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
@@ -99,7 +99,7 @@ export default function OrderQuotePage() {
   const finalAmount = orderVisibleTotal(order);
   const needsAccountVerification =
     feedback?.type === "error" &&
-    /verifi|email|conta estiver pendente|codigo/i.test(feedback.msg);
+    /verifi|telefone|whatsapp|email|conta estiver pendente|codigo/i.test(feedback.msg);
   const sessionExpired =
     feedback?.type === "error" &&
     /sessao expirou|entra novamente|inicia sessao/i.test(feedback.msg);
@@ -144,6 +144,8 @@ export default function OrderQuotePage() {
       const message =
         error instanceof AuthExpiredError
           ? "A tua sessao expirou. Entra novamente para aceitar a proposta."
+          : error instanceof ApiRequestError && error.code === "VERIFICATION_REQUIRED"
+            ? error.message || "Antes de aceitar a proposta, verifica o teu telefone pelo WhatsApp."
           : error instanceof Error
             ? error.message
             : "Nao foi possivel atualizar o pedido.";
@@ -171,6 +173,8 @@ export default function OrderQuotePage() {
       const message =
         error instanceof AuthExpiredError
           ? "A tua sessao expirou. Entra novamente."
+          : error instanceof ApiRequestError && error.code === "VERIFICATION_REQUIRED"
+            ? error.message || "Antes de submeter o pagamento, verifica o teu telefone pelo WhatsApp."
           : error instanceof Error
             ? error.message
             : "Nao foi possivel submeter o comprovativo.";
@@ -279,7 +283,7 @@ export default function OrderQuotePage() {
                   className="inline-flex shrink-0 justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
                   style={{ background: RED }}
                 >
-                  Ir verificar
+                  Verificar agora
                 </Link>
               ) : sessionExpired ? (
                 <Link
