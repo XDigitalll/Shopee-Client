@@ -96,7 +96,7 @@ export async function loadSessionProfile() {
   });
 
   if (response.status === 401) {
-    clearStoredSession();
+    clearLegacyAuthStorage();
     throw new AuthExpiredError();
   }
 
@@ -116,7 +116,7 @@ export async function loadSessionProfile() {
 let pendingRefreshPromise: Promise<ClientSessionProfile | null> | null = null;
 
 export async function expireStoredSession({ redirectToLogin = false } = {}) {
-  clearStoredSession();
+  clearLegacyAuthStorage();
 
   if (typeof window === "undefined") {
     return;

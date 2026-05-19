@@ -1,4 +1,4 @@
-import { clearStoredSession, refreshStoredSession } from "@/lib/auth";
+import { AuthExpiredError, expireStoredSession, refreshStoredSession } from "@/lib/auth";
 import { normalizeClientError } from "@/lib/client-errors";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
@@ -54,14 +54,15 @@ function getApiErrorMessage(payload: unknown) {
 }
 
 function statusFallbackMessage(status: number): string {
-  if (status === 401) return "A tua sessão expirou. Inicia sessão novamente para continuar.";
-  if (status === 403) return "Não tens permissão para esta ação.";
-  if (status === 404) return "Não encontrámos esse recurso.";
-  if (status === 409) return "Não foi possível completar a operação. Verifica os dados e tenta novamente.";
+  if (status === 401) return "A tua sessao expirou. Entra novamente.";
+  if (status === 403) return "Nao tens permissao para aprovar esta proposta.";
+  if (status === 404) return "Nao encontramos esse recurso.";
+  if (status === 409) return "Nao foi possivel completar a operacao. Verifica os dados e tenta novamente.";
+  if (status === 422) return "Verifica os dados enviados e tenta novamente.";
   if (status === 429) return "Muitas tentativas. Aguarda um pouco e tenta novamente.";
-  if (status === 502) return "Não conseguimos contactar o servidor agora. Tenta novamente.";
-  if (status >= 500) return "Não conseguimos concluir agora. Tenta novamente.";
-  return "Não foi possível concluir a operação.";
+  if (status === 502) return "Nao conseguimos contactar o servidor agora. Tenta novamente.";
+  if (status >= 500) return "Erro interno. Tenta novamente.";
+  return "Nao foi possivel concluir a operacao.";
 }
 
 async function performRequest(path: string, options: ApiOptions = {}) {
@@ -90,6 +91,11 @@ async function performRequest(path: string, options: ApiOptions = {}) {
   });
 }
 
+async function expireAndThrow(): Promise<never> {
+  await expireStoredSession({ redirectToLogin: true });
+  throw new AuthExpiredError();
+}
+
 export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const mutation = isMutation(method);
@@ -98,9 +104,10 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
 
   if (response.status === 401 && path !== "auth/refresh") {
     const refreshed = await refreshStoredSession();
-    if (refreshed) {
-      response = await performRequest(path, options);
+    if (!refreshed) {
+      await expireAndThrow();
     }
+    response = await performRequest(path, options);
   }
 
   if (mutation && response.status === 403) {
@@ -108,11 +115,6 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
 
     if (csrfAfterResponse && csrfAfterResponse !== csrfBeforeRequest) {
       response = await performRequest(path, options);
-    } else if (path !== "auth/refresh") {
-      const refreshed = await refreshStoredSession();
-      if (refreshed) {
-        response = await performRequest(path, options);
-      }
     }
   }
 
@@ -123,14 +125,17 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   const payload = await response.json().catch(() => null);
 
   if (response.status === 401) {
-    clearStoredSession();
+    await expireAndThrow();
   }
 
   if (!response.ok) {
     const apiMessage = getApiErrorMessage(payload);
+    const shouldUseBackendMessage =
+      Boolean(apiMessage) && (response.status === 400 || response.status === 422);
+    const fallback = statusFallbackMessage(response.status);
     const message = normalizeClientError(
-      apiMessage ?? statusFallbackMessage(response.status),
-      statusFallbackMessage(response.status),
+      shouldUseBackendMessage ? apiMessage! : fallback,
+      fallback,
       response.status
     ).message;
     throw new Error(message);

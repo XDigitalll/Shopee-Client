@@ -13,7 +13,10 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import {
   AUTH_CHANGE_EVENT,
-  clearStoredSession,
+  AUTH_EXPIRED_EVENT,
+  AuthExpiredError,
+  clearLegacyAuthStorage,
+  expireStoredSession,
   loadSessionProfile,
   notifyAuthChanged,
   refreshStoredSession,
@@ -24,6 +27,7 @@ type SessionProfile = ClientSessionProfile;
 
 type AuthContextValue = {
   token: string | null;
+  user: SessionProfile | null;
   isAuthenticated: boolean;
   isReady: boolean;
   userLabel: string;
@@ -104,9 +108,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const token = isAuthenticated ? AUTHENTICATED_MARKER : null;
 
   const refreshProfile = useCallback(async () => {
-    const profile = await loadSessionProfile();
-    setSessionProfile(profile);
-  }, []);
+    try {
+      const profile = await loadSessionProfile();
+      setSessionProfile(profile);
+    } catch (error) {
+      if (error instanceof AuthExpiredError) {
+        await expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
+        setSessionProfile(null);
+        setIsReady(true);
+        return;
+      }
+      throw error;
+    }
+  }, [pathname]);
 
   const handleRefreshFailureOnce = useCallback((reason: string) => {
     if (refreshFailureHandledRef.current) {
@@ -115,15 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     refreshFailureHandledRef.current = true;
     currentRefreshPromiseRef.current = null;
-    clearStoredSession();
+    void expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
     setSessionProfile(null);
+    setIsReady(true);
 
     if (process.env.NODE_ENV !== "production") {
       console.debug("[auth] refresh failed", reason);
     }
 
     if (isAuthRequiredPath(pathname)) {
-      router.replace("/login?expired=1");
+      router.replace("/login?expired=true");
     }
   }, [pathname, router]);
 
@@ -158,7 +173,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const profile = await loadSessionProfile();
+      let profile: SessionProfile | null = null;
+      try {
+        profile = await loadSessionProfile();
+      } catch (error) {
+        if (error instanceof AuthExpiredError) {
+          if (!cancelled) {
+            await expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
+            setSessionProfile(null);
+            setIsReady(true);
+          }
+          return;
+        }
+        throw error;
+      }
       if (cancelled) return;
 
       if (profile) {
@@ -180,13 +208,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void refreshProfile();
     };
 
+    const handleAuthExpired = () => {
+      setSessionProfile(null);
+      setIsReady(true);
+      if (isAuthRequiredPath(pathname)) {
+        router.replace("/login?expired=true");
+      }
+    };
+
     window.addEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
 
     return () => {
       cancelled = true;
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     };
-  }, [refreshProfile, safeRefresh]);
+  }, [pathname, refreshProfile, router, safeRefresh]);
 
   useEffect(() => {
     const isProtectedRoute = isAuthRequiredPath(pathname);
@@ -280,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = {
     token,
+    user: sessionProfile,
     isAuthenticated,
     isReady,
     userLabel,
@@ -300,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout: () => {
       refreshFailureHandledRef.current = true;
       currentRefreshPromiseRef.current = null;
-      clearStoredSession();
+      clearLegacyAuthStorage();
       setSessionProfile(null);
       void fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
       router.replace("/login");

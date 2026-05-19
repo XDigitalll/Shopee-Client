@@ -41,7 +41,7 @@ export async function POST() {
     cookieStore.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
     return NextResponse.json(
       { message: (payload as { message?: string })?.message || "Nao foi possivel renovar a sessao." },
-      { status: backendResponse.status }
+      { status: 401 }
     );
   }
 

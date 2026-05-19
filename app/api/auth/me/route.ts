@@ -1,10 +1,25 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BACKEND_ACCESS_COOKIE, decodeJwtPayload, SESSION_COOKIE } from "@/lib/session";
+import {
+  BACKEND_ACCESS_COOKIE,
+  BACKEND_REFRESH_COOKIE,
+  cookieOpts,
+  PROFILE_COOKIE,
+  REFRESH_COOKIE_NAME,
+  SESSION_COOKIE,
+} from "@/lib/session";
 import { XSRF_COOKIE } from "@/lib/csrf";
 import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+
+function clearSessionCookies(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+  cookieStore.set(SESSION_COOKIE, "", cookieOpts(true, 0));
+  cookieStore.set(REFRESH_COOKIE_NAME, "", cookieOpts(true, 0));
+  cookieStore.set(BACKEND_ACCESS_COOKIE, "", cookieOpts(true, 0));
+  cookieStore.set(BACKEND_REFRESH_COOKIE, "", cookieOpts(true, 0));
+  cookieStore.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
+}
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -20,20 +35,11 @@ export async function GET() {
   }).catch(() => null);
 
   if (!backendResponse || !backendResponse.ok) {
-    // Fall back to JWT claims if backend is unreachable or token expired
-    const payload = decodeJwtPayload(token);
-    if (!payload) {
-      return NextResponse.json({ message: "Sessao invalida." }, { status: 401 });
-    }
-    return NextResponse.json({
-      name: payload.name,
-      email: payload.email ?? payload.sub,
-      avatarUrl: payload.avatarUrl,
-      provider: payload.provider,
-      roles: payload.roles,
-      mustChangePassword: payload.mustChangePassword ?? false,
-      expiresAt: typeof payload.exp === "number" ? payload.exp * 1000 : null,
-    });
+    clearSessionCookies(cookieStore);
+    return NextResponse.json(
+      { message: "Sessao invalida ou expirada." },
+      { status: backendResponse?.status === 403 ? 403 : 401 }
+    );
   }
 
   const profile = await backendResponse.json().catch(() => null);
