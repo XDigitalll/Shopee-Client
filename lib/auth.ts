@@ -1,4 +1,5 @@
 export const AUTH_CHANGE_EVENT = "shopeex-auth-change";
+export const AUTH_EXPIRED_EVENT = "shopeex-auth-expired";
 
 export const PROFILE_COOKIE = "shopee_client_profile";
 
@@ -25,12 +26,29 @@ export type ClientSessionProfile = {
   expiresAt?: number | null;
 };
 
+export class AuthExpiredError extends Error {
+  code = "AUTH_EXPIRED" as const;
+
+  constructor(message = "A tua sessao expirou. Entra novamente.") {
+    super(message);
+    this.name = "AuthExpiredError";
+  }
+}
+
 function emitAuthChange() {
   if (typeof window === "undefined") {
     return;
   }
 
   window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+}
+
+function emitAuthExpired() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
 export function clearLegacyAuthStorage({ emit = false }: { emit?: boolean } = {}) {
@@ -77,6 +95,11 @@ export async function loadSessionProfile() {
     credentials: "same-origin",
   });
 
+  if (response.status === 401) {
+    clearStoredSession();
+    throw new AuthExpiredError();
+  }
+
   if (!response.ok) {
     return null;
   }
@@ -91,6 +114,26 @@ export async function loadSessionProfile() {
 // The variable is intentionally at module scope (not inside a closure) so it
 // is shared across all call sites within the same browser session.
 let pendingRefreshPromise: Promise<ClientSessionProfile | null> | null = null;
+
+export async function expireStoredSession({ redirectToLogin = false } = {}) {
+  clearStoredSession();
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  void fetch("/api/auth/logout", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+  }).catch(() => {});
+
+  emitAuthExpired();
+
+  if (redirectToLogin && !window.location.pathname.startsWith("/login")) {
+    window.location.assign("/login?expired=true");
+  }
+}
 
 export async function refreshStoredSession(): Promise<ClientSessionProfile | null> {
   // Guard: the function uses browser-only APIs; on the server return null.
@@ -107,12 +150,25 @@ export async function refreshStoredSession(): Promise<ClientSessionProfile | nul
       credentials: "same-origin",
     });
 
-    if (!response.ok) {
-      clearStoredSession();
+    if (response.status === 401) {
+      await expireStoredSession();
       return null;
     }
 
-    return loadSessionProfile();
+    if (!response.ok) {
+      await expireStoredSession();
+      return null;
+    }
+
+    try {
+      return await loadSessionProfile();
+    } catch (error) {
+      if (error instanceof AuthExpiredError) {
+        await expireStoredSession();
+        return null;
+      }
+      throw error;
+    }
   })().finally(() => {
     pendingRefreshPromise = null;
   });
