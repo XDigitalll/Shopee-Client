@@ -53,14 +53,14 @@ export default function CompleteAccountPasswordPage() {
 
     setSaving(true);
     try {
-      await apiFetch<{ success: boolean; mustChangePassword: boolean; profileIncomplete: boolean }>("auth/force-change-password", {
+      await apiFetch<{ success: boolean; mustChangePassword: boolean; profileIncomplete: boolean }>("auth/complete-first-password", {
         method: "POST",
         token,
         body: JSON.stringify({ newPassword, confirmPassword }),
       });
       router.push("/complete-account/profile");
     } catch (error) {
-      console.error("[force-change-password] error:", error);
+      console.error("[complete-first-password] error:", error);
       setDanger(error instanceof Error ? error.message : "Não foi possível atualizar a senha.");
     } finally {
       setSaving(false);

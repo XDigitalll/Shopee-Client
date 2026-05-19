@@ -164,7 +164,7 @@ function LoginPageContent() {
       login();
 
       if (payload.mustChangePassword) {
-        router.replace("/profile/change-password?forced=1");
+        router.replace("/onboarding/security");
       } else {
         router.replace(redirectTo);
       }

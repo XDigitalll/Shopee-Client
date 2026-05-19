@@ -174,6 +174,14 @@ export type OrderItem = {
   quantity: number;
   price?: number;
   subtotal?: number;
+  variantId?: number;
+  variantSku?: string;
+  variantName?: string;
+  variantLabel?: string;
+  selectedVariantLabel?: string;
+  variantAttributesSnapshot?: string;
+  variantAttributesJson?: string;
+  variantAttributes?: Record<string, string>;
 };
 
 export type Order = {

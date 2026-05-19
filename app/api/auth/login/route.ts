@@ -81,8 +81,11 @@ export async function POST(request: Request) {
 
     const nextResponse = NextResponse.json(
       {
-        authenticated: true,
+        authenticated: payload.authenticated ?? true,
         mustChangePassword: payload.mustChangePassword ?? false,
+        temporaryPassword: payload.temporaryPassword ?? false,
+        firstLogin: payload.firstLogin ?? false,
+        accountSetupStep: payload.accountSetupStep ?? null,
       },
       { status: 200 }
     );

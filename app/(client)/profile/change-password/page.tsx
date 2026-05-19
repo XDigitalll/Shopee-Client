@@ -75,6 +75,7 @@ function ChangePasswordPageContent() {
         body: JSON.stringify({
           currentPassword: requiresCurrentPassword ? currentPassword : undefined,
           newPassword,
+          confirmPassword,
         }),
       });
       setFeedback(profile?.canSetLocalPassword

@@ -83,13 +83,26 @@ export default function OrderReceiptPage() {
   );
 
   const summary = useMemo(() => {
-    const itemsTotal = Number(order?.items?.reduce((sum, item) => sum + Number(item.subtotal || item.price || 0), 0) || 0);
+    const itemsTotal = Number(order?.items?.reduce((sum, item) => {
+      const quantity = Number(item.quantity || 1);
+      return sum + Number(item.subtotal ?? Number(item.price || 0) * quantity);
+    }, 0) || 0);
     const deliveryFee = Number(order?.deliveryFee || 0);
     const total = orderVisibleTotal(order) || itemsTotal + deliveryFee;
     return { itemsTotal, deliveryFee, total };
   }, [order]);
 
   const isExternal = order?.type === "EXTERNAL";
+
+  function variantLabel(item: NonNullable<Order["items"]>[number]) {
+    if (item.selectedVariantLabel || item.variantLabel || item.variantName || item.variantSku) {
+      return item.selectedVariantLabel || item.variantLabel || item.variantName || item.variantSku;
+    }
+    if (item.variantAttributes && Object.keys(item.variantAttributes).length) {
+      return Object.entries(item.variantAttributes).map(([key, value]) => `${key}: ${value}`).join(" | ");
+    }
+    return null;
+  }
 
   const externalBreakdown = useMemo(() => {
     const productAmount = Number(order?.quote?.productAmountMzn || 0);
@@ -217,11 +230,16 @@ export default function OrderReceiptPage() {
                                 Código físico: {item.productCode}
                               </p>
                             ) : null}
+                            {variantLabel(item) ? (
+                              <p className="mt-1 break-words text-xs font-semibold" style={{ color: "#6B7280" }}>
+                                Variante: {variantLabel(item)}
+                              </p>
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-center" data-label="Qtd." style={{ color: "#6B7280" }}>{item.quantity || 1}</td>
                         <td className="px-4 py-3 text-right" data-label="Preco" style={{ color: "#6B7280" }}>{formatMoney(Number(item.price || 0))}</td>
-                        <td className="px-4 py-3 text-right font-bold" data-label="Subtotal" style={{ color: "#1A1410" }}>{formatMoney(Number(item.subtotal || item.price || 0))}</td>
+                        <td className="px-4 py-3 text-right font-bold" data-label="Subtotal" style={{ color: "#1A1410" }}>{formatMoney(Number(item.subtotal ?? Number(item.price || 0) * Number(item.quantity || 1)))}</td>
                       </tr>
                     ))}
                   </tbody>

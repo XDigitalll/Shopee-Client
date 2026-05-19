@@ -82,6 +82,7 @@ function isAuthRequiredPath(pathname: string | null) {
     pathname === "/orders/external/new" ||
     pathname.startsWith("/orders/external/new/") ||
     pathname === "/profile/change-password" ||
+    pathname.startsWith("/onboarding/security") ||
     pathname.startsWith("/complete-account");
 
   if (isPublicRoute) {
@@ -258,8 +259,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const mustChange = sessionProfile?.mustChangePassword === true;
     if (!mustChange) return;
     if (pathname?.startsWith("/complete-account/password")) return;
+    if (pathname?.startsWith("/onboarding/security")) return;
     if (pathname === "/login") return;
-    router.replace("/complete-account/password");
+    router.replace("/onboarding/security");
   }, [isAuthenticated, isReady, pathname, router, sessionProfile?.mustChangePassword]);
 
   useEffect(() => {
