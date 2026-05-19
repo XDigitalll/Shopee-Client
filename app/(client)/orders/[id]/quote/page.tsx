@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api-client";
+import { ApiRequestError, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
 import type { Order } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { RelatedPurchasePanel } from "@/components/orders/related-purchase-panel";
+import { AuthExpiredError } from "@/lib/auth";
 
 const RED = "#E8431A";
 const GREEN = "#2E8B57";
@@ -55,7 +56,8 @@ function QuoteRow({
 export default function OrderQuotePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { token } = useAuth();
+  const auth = useAuth();
+  const { token, isAuthenticated, user } = auth;
   const orderId = Number(params.id);
   const [order, setOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -97,10 +99,27 @@ export default function OrderQuotePage() {
   const finalAmount = orderVisibleTotal(order);
   const needsAccountVerification =
     feedback?.type === "error" &&
-    /verifi|email|conta estiver pendente|codigo/i.test(feedback.msg);
+    /verifi|telefone|whatsapp|email|conta estiver pendente|codigo/i.test(feedback.msg);
+  const sessionExpired =
+    feedback?.type === "error" &&
+    /sessao expirou|entra novamente|inicia sessao/i.test(feedback.msg);
+
+  function requireActiveSession() {
+    if (isAuthenticated && user && token) {
+      return true;
+    }
+
+    setFeedback({
+      type: "error",
+      msg: "A tua sessao expirou. Entra novamente para aceitar a proposta.",
+    });
+    return false;
+  }
 
   const handleAction = async (action: "approve" | "cancel") => {
-    if (!token || !order) return;
+    if (!order) return;
+    if (!requireActiveSession()) return;
+
     setIsBusy(true);
     setFeedback(null);
     try {
@@ -122,7 +141,15 @@ export default function OrderQuotePage() {
         router.push("/orders");
       }
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel atualizar o pedido." });
+      const message =
+        error instanceof AuthExpiredError
+          ? "A tua sessao expirou. Entra novamente para aceitar a proposta."
+          : error instanceof ApiRequestError && error.code === "VERIFICATION_REQUIRED"
+            ? error.message || "Antes de aceitar a proposta, verifica o teu telefone pelo WhatsApp."
+          : error instanceof Error
+            ? error.message
+            : "Nao foi possivel atualizar o pedido.";
+      setFeedback({ type: "error", msg: message });
     } finally {
       setIsBusy(false);
     }
@@ -130,7 +157,8 @@ export default function OrderQuotePage() {
 
   const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token || !order) return;
+    if (!order) return;
+    if (!requireActiveSession()) return;
 
     setIsBusy(true);
     setFeedback(null);
@@ -142,7 +170,15 @@ export default function OrderQuotePage() {
       });
       router.push("/orders");
     } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel submeter o comprovativo." });
+      const message =
+        error instanceof AuthExpiredError
+          ? "A tua sessao expirou. Entra novamente."
+          : error instanceof ApiRequestError && error.code === "VERIFICATION_REQUIRED"
+            ? error.message || "Antes de submeter o pagamento, verifica o teu telefone pelo WhatsApp."
+          : error instanceof Error
+            ? error.message
+            : "Nao foi possivel submeter o comprovativo.";
+      setFeedback({ type: "error", msg: message });
     } finally {
       setIsBusy(false);
     }
@@ -247,7 +283,15 @@ export default function OrderQuotePage() {
                   className="inline-flex shrink-0 justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
                   style={{ background: RED }}
                 >
-                  Ir verificar
+                  Verificar agora
+                </Link>
+              ) : sessionExpired ? (
+                <Link
+                  href={`/login?expired=true&redirect=${encodeURIComponent(`/orders/${orderId}/quote`)}`}
+                  className="inline-flex shrink-0 justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
+                  style={{ background: RED }}
+                >
+                  Entrar novamente
                 </Link>
               ) : null}
             </div>

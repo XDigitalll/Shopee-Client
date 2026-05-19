@@ -342,10 +342,12 @@ export default function ProfilePage() {
   const [dangerFeedback, setDangerFeedback] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [verifySent, setVerifySent] = useState(false);
+  const [verifyChannel, setVerifyChannel] = useState<"EMAIL" | "PHONE" | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [verifySending, setVerifySending] = useState(false);
   const [verifyConfirming, setVerifyConfirming] = useState(false);
   const [verifyDestination, setVerifyDestination] = useState("");
+  const [verifyCooldown, setVerifyCooldown] = useState(0);
   const [confirmDeleteAddressId, setConfirmDeleteAddressId] = useState<number | null>(null);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
 
@@ -406,6 +408,14 @@ export default function ProfilePage() {
 
     void loadAll();
   }, [token, userEmail, userLabel]);
+
+  useEffect(() => {
+    if (verifyCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setVerifyCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [verifyCooldown]);
 
   const notificationCount = useMemo(() => {
     if (!profile) return "0";
@@ -621,16 +631,22 @@ export default function ProfilePage() {
     setIsEditingPersonal(false);
   };
 
-  const handleSendVerifyCode = async () => {
+  const handleSendVerifyCode = async (channel: "EMAIL" | "PHONE" = "EMAIL") => {
     if (!token) return;
     setVerifySending(true);
     setFeedback("");
     setDangerFeedback("");
     try {
-      const dispatch = await apiFetch<VerificationDispatchResponse>("users/me/verify/send", { method: "POST", token });
+      const path = channel === "PHONE"
+        ? "users/me/phone-verification/request"
+        : "users/me/email-verification/request";
+      const dispatch = await apiFetch<VerificationDispatchResponse>(path, { method: "POST", token });
       setVerifySent(true);
+      setVerifyChannel(channel);
+      setVerifyCode("");
+      setVerifyCooldown(60);
       setVerifyDestination(dispatch.destinationMasked || profile?.verificationDestinationMasked || profile?.email || userEmail || "");
-      setFeedback(dispatch.message || `Codigo enviado para ${dispatch.destinationMasked || "o seu email"}.`);
+      setFeedback(dispatch.message || `Codigo enviado para ${dispatch.destinationMasked || (channel === "PHONE" ? "o teu telefone" : "o teu email")}.`);
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel enviar o codigo.");
     } finally {
@@ -644,7 +660,10 @@ export default function ProfilePage() {
     setFeedback("");
     setDangerFeedback("");
     try {
-      const updated = await apiFetch<CustomerProfile>("users/me/verify/confirm", {
+      const path = verifyChannel === "PHONE"
+        ? "users/me/phone-verification/confirm"
+        : "users/me/email-verification/confirm";
+      const updated = await apiFetch<CustomerProfile>(path, {
         method: "POST",
         token,
         body: JSON.stringify({ code: verifyCode.trim() }),
@@ -653,8 +672,9 @@ export default function ProfilePage() {
       setVerifyDestination(updated.verificationDestinationMasked || updated.verificationDestination || updated.email || "");
       await refreshProfile();
       setVerifySent(false);
+      setVerifyChannel(null);
       setVerifyCode("");
-      setFeedback("Email verificado com sucesso!");
+      setFeedback(verifyChannel === "PHONE" ? "Telefone verificado com sucesso!" : "Email verificado com sucesso!");
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Codigo incorreto ou expirado.");
     } finally {
@@ -1089,6 +1109,37 @@ export default function ProfilePage() {
             </div>
 
             <div className="mt-6 grid gap-4">
+              <div className="rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>Seguranca e verificacao</p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
+                      Conta ativa significa que podes entrar. Conta verificada significa que podes pagar e concluir acoes sensiveis.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#ECFDF5", color: GREEN }}>Conta ativa</span>
+                    <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: isVerified ? "#ECFDF5" : "#FFF7E8", color: isVerified ? GREEN : "#A16207" }}>
+                      {isVerified ? "Conta verificada" : `${accountPct}% concluida`}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2 text-sm" style={{ color: MUTED }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Nome</span>
+                    <strong style={{ color: fullName && fullName !== "Cliente" ? GREEN : RED }}>{fullName && fullName !== "Cliente" ? "OK" : "Pendente"}</strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Morada</span>
+                    <strong style={{ color: profile?.hasDeliveryAddress ? GREEN : RED }}>{profile?.hasDeliveryAddress ? "OK" : "Pendente"}</strong>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Canal verificado para pagamentos</span>
+                    <strong style={{ color: isVerified ? GREEN : RED }}>{isVerified ? "OK" : "Verificar telefone"}</strong>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
                 <div>
                   <p className="text-sm font-bold" style={{ color: TEXT }}>Senha</p>
@@ -1101,6 +1152,70 @@ export default function ProfilePage() {
                 <Link href="/profile/change-password" className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED_DARK }}>
                   {profile?.canSetLocalPassword ? "Definir senha" : "Alterar senha"}
                 </Link>
+              </div>
+
+              <div className="rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>Telefone</p>
+                    <p className="mt-1 break-all text-sm" style={{ color: MUTED }}>
+                      {profile?.phoneNumber || "Adiciona um numero de telefone nos dados pessoais."}
+                    </p>
+                    <p className="mt-1 text-sm" style={{ color: profile?.phoneVerified ? GREEN : "#A16207" }}>
+                      {profile?.phoneVerified ? "Verificado" : "Nao verificado"}
+                    </p>
+                  </div>
+                  {profile?.phoneVerified ? (
+                    <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#ECFDF5", color: GREEN }}>Verificado</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleSendVerifyCode("PHONE")}
+                      disabled={verifySending || verifyCooldown > 0 || (verifySent && verifyChannel === "PHONE") || !profile?.phoneNumber}
+                      className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
+                      style={{ borderColor: "#F2D4CC", color: RED_DARK }}
+                    >
+                      {verifyCooldown > 0 && verifyChannel === "PHONE" ? `Reenviar em ${verifyCooldown}s` : verifySending && verifyChannel === "PHONE" ? "A enviar..." : verifySent && verifyChannel === "PHONE" ? "Codigo enviado" : "Verificar por WhatsApp"}
+                    </button>
+                  )}
+                </div>
+                {false && verifySent && verifyChannel === "PHONE" && !(profile?.phoneVerified) && (
+                  <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
+                    <p className="text-sm font-semibold" style={{ color: TEXT }}>
+                      Enviamos um codigo de 6 digitos por WhatsApp para <span style={{ color: RED_DARK }}>{verifyDestination || profile?.verificationDestinationMasked || profile?.phoneNumber || ""}</span>.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="000000"
+                        value={verifyCode}
+                        onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                        className="w-40 rounded-2xl border px-4 py-2.5 text-center text-lg font-black tracking-[0.35em] outline-none"
+                        style={inputStyle}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleConfirmVerifyCode}
+                        disabled={verifyConfirming || verifyCode.length < 6}
+                        className="rounded-2xl px-4 py-2.5 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50"
+                        style={{ background: RED }}
+                      >
+                        {verifyConfirming ? "A confirmar..." : "Confirmar codigo"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendVerifyCode("PHONE")}
+                        disabled={verifySending}
+                        className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
+                        style={{ borderColor: "#F2D4CC", color: RED_DARK }}
+                      >
+                        {verifySending ? "A reenviar..." : "Reenviar codigo"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
@@ -1137,17 +1252,17 @@ export default function ProfilePage() {
                       ) : (
                         <button
                           type="button"
-                          onClick={verifySent ? undefined : handleSendVerifyCode}
-                          disabled={verifySending || verifySent}
+                          onClick={() => handleSendVerifyCode("EMAIL")}
+                          disabled={verifySending || verifyCooldown > 0 || (verifySent && verifyChannel === "EMAIL")}
                           className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
                           style={{ borderColor: "#F2D4CC", color: RED_DARK }}
                         >
-                          {verifySending ? "A enviar..." : verifySent ? "Codigo enviado" : "Enviar codigo"}
+                          {verifyCooldown > 0 && verifyChannel === "EMAIL" ? `Reenviar em ${verifyCooldown}s` : verifySending && verifyChannel === "EMAIL" ? "A enviar..." : verifySent && verifyChannel === "EMAIL" ? "Codigo enviado" : "Enviar codigo"}
                         </button>
                       )}
                     </div>
 
-                    {verifySent && !(profile?.emailVerified) && (
+                    {false && verifySent && verifyChannel === "EMAIL" && !(profile?.emailVerified) && (
                       <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
                         <p className="text-sm font-semibold" style={{ color: TEXT }}>
                           Enviamos um codigo de 6 digitos para <span style={{ color: RED_DARK }}>{verifyDestination || profile?.verificationDestinationMasked || profile?.email || ""}</span>.
@@ -1178,7 +1293,7 @@ export default function ProfilePage() {
                           </button>
                           <button
                             type="button"
-                            onClick={handleSendVerifyCode}
+                            onClick={() => handleSendVerifyCode("EMAIL")}
                             disabled={verifySending}
                             className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
                             style={{ borderColor: "#F2D4CC", color: RED_DARK }}
@@ -1239,6 +1354,67 @@ export default function ProfilePage() {
           setConfirmLogoutOpen(false);
         }}
       />
+      {verifySent && verifyChannel ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl" style={{ border: "1px solid #F2D4CC" }}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold" style={{ color: RED }}>
+                  {verifyChannel === "PHONE" ? "Verificacao por WhatsApp" : "Verificacao de email"}
+                </p>
+                <h3 className="mt-1 text-2xl font-black" style={{ color: TEXT, fontFamily: "'Sora', sans-serif" }}>
+                  Introduz o codigo recebido
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setVerifySent(false);
+                  setVerifyChannel(null);
+                  setVerifyCode("");
+                }}
+                className="rounded-full px-3 py-1 text-sm font-black"
+                style={{ background: "#FFF0EC", color: RED_DARK }}
+              >
+                X
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-6" style={{ color: MUTED }}>
+              Codigo enviado para {verifyDestination || (verifyChannel === "PHONE" ? profile?.phoneNumber : profile?.email) || "o teu contacto"}.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="000000"
+              value={verifyCode}
+              onChange={(event) => setVerifyCode(event.target.value.replace(/\D/g, ""))}
+              className="mt-5 w-full rounded-2xl border px-4 py-3 text-center text-2xl font-black tracking-[0.35em] outline-none"
+              style={inputStyle}
+            />
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleConfirmVerifyCode}
+                disabled={verifyConfirming || verifyCode.length < 6}
+                className="flex-1 rounded-2xl px-4 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-50"
+                style={{ background: RED }}
+              >
+                {verifyConfirming ? "A confirmar..." : "Confirmar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSendVerifyCode(verifyChannel)}
+                disabled={verifySending || verifyCooldown > 0}
+                className="rounded-2xl border px-4 py-3 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
+                style={{ borderColor: "#F2D4CC", color: RED_DARK }}
+              >
+                {verifyCooldown > 0 ? `Reenviar em ${verifyCooldown}s` : verifySending ? "A reenviar..." : "Reenviar codigo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
