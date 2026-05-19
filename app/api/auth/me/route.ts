@@ -38,7 +38,7 @@ export async function GET() {
     clearSessionCookies(cookieStore);
     return NextResponse.json(
       { message: "Sessao invalida ou expirada." },
-      { status: backendResponse?.status === 403 ? 403 : 401 }
+      { status: 401 }
     );
   }
 

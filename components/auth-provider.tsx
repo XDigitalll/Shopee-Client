@@ -107,20 +107,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = Boolean(sessionProfile);
   const token = isAuthenticated ? AUTHENTICATED_MARKER : null;
 
+  const clearExpiredSessionAndRedirect = useCallback(() => {
+    refreshFailureHandledRef.current = true;
+    currentRefreshPromiseRef.current = null;
+    clearLegacyAuthStorage();
+    setSessionProfile(null);
+    setIsReady(true);
+    void fetch("/api/auth/logout", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+    }).catch(() => {});
+    router.replace("/login?expired=true");
+  }, [router]);
+
   const refreshProfile = useCallback(async () => {
     try {
       const profile = await loadSessionProfile();
       setSessionProfile(profile);
     } catch (error) {
       if (error instanceof AuthExpiredError) {
-        await expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
-        setSessionProfile(null);
-        setIsReady(true);
+        clearExpiredSessionAndRedirect();
         return;
       }
       throw error;
     }
-  }, [pathname]);
+  }, [clearExpiredSessionAndRedirect]);
 
   const handleRefreshFailureOnce = useCallback((reason: string) => {
     if (refreshFailureHandledRef.current) {
@@ -129,9 +141,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     refreshFailureHandledRef.current = true;
     currentRefreshPromiseRef.current = null;
-    void expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
+    clearLegacyAuthStorage();
     setSessionProfile(null);
     setIsReady(true);
+    void expireStoredSession();
 
     if (process.env.NODE_ENV !== "production") {
       console.debug("[auth] refresh failed", reason);
@@ -179,9 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (error instanceof AuthExpiredError) {
           if (!cancelled) {
-            await expireStoredSession({ redirectToLogin: isAuthRequiredPath(pathname) });
-            setSessionProfile(null);
-            setIsReady(true);
+            clearExpiredSessionAndRedirect();
           }
           return;
         }
@@ -224,7 +235,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
       window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     };
-  }, [pathname, refreshProfile, router, safeRefresh]);
+  }, [clearExpiredSessionAndRedirect, pathname, refreshProfile, router, safeRefresh]);
+
+  useEffect(() => {
+    console.log("isAuth", isAuthenticated, "user", sessionProfile);
+  }, [isAuthenticated, sessionProfile]);
 
   useEffect(() => {
     const isProtectedRoute = isAuthRequiredPath(pathname);
@@ -234,7 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!isAuthenticated && isProtectedRoute) {
-      router.replace(`/login?redirect=${encodeURIComponent(pathname || "/")}`);
+      router.replace("/login?expired=true");
     }
   }, [isAuthenticated, isReady, pathname, router]);
 

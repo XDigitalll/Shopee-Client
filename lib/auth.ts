@@ -1,8 +1,6 @@
 export const AUTH_CHANGE_EVENT = "shopeex-auth-change";
 export const AUTH_EXPIRED_EVENT = "shopeex-auth-expired";
 
-export const PROFILE_COOKIE = "shopee_client_profile";
-
 const LEGACY_TOKEN_KEYS = [
   "shopee_client_token",
   "shopee_client_refresh_token",
@@ -73,19 +71,6 @@ export function clearStoredToken() {
   clearStoredSession();
 }
 
-export function getProfileCookie(): Record<string, unknown> | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(PROFILE_COOKIE + "="));
-  if (!match) return null;
-  try {
-    return JSON.parse(decodeURIComponent(match.slice(PROFILE_COOKIE.length + 1))) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
 export async function loadSessionProfile() {
   clearLegacyAuthStorage();
 
@@ -95,7 +80,7 @@ export async function loadSessionProfile() {
     credentials: "same-origin",
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     clearLegacyAuthStorage();
     throw new AuthExpiredError();
   }

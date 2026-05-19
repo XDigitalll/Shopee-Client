@@ -67,14 +67,16 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
   const pathname = usePathname();
   const router = useRouter();
   const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, profileIncomplete, accountCompletionPercentage } = useAuth();
+  const needsAuth = useMemo(() => {
+    const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
+    const isPublicCatalogRoute = PUBLIC_CATALOG_ROUTES.some((p) => pathname === p || (p !== "/" && pathname?.startsWith(p + "/")));
+    return !isPublicOrderRoute && !isPublicCatalogRoute && REQUIRES_AUTH.some((p) => pathname === p || pathname?.startsWith(p + "/"));
+  }, [pathname]);
 
   useEffect(() => {
     if (!isReady || token) return;
-    const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
-    const isPublicCatalogRoute = PUBLIC_CATALOG_ROUTES.some((p) => pathname === p || (p !== "/" && pathname?.startsWith(p + "/")));
-    const needsAuth = !isPublicOrderRoute && !isPublicCatalogRoute && REQUIRES_AUTH.some((p) => pathname === p || pathname?.startsWith(p + "/"));
-    if (needsAuth) router.replace(`/login?redirect=${encodeURIComponent(pathname ?? "/")}`);
-  }, [isReady, token, pathname, router]);
+    if (needsAuth) router.replace("/login?expired=true");
+  }, [isReady, needsAuth, token, router]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -152,11 +154,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     return "Pagina inicial";
   }, [pathname]);
 
-  const isProtectedRoute = REQUIRES_AUTH.some(
-    (p) => pathname === p || pathname?.startsWith(p + "/")
-  );
-
-  if (!isReady && isProtectedRoute) {
+  if (needsAuth && (!isReady || !token)) {
     return <GlobalAppLoader />;
   }
 
