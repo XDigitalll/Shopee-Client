@@ -308,7 +308,6 @@ export default function CartPage() {
 
             <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
               <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal local</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
-              <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong className="text-right" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>A definir</strong></div>
               <div className="flex items-center justify-between text-sm"><span style={{ color: GREEN }}>Desconto aplicado</span><strong style={{ color: GREEN, fontFamily: "'Sora', sans-serif" }}>- {formatMoney(discountAmount)}</strong></div>
             </div>
 

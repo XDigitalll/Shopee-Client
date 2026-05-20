@@ -485,7 +485,6 @@ export default function CheckoutPage() {
                 <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Itens locais</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{localItems.length}</strong></div>
                   <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(localSubtotal)}</strong></div>
-                  <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: "#6B7280" }}>Entrega</span><strong className="text-right" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>A definir</strong></div>
                   {discountAmount > 0 ? (
                     <>
                       <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Total antes</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(total)}</strong></div>
@@ -526,7 +525,18 @@ export default function CheckoutPage() {
                 <div className="space-y-3">
                   <p className="text-sm font-semibold" style={{ color: "#1A1410" }}>Produtos incluídos</p>
                   <div className="space-y-2">
-                    {localItems.map((item: CartItem) => <div key={item.itemId} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFFDFC" }}><span className="min-w-0 break-words">{item.productName} x{item.quantity}</span><strong className="shrink-0 text-right" style={{ fontFamily: "'Sora', sans-serif" }}>{formatMoney(item.subTotal)}</strong></div>)}
+                    {localItems.map((item: CartItem) => (
+                      <div key={item.itemId} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFFDFC" }}>
+                        <span className="min-w-0 break-words">
+                          <span className="font-medium">{item.productName}</span>
+                          {item.variantLabel && (
+                            <span className="block text-xs mt-0.5" style={{ color: "#9A3412" }}>{item.variantLabel}</span>
+                          )}
+                          <span className="block text-xs mt-0.5" style={{ color: "#6B7280" }}>x{item.quantity} · {formatMoney(item.price)} /un</span>
+                        </span>
+                        <strong className="shrink-0 text-right" style={{ fontFamily: "'Sora', sans-serif" }}>{formatMoney(item.subTotal)}</strong>
+                      </div>
+                    ))}
                   </div>
                 </div>
 

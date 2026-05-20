@@ -8,6 +8,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
 import { cleanDisplayText } from "@/lib/text";
+import type { CustomerOrderNotificationSummary } from "@/lib/customer-notifications";
 import type { Order, OrderItem, OrderStats } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 
@@ -349,6 +350,7 @@ export default function OrdersPage() {
   const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
   const [deliveryFormOrderId, setDeliveryFormOrderId] = useState<number | null>(null);
   const [deliveryForms, setDeliveryForms] = useState<Record<number, DeliveryFormState>>({});
+  const [notificationSummary, setNotificationSummary] = useState<Record<number, CustomerOrderNotificationSummary>>({});
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!token) return;
@@ -356,12 +358,14 @@ export default function OrdersPage() {
       setIsLoading(true);
     }
     try {
-      const [ordersData, statsData] = await Promise.all([
+      const [ordersData, statsData, notificationData] = await Promise.all([
         fetchWithToken<Order[]>("/api/orders/my-orders", token),
         fetchWithToken<OrderStats>("/api/orders/my-stats", token),
+        apiFetch<CustomerOrderNotificationSummary[]>("customer/orders/notification-summary", { token }),
       ]);
       setOrders(ordersData);
       setStats(statsData);
+      setNotificationSummary(Object.fromEntries((notificationData ?? []).map((item) => [item.orderId, item])));
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar os pedidos." });
     } finally {
@@ -501,6 +505,7 @@ export default function OrdersPage() {
     const showDeliveryForm = deliveryFormOrderId === order.id;
     const deliveryForm = deliveryForms[order.id] ?? buildInitialDeliveryForm(order);
     const deliveryFee = Number(order.deliveryFee || 0);
+    const unreadUpdates = notificationSummary[order.id]?.unreadCount ?? 0;
 
     return (
       <article
@@ -522,6 +527,12 @@ export default function OrdersPage() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Pedido {orderDisplayCode(order)}</h2>
+                {unreadUpdates > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black" style={{ background: "#FFF7ED", color: "#C2410C" }}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: "#F97316" }} />
+                    Nova atualização
+                  </span>
+                ) : null}
                 <span className="rounded-full px-2.5 py-1 text-xs font-black" style={{ background: isExternal ? "#FFF7ED" : "#ECFDF5", color: isExternal ? "#C2410C" : GREEN }}>
                   {isExternal ? "EXT" : "INT"}
                 </span>
@@ -550,7 +561,10 @@ export default function OrdersPage() {
                 <div key={step} className="flex min-w-[84px] flex-1 items-center">
                   <div className="flex flex-col items-center text-center">
                     <div className="h-4 w-4 rounded-full border-2" style={{ background: done ? RED : current ? "white" : "transparent", borderColor: RED }} />
-                    <span className="mt-2 text-[11px] font-semibold" style={{ color: current || done ? RED : "#9CA3AF" }}>{step}</span>
+                    <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: current || done ? RED : "#9CA3AF" }}>
+                      {current && unreadUpdates > 0 ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#F97316" }} /> : null}
+                      {step}
+                    </span>
                   </div>
                   {index < flowSteps.length - 1 && <div className="mx-2 h-[2px] flex-1" style={{ background: done ? RED : "#F2D4CC" }} />}
                 </div>
@@ -576,9 +590,7 @@ export default function OrdersPage() {
             </div>
             {order.code && (
               <p className="mt-3 text-xs" style={{ color: "#92400E" }}>
-                <span className="font-bold">Tens o Telegram?</span>{" "}
-                Responde com <span className="rounded px-1 font-mono font-bold" style={{ background: "rgba(146,64,14,0.1)" }}>SIM {order.code}</span> para aceitar ou{" "}
-                <span className="rounded px-1 font-mono font-bold" style={{ background: "rgba(146,64,14,0.1)" }}>NAO {order.code}</span> para recusar diretamente no chat.
+                Confirma ou recusa a proposta aqui no portal para a equipa avançar com o teu pedido.
               </p>
             )}
           </div>
