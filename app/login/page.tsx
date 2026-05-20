@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
+import { ClientActionError, ClientProcessingOverlay } from "@/components/client-feedback-state";
 import { Logo } from "@/components/logo";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 type AuthTab = "login" | "register";
 
@@ -88,7 +90,7 @@ function LoginPageContent() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
-  const [isLoginLoading, setIsLoginLoading] = useState(false);
+  const loginAction = useAsyncAction();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -98,7 +100,10 @@ function LoginPageContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
-  const [isRegisterLoading, setIsRegisterLoading] = useState(false);
+  const registerAction = useAsyncAction();
+  const isLoginLoading = loginAction.isRunning;
+  const isRegisterLoading = registerAction.isRunning;
+  const isBusy = isLoginLoading || isRegisterLoading;
 
   const passwordStrength = useMemo(() => getStrength(registerPassword), [registerPassword]);
   const strengthMeta = getStrengthMeta(passwordStrength);
@@ -137,10 +142,9 @@ function LoginPageContent() {
       return;
     }
 
-    setIsLoginLoading(true);
     setLoginError("");
 
-    try {
+    const result = await loginAction.run(async () => {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -169,10 +173,11 @@ function LoginPageContent() {
         router.replace(redirectTo);
       }
       router.refresh();
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : "Nao foi possivel entrar na conta.");
-    } finally {
-      setIsLoginLoading(false);
+      return true;
+    });
+
+    if (!result) {
+      setLoginError(loginAction.error);
     }
   };
 
@@ -191,11 +196,10 @@ function LoginPageContent() {
       return;
     }
 
-    setIsRegisterLoading(true);
     setRegisterError("");
     setRegisterSuccess("");
 
-    try {
+    const result = await registerAction.run(async () => {
       const normalizedPhone = `+258${phone.replace(/\D/g, "")}`;
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -226,14 +230,16 @@ function LoginPageContent() {
         router.replace(redirectTo);
         router.refresh();
       }, 900);
-    } catch (error) {
-      setRegisterError(error instanceof Error ? error.message : "Nao foi possivel criar a conta.");
-    } finally {
-      setIsRegisterLoading(false);
+      return true;
+    });
+
+    if (!result) {
+      setRegisterError(registerAction.error);
     }
   };
 
   const handleGoogleLogin = () => {
+    if (isBusy) return;
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("google_auth_redirect", redirectTo);
       window.location.href = `${BACKEND_PUBLIC_URL}/oauth2/authorization/google`;
@@ -287,7 +293,8 @@ function LoginPageContent() {
         </section>
 
         <section className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:px-10">
-          <div className="w-full max-w-[560px] rounded-[32px] border border-[#F1D4CB] bg-white p-5 shadow-[0_30px_80px_rgba(232,67,26,0.08)] sm:p-8 lg:p-10">
+          <div className="relative w-full max-w-[560px] rounded-[32px] border border-[#F1D4CB] bg-white p-5 shadow-[0_30px_80px_rgba(232,67,26,0.08)] sm:p-8 lg:p-10">
+            <ClientProcessingOverlay visible={isBusy} title={isLoginLoading ? "A entrar..." : "A criar conta..."} message="Nao feches esta janela." />
             <div className="mb-8 flex items-center justify-between lg:hidden">
               <Logo />
               <span className="rounded-full bg-[#FFF1EA] px-3 py-1 text-xs font-semibold text-[#E8431A]">Cliente</span>
@@ -296,6 +303,7 @@ function LoginPageContent() {
             <div className="mb-8 flex border-b border-[#F3D8CE]">
               <button
                 type="button"
+                disabled={isBusy}
                 onClick={() => setActiveTab("login")}
                 className={`relative flex-1 pb-4 text-sm font-bold transition ${activeTab === "login" ? "text-[#E8431A]" : "text-[#8E837D] hover:text-[#4E403B]"}`}
               >
@@ -304,6 +312,7 @@ function LoginPageContent() {
               </button>
               <button
                 type="button"
+                disabled={isBusy}
                 onClick={() => setActiveTab("register")}
                 className={`relative flex-1 pb-4 text-sm font-bold transition ${activeTab === "register" ? "text-[#E8431A]" : "text-[#8E837D] hover:text-[#4E403B]"}`}
               >
@@ -325,13 +334,12 @@ function LoginPageContent() {
                   </div>
                 ) : null}
 
-                {loginError ? (
-                  <div className="mb-5 rounded-2xl border border-[#F5D0D0] bg-[#FCEBEB] px-4 py-3 text-sm font-medium text-[#A53B32]">
-                    {loginError}
-                  </div>
-                ) : null}
+                <div className="mb-5">
+                  <ClientActionError message={loginError || loginAction.error} />
+                </div>
 
-                <form className="space-y-4" onSubmit={(event) => void handleLoginSubmit(event)}>
+                <form className="space-y-4" onSubmit={(event) => void handleLoginSubmit(event)} aria-busy={isLoginLoading}>
+                  <fieldset disabled={isLoginLoading} className="space-y-4 disabled:opacity-70">
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-[#2F2521]">Email ou telefone</label>
                     <input
@@ -347,7 +355,7 @@ function LoginPageContent() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-3">
                       <label className="text-sm font-semibold text-[#2F2521]">Senha</label>
-                      <Link href="/forgot-password" className="text-sm font-semibold text-[#E8431A] hover:text-[#C93812]">
+                      <Link href="/forgot-password" aria-disabled={isLoginLoading} onClick={(event) => { if (isLoginLoading) event.preventDefault(); }} className={`text-sm font-semibold text-[#E8431A] hover:text-[#C93812] ${isLoginLoading ? "pointer-events-none opacity-50" : ""}`}>
                         Esqueceu a senha?
                       </Link>
                     </div>
@@ -368,6 +376,7 @@ function LoginPageContent() {
                   >
                     {isLoginLoading ? "A entrar..." : "Entrar na conta"}
                   </button>
+                  </fieldset>
                 </form>
 
                 <div className="my-6 flex items-center gap-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#B6AAA2]">
@@ -379,6 +388,7 @@ function LoginPageContent() {
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
+                  disabled={isBusy}
                   className="inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-[#E8DAD4] bg-white px-5 py-3.5 text-sm font-bold text-[#2E241F] transition hover:border-[#E8431A] hover:text-[#E8431A]"
                 >
                   <GoogleIcon />
@@ -400,11 +410,16 @@ function LoginPageContent() {
 
                 {registerError ? (
                   <div className="mb-5 rounded-2xl border border-[#F5D0D0] bg-[#FCEBEB] px-4 py-3 text-sm font-medium text-[#A53B32]">
-                    {registerError}
+                    {registerError || registerAction.error}
+                  </div>
+                ) : registerAction.error ? (
+                  <div className="mb-5">
+                    <ClientActionError message={registerAction.error} />
                   </div>
                 ) : null}
 
-                <form className="space-y-4" onSubmit={(event) => void handleRegisterSubmit(event)}>
+                <form className="space-y-4" onSubmit={(event) => void handleRegisterSubmit(event)} aria-busy={isRegisterLoading}>
+                  <fieldset disabled={isRegisterLoading} className="space-y-4 disabled:opacity-70">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-[#2F2521]">Nome</label>
@@ -521,6 +536,7 @@ function LoginPageContent() {
                   >
                     {isRegisterLoading ? "A criar conta..." : "Criar conta"}
                   </button>
+                  </fieldset>
                 </form>
 
                 <p className="mt-5 text-xs leading-6 text-[#8D817A]">

@@ -71,6 +71,54 @@ export function ClientFeedbackBanner({
   );
 }
 
+export function ClientActionError({ message }: { message?: string | null }) {
+  if (!message) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-2xl border px-4 py-3 text-sm font-bold leading-6"
+      style={{ borderColor: "#FECACA", background: "#FFF5F5", color: "#B42318" }}
+      role="alert"
+      aria-live="assertive"
+    >
+      {message}
+    </div>
+  );
+}
+
+export function ClientProcessingOverlay({
+  visible,
+  title = "A processar...",
+  message = "Nao feches esta janela.",
+}: {
+  visible: boolean;
+  title?: string;
+  message?: string;
+}) {
+  if (!visible) {
+    return null;
+  }
+
+  return (
+    <div
+      className="absolute inset-0 z-30 flex items-center justify-center rounded-[inherit] bg-[rgba(15,23,42,0.38)] px-4 backdrop-blur-[2px]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div className="flex w-full max-w-xs flex-col items-center rounded-[26px] border bg-white px-6 py-6 text-center shadow-[0_24px_80px_rgba(15,23,42,0.2)]" style={{ borderColor: "#F7D2C8" }}>
+        <ClientLoadingPulse />
+        <p className="mt-4 text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+          {title}
+        </p>
+        <p className="mt-2 text-sm leading-6" style={{ color: "#6B7280" }}>{message}</p>
+      </div>
+    </div>
+  );
+}
+
 export function ClientActionFeedback({
   feedback,
   onClose,
