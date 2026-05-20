@@ -12,10 +12,13 @@ import { normalizeClientError } from "@/lib/client-errors";
 import type { Cart, CartItem, CheckoutResponse, CouponValidation, CustomerProfile, Order, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { addressMatchesForm, applySavedAddress, createAddressLabel, createPrefilledAddress, createPrefilledContact } from "@/lib/address-book";
+import { sanitizeTextField, normalizePhone, normalizeEmail, sanitizeUrl } from "@/utils/input-normalizer";
+import { cleanName, cleanCity, cleanAddress } from "@/utils/text-cleaner";
+import { validateName, validatePhone, validatePhoneOptional, validateEmailOptional, validateCity, validateNeighborhood, validateStreet, validateMessage, validateUrl } from "@/utils/validators";
+import { useFormValidation } from "@/hooks/useFormValidation";
 
 const RED = "#E8431A";
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
-const PHONE_PATTERN = /^\+258(82|83|84|85|86|87)\d{7}$/;
 
 const initialForm = {
   deliveryMethod: "DELIVERY",
@@ -34,15 +37,6 @@ const initialForm = {
 
 const fieldClass = "w-full rounded-2xl border px-4 py-3 text-sm outline-none";
 
-function isValidPhone(value: string) {
-  return PHONE_PATTERN.test(value.trim());
-}
-
-function getPhoneError(value: string, required: boolean) {
-  const trimmed = value.trim();
-  if (!trimmed) return required ? "Usa o formato +2588xxxxxxxx." : "";
-  return isValidPhone(trimmed) ? "" : "Número inválido. Usa o formato +2588xxxxxxxx.";
-}
 
 function isCheckoutResponse(payload: CheckoutResponse | Order | null): payload is CheckoutResponse {
   return Boolean(
@@ -59,20 +53,6 @@ function getInternalOrderForPayment(result: CheckoutResponse) {
   return result.orders?.find((order) => order.type === "INTERNAL" && order.id) ?? null;
 }
 
-async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit) {
-  const headers = new Headers(init?.headers);
-  if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const method = String(init?.method || "GET").toUpperCase();
-  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    const csrfToken = getCsrfToken();
-    if (csrfToken) headers.set(XSRF_HEADER, csrfToken);
-  }
-  const response = await fetch(url, { ...init, headers, cache: "no-store", credentials: "same-origin" });
-  if (response.status === 204) return null as T;
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || payload?.error || "Não foi possível concluir a operação.");
-  return payload as T;
-}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -88,12 +68,28 @@ export default function CheckoutPage() {
   const [couponFeedback, setCouponFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [phoneTouched, setPhoneTouched] = useState({ primary: false, alternative: false });
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const primaryPhoneRef = useRef<HTMLInputElement | null>(null);
   const alternativePhoneRef = useRef<HTMLInputElement | null>(null);
+
+  const isDelivery = form.deliveryMethod === "DELIVERY";
+  const checkoutRules = useMemo(() => ({
+    fullName: validateName,
+    primaryPhoneNumber: validatePhone,
+    alternativePhoneNumber: validatePhoneOptional,
+    email: validateEmailOptional,
+    ...(isDelivery ? {
+      city: validateCity,
+      neighborhood: validateNeighborhood,
+      street: validateStreet,
+    } : {}),
+    customerNotes: validateMessage,
+    googleMapsLink: validateUrl,
+  }), [isDelivery]);
+
+  const fv = useFormValidation(form, checkoutRules);
 
   useEffect(() => {
     const loadCheckout = async () => {
@@ -101,16 +97,17 @@ export default function CheckoutPage() {
       setIsLoading(true);
       try {
         const [payload, me, addresses] = await Promise.all([
-          fetchWithAuth<Cart>("/api/cart", token),
-          fetchWithAuth<CustomerProfile>("/api/xdigital/users/me", token),
-          fetchWithAuth<UserAddress[]>("/api/xdigital/users/me/addresses", token),
+          apiFetch<Cart>("cart/me"),
+          apiFetch<CustomerProfile>("users/me"),
+          apiFetch<UserAddress[]>("users/me/addresses"),
         ]);
         setCart(payload);
         setSavedAddresses(addresses);
 
         const contact = createPrefilledContact(me);
-        const address = addresses.find((item) => item.defaultAddress)
-          ? applySavedAddress(createPrefilledAddress(me), addresses.find((item) => item.defaultAddress)!)
+        const defaultAddress = addresses.find((addr: UserAddress) => addr.defaultAddress);
+        const address = defaultAddress
+          ? applySavedAddress(createPrefilledAddress(me), defaultAddress)
           : createPrefilledAddress(me);
 
         setForm((current) => ({
@@ -118,17 +115,17 @@ export default function CheckoutPage() {
           ...contact,
           ...address,
         }));
-        setSelectedAddressId(addresses.find((item) => item.defaultAddress)?.id ?? (addresses.length ? addresses[0].id : "manual"));
+        setSelectedAddressId(defaultAddress?.id ?? (addresses.length ? addresses[0].id : "manual"));
         setSaveAddress(addresses.length === 0);
 
         if (typeof window !== "undefined") {
           const rawSelection = window.sessionStorage.getItem(CHECKOUT_SELECTION_KEY);
           if (rawSelection) {
-            const parsedSelection = JSON.parse(rawSelection);
+            const parsedSelection = JSON.parse(rawSelection) as unknown;
             if (Array.isArray(parsedSelection)) {
-              const validSelection = parsedSelection
+              const validSelection = (parsedSelection as unknown[])
                 .map((value) => Number(value))
-                .filter((value) => Number.isFinite(value) && payload.items.some((item) => item.itemId === value));
+                .filter((value) => Number.isFinite(value) && payload.items.some((item: CartItem) => item.itemId === value));
               setSelectedItemIds(validSelection.length ? validSelection : null);
             } else {
               setSelectedItemIds(null);
@@ -172,23 +169,38 @@ export default function CheckoutPage() {
   const total = localSubtotal;
   const discountAmount = coupon?.valid ? Number(coupon.discountAmount || 0) : 0;
   const totalAfterDiscount = Math.max(total - discountAmount, 0);
-  const primaryPhoneError = getPhoneError(form.primaryPhoneNumber, true);
-  const alternativePhoneError = getPhoneError(form.alternativePhoneNumber, false);
-  const hasPhoneErrors = Boolean(primaryPhoneError || alternativePhoneError);
+  const primaryPhoneError = fv.errors.primaryPhoneNumber ?? null;
+  const alternativePhoneError = fv.errors.alternativePhoneNumber ?? null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
-    if (hasPhoneErrors) {
-      setPhoneTouched({ primary: true, alternative: true });
+
+    const isValid = fv.validateAll();
+    if (!isValid) {
       setSubmitFeedback({ type: "error", msg: "Revê os campos destacados antes de continuar." });
-      setTimeout(() => {
-        const target = primaryPhoneError ? primaryPhoneRef.current : alternativePhoneRef.current;
-        target?.scrollIntoView({ behavior: "smooth", block: "center" });
-        target?.focus();
-      }, 0);
+      setTimeout(() => fv.scrollToFirstError(), 0);
       return;
     }
+
+    // Sanitize all text fields before sending
+    const sanitized = {
+      ...form,
+      fullName: sanitizeTextField(form.fullName).value || form.fullName,
+      email: normalizeEmail(form.email),
+      primaryPhoneNumber: normalizePhone(form.primaryPhoneNumber),
+      alternativePhoneNumber: form.alternativePhoneNumber.trim()
+        ? normalizePhone(form.alternativePhoneNumber)
+        : "",
+      city: sanitizeTextField(form.city).value || form.city,
+      neighborhood: sanitizeTextField(form.neighborhood).value || form.neighborhood,
+      street: sanitizeTextField(form.street).value || form.street,
+      houseNumber: sanitizeTextField(form.houseNumber).value || form.houseNumber,
+      deliveryReference: sanitizeTextField(form.deliveryReference).value || form.deliveryReference,
+      customerNotes: sanitizeTextField(form.customerNotes).value || form.customerNotes,
+      googleMapsLink: sanitizeUrl(form.googleMapsLink) ?? "",
+    };
+
     setIsSubmitting(true);
     setSubmitFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     setFeedback(null);
@@ -196,9 +208,7 @@ export default function CheckoutPage() {
       const checkoutResult = await apiFetch<CheckoutResponse | Order>("orders/from-cart", {
         method: "POST",
         body: JSON.stringify({
-          ...form,
-          primaryPhoneNumber: form.primaryPhoneNumber.trim(),
-          alternativePhoneNumber: form.alternativePhoneNumber.trim(),
+          ...sanitized,
           selectedItemIds: checkoutItems.map((item) => item.itemId),
           couponCode: coupon?.valid ? coupon.code : undefined,
         }),
@@ -283,7 +293,7 @@ export default function CheckoutPage() {
     setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
     setFeedback(null);
     try {
-      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, {
+      const payload = await apiFetch<CouponValidation>("coupons/validate", {
         method: "POST",
         body: JSON.stringify({
           code: couponCode.trim(),
@@ -388,49 +398,189 @@ export default function CheckoutPage() {
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div><label className="mb-2 block text-sm font-semibold">Nome completo</label><input required value={form.fullName} onChange={(e) => setForm((current) => ({ ...current, fullName: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
+                {/* Nome completo */}
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Telefone principal</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-fullName">Nome completo</label>
                   <input
+                    id="co-fullName"
                     required
-                    ref={primaryPhoneRef}
-                    value={form.primaryPhoneNumber}
-                    onChange={(e) => setForm((current) => ({ ...current, primaryPhoneNumber: e.target.value }))}
-                    onBlur={() => setPhoneTouched((current) => ({ ...current, primary: true }))}
+                    value={form.fullName}
+                    onChange={(e) => setForm((c) => ({ ...c, fullName: e.target.value }))}
+                    onBlur={(e) => { fv.touch("fullName"); setForm((c) => ({ ...c, fullName: cleanName(e.target.value) })); }}
                     className={fieldClass}
-                    style={getFieldStyle(phoneTouched.primary && Boolean(primaryPhoneError))}
-                    placeholder="+258849614486"
+                    style={getFieldStyle(Boolean(fv.errors.fullName))}
+                    aria-invalid={Boolean(fv.errors.fullName)}
+                    aria-describedby={fv.errors.fullName ? "co-fullName-err" : undefined}
+                    ref={fv.registerRef("fullName")}
                   />
-                  <p className="mt-2 text-xs" style={{ color: phoneTouched.primary && primaryPhoneError ? "#B42318" : "#6B7280" }}>
-                    {phoneTouched.primary && primaryPhoneError ? primaryPhoneError : "Formato esperado: +2588xxxxxxxx"}
-                  </p>
+                  {fv.errors.fullName ? <p id="co-fullName-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.fullName}</p> : null}
                 </div>
+
+                {/* Telefone principal */}
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Telefone alternativo</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-phone1">Telefone principal</label>
                   <input
-                    ref={alternativePhoneRef}
-                    value={form.alternativePhoneNumber}
-                    onChange={(e) => setForm((current) => ({ ...current, alternativePhoneNumber: e.target.value }))}
-                    onBlur={() => setPhoneTouched((current) => ({ ...current, alternative: true }))}
+                    id="co-phone1"
+                    required
+                    ref={(el) => { primaryPhoneRef.current = el; fv.registerRef("primaryPhoneNumber")(el); }}
+                    value={form.primaryPhoneNumber}
+                    onChange={(e) => setForm((c) => ({ ...c, primaryPhoneNumber: e.target.value }))}
+                    onBlur={() => fv.touch("primaryPhoneNumber")}
                     className={fieldClass}
-                    style={getFieldStyle(phoneTouched.alternative && Boolean(alternativePhoneError))}
-                    placeholder="+258841234567"
+                    style={getFieldStyle(Boolean(primaryPhoneError))}
+                    placeholder="+258849614486"
+                    aria-invalid={Boolean(primaryPhoneError)}
+                    aria-describedby="co-phone1-hint"
+                    inputMode="tel"
                   />
-                  <p className="mt-2 text-xs" style={{ color: phoneTouched.alternative && alternativePhoneError ? "#B42318" : "#6B7280" }}>
-                    {phoneTouched.alternative && alternativePhoneError ? alternativePhoneError : "Opcional, mas se preencher usa +2588xxxxxxxx"}
+                  <p id="co-phone1-hint" className="mt-1.5 text-xs" style={{ color: primaryPhoneError ? "#B42318" : "#6B7280" }}>
+                    {primaryPhoneError ?? "Formato: +2588xxxxxxxx"}
                   </p>
                 </div>
-                <div><label className="mb-2 block text-sm font-semibold">Email</label><input type="email" value={form.email} onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Receber como</label><select value={form.deliveryMethod} onChange={(e) => setForm((current) => ({ ...current, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}><option value="DELIVERY">Entrega ao domicílio</option><option value="STORE_PICKUP">Levantar na loja</option></select></div>
-                <div><label className="mb-2 block text-sm font-semibold">Cidade</label><input value={form.city} onChange={(e) => setForm((current) => ({ ...current, city: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Bairro</label><input value={form.neighborhood} onChange={(e) => setForm((current) => ({ ...current, neighborhood: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Rua / Avenida</label><input value={form.street} onChange={(e) => setForm((current) => ({ ...current, street: e.target.value }))} className={fieldClass} style={getFieldStyle()} required={form.deliveryMethod === "DELIVERY"} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Casa / Número</label><input value={form.houseNumber} onChange={(e) => setForm((current) => ({ ...current, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} /></div>
+
+                {/* Telefone alternativo */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-phone2">Telefone alternativo</label>
+                  <input
+                    id="co-phone2"
+                    ref={(el) => { alternativePhoneRef.current = el; fv.registerRef("alternativePhoneNumber")(el); }}
+                    value={form.alternativePhoneNumber}
+                    onChange={(e) => setForm((c) => ({ ...c, alternativePhoneNumber: e.target.value }))}
+                    onBlur={() => fv.touch("alternativePhoneNumber")}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(alternativePhoneError))}
+                    placeholder="+258841234567"
+                    aria-invalid={Boolean(alternativePhoneError)}
+                    aria-describedby="co-phone2-hint"
+                    inputMode="tel"
+                  />
+                  <p id="co-phone2-hint" className="mt-1.5 text-xs" style={{ color: alternativePhoneError ? "#B42318" : "#6B7280" }}>
+                    {alternativePhoneError ?? "Opcional — usa +2588xxxxxxxx"}
+                  </p>
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-email">Email</label>
+                  <input
+                    id="co-email"
+                    type="email"
+                    inputMode="email"
+                    value={form.email}
+                    onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
+                    onBlur={() => fv.touch("email")}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(fv.errors.email))}
+                    aria-invalid={Boolean(fv.errors.email)}
+                    aria-describedby={fv.errors.email ? "co-email-err" : undefined}
+                    ref={fv.registerRef("email")}
+                  />
+                  {fv.errors.email ? <p id="co-email-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.email}</p> : null}
+                </div>
+
+                {/* Método de entrega */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-delivery">Receber como</label>
+                  <select id="co-delivery" value={form.deliveryMethod} onChange={(e) => setForm((c) => ({ ...c, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}>
+                    <option value="DELIVERY">Entrega ao domicílio</option>
+                    <option value="STORE_PICKUP">Levantar na loja</option>
+                  </select>
+                </div>
+
+                {/* Cidade */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-city">Cidade</label>
+                  <input
+                    id="co-city"
+                    value={form.city}
+                    onChange={(e) => setForm((c) => ({ ...c, city: e.target.value }))}
+                    onBlur={(e) => { fv.touch("city"); setForm((c) => ({ ...c, city: cleanCity(e.target.value) })); }}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(fv.errors.city))}
+                    required={isDelivery}
+                    aria-invalid={Boolean(fv.errors.city)}
+                    aria-describedby={fv.errors.city ? "co-city-err" : undefined}
+                    ref={fv.registerRef("city")}
+                  />
+                  {fv.errors.city ? <p id="co-city-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.city}</p> : null}
+                </div>
+
+                {/* Bairro */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-neighborhood">Bairro</label>
+                  <input
+                    id="co-neighborhood"
+                    value={form.neighborhood}
+                    onChange={(e) => setForm((c) => ({ ...c, neighborhood: e.target.value }))}
+                    onBlur={(e) => { fv.touch("neighborhood"); setForm((c) => ({ ...c, neighborhood: cleanAddress(e.target.value) })); }}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(fv.errors.neighborhood))}
+                    required={isDelivery}
+                    aria-invalid={Boolean(fv.errors.neighborhood)}
+                    aria-describedby={fv.errors.neighborhood ? "co-neighborhood-err" : undefined}
+                    ref={fv.registerRef("neighborhood")}
+                  />
+                  {fv.errors.neighborhood ? <p id="co-neighborhood-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.neighborhood}</p> : null}
+                </div>
+
+                {/* Rua */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-street">Rua / Avenida</label>
+                  <input
+                    id="co-street"
+                    value={form.street}
+                    onChange={(e) => setForm((c) => ({ ...c, street: e.target.value }))}
+                    onBlur={(e) => { fv.touch("street"); setForm((c) => ({ ...c, street: cleanAddress(e.target.value) })); }}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(fv.errors.street))}
+                    required={isDelivery}
+                    aria-invalid={Boolean(fv.errors.street)}
+                    aria-describedby={fv.errors.street ? "co-street-err" : undefined}
+                    ref={fv.registerRef("street")}
+                  />
+                  {fv.errors.street ? <p id="co-street-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.street}</p> : null}
+                </div>
+
+                {/* Casa / Número */}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-house">Casa / Número</label>
+                  <input id="co-house" value={form.houseNumber} onChange={(e) => setForm((c) => ({ ...c, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} />
+                </div>
               </div>
               <div className="mt-4 grid gap-4">
-                <div><label className="mb-2 block text-sm font-semibold">Referência</label><textarea value={form.deliveryReference} onChange={(e) => setForm((current) => ({ ...current, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={form.deliveryMethod === "DELIVERY"} /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Google Maps</label><input value={form.googleMapsLink} onChange={(e) => setForm((current) => ({ ...current, googleMapsLink: e.target.value }))} className={fieldClass} style={getFieldStyle()} placeholder="https://maps.google.com/..." /></div>
-                <div><label className="mb-2 block text-sm font-semibold">Notas</label><textarea value={form.customerNotes} onChange={(e) => setForm((current) => ({ ...current, customerNotes: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 110 }} placeholder="Instruções para a entrega, horários ou observações." /></div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-ref">Referência</label>
+                  <textarea id="co-ref" value={form.deliveryReference} onChange={(e) => setForm((c) => ({ ...c, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={isDelivery} />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-maps">Google Maps</label>
+                  <input
+                    id="co-maps"
+                    value={form.googleMapsLink}
+                    onChange={(e) => setForm((c) => ({ ...c, googleMapsLink: e.target.value }))}
+                    onBlur={() => fv.touch("googleMapsLink")}
+                    className={fieldClass}
+                    style={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
+                    placeholder="https://maps.google.com/..."
+                    inputMode="url"
+                    ref={fv.registerRef("googleMapsLink")}
+                  />
+                  {fv.errors.googleMapsLink ? <p className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.googleMapsLink}</p> : null}
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-notes">Notas</label>
+                  <textarea
+                    id="co-notes"
+                    value={form.customerNotes}
+                    onChange={(e) => setForm((c) => ({ ...c, customerNotes: e.target.value }))}
+                    onBlur={() => fv.touch("customerNotes")}
+                    className={fieldClass}
+                    style={{ ...getFieldStyle(Boolean(fv.errors.customerNotes)), minHeight: 110 }}
+                    placeholder="Instruções para a entrega, horários ou observações."
+                    ref={fv.registerRef("customerNotes")}
+                  />
+                  {fv.errors.customerNotes ? <p className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.customerNotes}</p> : null}
+                </div>
                 {form.deliveryMethod === "DELIVERY" ? (
                   <label className="inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }}>
                     <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />

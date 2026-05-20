@@ -38,6 +38,34 @@ export function normalizeClientError(
     return { kind: "validation", message: "Não tens permissão para esta ação." };
   }
 
+  if (status === 404 || /404|não encontr|nao encontr|not found/.test(lower)) {
+    return { kind: "generic", message: "Não encontrámos o que procuras." };
+  }
+
+  if (status === 409 || /409|conflict|já exist|ja exist|duplicad/.test(lower)) {
+    return { kind: "validation", message: "Operação em conflito. Verifica os dados e tenta novamente." };
+  }
+
+  if (status === 410) {
+    return { kind: "generic", message: "Este recurso já não está disponível." };
+  }
+
+  if (status === 422 || /422|unprocessable|dados inv[aá]lidos/.test(lower)) {
+    return { kind: "validation", message: "Verifica os dados preenchidos e tenta novamente." };
+  }
+
+  if (status === 429 || /429|too many|rate.?limit|muitas tentativas/.test(lower)) {
+    return { kind: "generic", message: "Demasiadas tentativas. Aguarda um pouco e tenta de novo." };
+  }
+
+  if (status != null && (status === 502 || status === 503 || status === 504)) {
+    return { kind: "network", message: "O servidor está temporariamente indisponível. Tenta novamente." };
+  }
+
+  if (status != null && status >= 500) {
+    return { kind: "generic", message: "Ocorreu um erro interno. Tenta mais tarde." };
+  }
+
   if (/cup[aã]o/.test(lower) && /inv[aá]lido|expir|inativo|mínimo|minimo/.test(lower)) {
     return { kind: "validation", message: "Cupão inválido ou expirado." };
   }

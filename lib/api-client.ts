@@ -68,15 +68,18 @@ function getApiErrorMessage(payload: unknown) {
 }
 
 function statusFallbackMessage(status: number): string {
-  if (status === 401) return "A tua sessao expirou. Entra novamente.";
-  if (status === 403) return "Nao tens permissao para aprovar esta proposta.";
-  if (status === 404) return "Nao encontramos esse recurso.";
-  if (status === 409) return "Nao foi possivel completar a operacao. Verifica os dados e tenta novamente.";
-  if (status === 422) return "Verifica os dados enviados e tenta novamente.";
-  if (status === 429) return "Muitas tentativas. Aguarda um pouco e tenta novamente.";
-  if (status === 502) return "Nao conseguimos contactar o servidor agora. Tenta novamente.";
-  if (status >= 500) return "Erro interno. Tenta novamente.";
-  return "Nao foi possivel concluir a operacao.";
+  if (status === 400) return "Os dados enviados são inválidos. Verifica o formulário.";
+  if (status === 401) return "A tua sessão expirou. Inicia sessão novamente.";
+  if (status === 403) return "Não tens permissão para esta ação.";
+  if (status === 404) return "Não encontrámos o que procuras.";
+  if (status === 409) return "Operação em conflito. Verifica os dados e tenta novamente.";
+  if (status === 410) return "Este recurso já não está disponível.";
+  if (status === 422) return "Verifica os dados preenchidos e tenta novamente.";
+  if (status === 429) return "Demasiadas tentativas. Aguarda um pouco e tenta de novo.";
+  if (status === 502 || status === 503 || status === 504)
+    return "O servidor está temporariamente indisponível. Tenta novamente.";
+  if (status >= 500) return "Ocorreu um erro interno. A equipa foi notificada. Tenta mais tarde.";
+  return "Não foi possível concluir a operação.";
 }
 
 async function performRequest(path: string, options: ApiOptions = {}) {
