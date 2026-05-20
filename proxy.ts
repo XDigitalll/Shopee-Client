@@ -1,20 +1,28 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-const PROTECTED_PREFIXES = ["/orders", "/checkout", "/profile", "/settings"];
+const SESSION_COOKIE = "shopee_client_session";
 
-const PUBLIC_EXCEPTIONS = [
-  "/orders/external/new",
-  "/profile/change-password",
+const PROTECTED_PREFIXES = [
+  "/profile",
+  "/orders",
+  "/checkout",
+  "/notifications",
+  "/delivery-address",
+  "/settings",
 ];
 
+// Public sub-paths that live inside a protected prefix
+const PUBLIC_EXCEPTIONS = ["/orders/external/new"];
+
 function isProtected(pathname: string): boolean {
-  if (
-    pathname.startsWith("/complete-account") ||
-    PUBLIC_EXCEPTIONS.some((p) => pathname === p || pathname.startsWith(p + "/"))
-  ) {
-    return false;
+  for (const exc of PUBLIC_EXCEPTIONS) {
+    if (pathname === exc || pathname.startsWith(`${exc}/`)) return false;
   }
-  return PROTECTED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"));
+  for (const prefix of PROTECTED_PREFIXES) {
+    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return true;
+  }
+  return false;
 }
 
 export function proxy(request: NextRequest) {
@@ -24,11 +32,8 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const session =
-    request.cookies.get("shopee_client_session")?.value ||
-    request.cookies.get("access_token")?.value;
-
-  if (!session) {
+  const session = request.cookies.get(SESSION_COOKIE);
+  if (!session?.value) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
@@ -38,5 +43,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/orders/:path*", "/checkout/:path*", "/profile/:path*", "/settings/:path*"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+  ],
 };

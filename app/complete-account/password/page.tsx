@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
 import { apiFetch } from "@/lib/api-client";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 const RED = "#E8431A";
 const TEXT = "#1A1410";
@@ -32,7 +33,8 @@ export default function CompleteAccountPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const saveAction = useAsyncAction();
+  const saving = saveAction.isRunning;
   const [danger, setDanger] = useState("");
 
   useEffect(() => {
@@ -51,19 +53,16 @@ export default function CompleteAccountPasswordPage() {
     if (!canSubmit) return;
     setDanger("");
 
-    setSaving(true);
-    try {
+    const result = await saveAction.run(async () => {
       await apiFetch<{ success: boolean; mustChangePassword: boolean; profileIncomplete: boolean }>("auth/complete-first-password", {
         method: "POST",
         token,
         body: JSON.stringify({ newPassword, confirmPassword }),
       });
       router.push("/complete-account/profile");
-    } catch (error) {
-      console.error("[complete-first-password] error:", error);
-      setDanger(error instanceof Error ? error.message : "Não foi possível atualizar a senha.");
-    } finally {
-      setSaving(false);
+    });
+    if (!result) {
+      setDanger(saveAction.error || "Não foi possível atualizar a senha.");
     }
   };
 

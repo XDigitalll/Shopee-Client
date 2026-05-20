@@ -6,6 +6,7 @@ import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
 import { apiFetch } from "@/lib/api-client";
 import type { CustomerProfile } from "@/lib/types";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 const RED = "#E8431A";
 const TEXT = "#1A1410";
@@ -17,7 +18,8 @@ export default function CompleteAccountProfilePage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [saving, setSaving] = useState(false);
+  const saveAction = useAsyncAction();
+  const saving = saveAction.isRunning;
   const [danger, setDanger] = useState("");
   const [isXdigitalEmail, setIsXdigitalEmail] = useState(false);
 
@@ -60,8 +62,7 @@ export default function CompleteAccountProfilePage() {
       return;
     }
 
-    setSaving(true);
-    try {
+    const result = await saveAction.run(async () => {
       await apiFetch<CustomerProfile>("users/me", {
         method: "PUT",
         token,
@@ -74,10 +75,9 @@ export default function CompleteAccountProfilePage() {
       });
       await refreshProfile();
       router.push("/");
-    } catch (error) {
-      setDanger(error instanceof Error ? error.message : "Não foi possível guardar o perfil.");
-    } finally {
-      setSaving(false);
+    });
+    if (!result) {
+      setDanger(saveAction.error || "Não foi possível guardar o perfil.");
     }
   };
 

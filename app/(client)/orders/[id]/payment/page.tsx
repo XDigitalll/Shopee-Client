@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { emitClientDataChanged } from "@/lib/api-client";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import { formatMoney } from "@/lib/format";
@@ -177,7 +178,8 @@ export default function OrderPaymentPage() {
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
+  const submitAction = useAsyncAction();
+  const isBusy = submitAction.isRunning;
   const [submission, setSubmission] = useState<SubmissionResponse | null>(null);
 
   const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -285,7 +287,6 @@ export default function OrderPaymentPage() {
       return;
     }
 
-    setIsBusy(true);
     setFieldError(null);
     setFeedback(null);
 
@@ -307,7 +308,7 @@ export default function OrderPaymentPage() {
     formData.append("payload", JSON.stringify(payload));
     if (file) formData.append("file", file);
 
-    try {
+    const result = await submitAction.run(async () => {
       const response = await fetch(`/api/payments/${order.id}/submit`, {
         method: "POST",
         headers: getCsrfToken() ? { [XSRF_HEADER]: getCsrfToken() } : undefined,
@@ -324,10 +325,9 @@ export default function OrderPaymentPage() {
       setFeedback(null);
       emitClientDataChanged();
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (error) {
-      setFeedback({ type: "error", msg: normalizeClientError(error, "Não foi possível validar o pagamento. Tenta novamente.").message });
-    } finally {
-      setIsBusy(false);
+    });
+    if (!result) {
+      setFeedback({ type: "error", msg: normalizeClientError(submitAction.error, "Não foi possível validar o pagamento. Tenta novamente.").message });
     }
   }
 

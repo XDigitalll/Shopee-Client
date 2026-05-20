@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image, { type ImageLoaderProps } from "next/image";
 import { memo, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
@@ -10,6 +11,8 @@ import { useAuth } from "@/components/auth-provider";
 
 const RED = "#E8431A";
 const GREEN = "#16A34A";
+
+const passthroughImageLoader = ({ src }: ImageLoaderProps) => src;
 
 /* ─── Icons ─────────────────────────────────────────────── */
 function ChevronRightIcon({ size = 14 }: { size?: number }) {
@@ -586,9 +589,18 @@ export default function ProductDetailPage() {
               <div className="absolute right-3 top-3 z-10 rounded-full bg-white/80 p-1.5 opacity-0 shadow backdrop-blur-sm transition group-hover:opacity-100">
                 <ZoomIcon />
               </div>
-              <div className="flex aspect-[4/3] items-center justify-center bg-[#FAFAFA] p-6 lg:aspect-square">
+              <div className="relative flex aspect-[4/3] items-center justify-center bg-[#FAFAFA] p-6 lg:aspect-square">
                 {activeImage
-                  ? <img src={activeImage} alt={product.name} className="h-full w-full object-contain" style={{ opacity: imgFading ? 0 : 1, transition: "opacity 0.22s ease" }} />
+                  ? <Image
+                      loader={passthroughImageLoader}
+                      unoptimized
+                      src={activeImage}
+                      alt={product.name}
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      className="object-contain p-6"
+                      style={{ opacity: imgFading ? 0 : 1, transition: "opacity 0.22s ease" }}
+                    />
                   : <PackageIcon />}
               </div>
               {images.length > 1 && (
@@ -605,7 +617,15 @@ export default function ProductDetailPage() {
                   const active = img === activeImage;
                   return (
                     <button key={img} type="button" onClick={() => setActiveImage(img)} className="flex-none overflow-hidden rounded-xl border-2 bg-white transition" style={{ borderColor: active ? RED : "transparent", outline: active ? `none` : "1px solid #F0F0F0" }}>
-                      <img src={img} alt={`${product.name} ${idx + 1}`} className="h-14 w-14 object-cover sm:h-16 sm:w-16" />
+                      <Image
+                        loader={passthroughImageLoader}
+                        unoptimized
+                        src={img}
+                        alt={`${product.name} ${idx + 1}`}
+                        width={64}
+                        height={64}
+                        className="h-14 w-14 object-cover sm:h-16 sm:w-16"
+                      />
                     </button>
                   );
                 })}
@@ -1114,9 +1134,17 @@ export default function ProductDetailPage() {
                   <article key={item.id} className="flex w-44 flex-none flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md sm:w-auto" style={{ borderColor: "#F0F0F0" }}>
                     <Link href={`/store/${item.id}`} className="relative block bg-[#FAFAFA]">
                       {itemDiscount > 0 && <span className="absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: RED }}>-{itemDiscount}%</span>}
-                      <div className="flex h-36 items-center justify-center p-3">
+                      <div className="relative flex h-36 items-center justify-center p-3">
                         {img
-                          ? <img src={img} alt={item.name} className="h-full w-full object-contain" />
+                          ? <Image
+                              loader={passthroughImageLoader}
+                              unoptimized
+                              src={img}
+                              alt={item.name}
+                              fill
+                              sizes="(max-width: 640px) 176px, 200px"
+                              className="object-contain p-3"
+                            />
                           : <PackageIcon />}
                       </div>
                     </Link>

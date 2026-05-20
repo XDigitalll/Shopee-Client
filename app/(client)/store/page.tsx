@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-
+import Image, { type ImageLoaderProps } from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
@@ -13,6 +13,8 @@ import { useAuth } from "@/components/auth-provider";
 
 const RED = "#E8431A";
 const RED_HOVER = "#CC3315";
+
+const passthroughImageLoader = ({ src }: ImageLoaderProps) => src;
 
 function resolveProductImage(product?: Product) {
   if (!product) return "";
@@ -192,10 +194,14 @@ function ProductCard({
     >
       <div className="relative aspect-square overflow-hidden" style={{ background: "#FFF8F5", flexShrink: 0 }}>
         {img ? (
-          <img
+          <Image
+            loader={passthroughImageLoader}
+            unoptimized
             src={img}
             alt={product.name}
-            className="h-full w-full object-contain p-3 transition-transform duration-300 group-hover:scale-105"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-contain p-3 transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

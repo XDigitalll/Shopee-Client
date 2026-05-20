@@ -9,6 +9,9 @@ import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
 import { ClientConfirmDialog, ClientFeedbackDock } from "@/components/client-feedback-state";
 import type { CustomerProfile, OrderStats, UserAddress, VerificationDispatchResponse } from "@/lib/types";
+import { normalizePhone, normalizeEmail } from "@/utils/input-normalizer";
+import { cleanName, cleanCity, cleanAddress, cleanMessage } from "@/utils/text-cleaner";
+import { validateName, validatePhoneOptional, validateEmailOptional, validateCity, validateNeighborhood, validateStreet, validateUrl } from "@/utils/validators";
 
 const RED = "#E8431A";
 const RED_DARK = "#C13210";
@@ -350,6 +353,10 @@ export default function ProfilePage() {
   const [verifyCooldown, setVerifyCooldown] = useState(0);
   const [confirmDeleteAddressId, setConfirmDeleteAddressId] = useState<number | null>(null);
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [personalErrors, setPersonalErrors] = useState<Partial<Record<keyof PersonalForm, string>>>({});
+  const [personalTouched, setPersonalTouched] = useState<Partial<Record<keyof PersonalForm, boolean>>>({});
+  const [addressErrors, setAddressErrors] = useState<Partial<Record<string, string>>>({});
+  const [addressTouched, setAddressTouched] = useState<Partial<Record<string, boolean>>>({});
 
   const personalRef = useRef<HTMLElement | null>(null);
   const addressesRef = useRef<HTMLElement | null>(null);
@@ -439,26 +446,100 @@ export default function ProfilePage() {
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const validatePersonalForm = (): Partial<Record<keyof PersonalForm, string>> => {
+    const errors: Partial<Record<keyof PersonalForm, string>> = {};
+    const firstErr = validateName(personalForm.firstName);
+    if (firstErr) errors.firstName = firstErr;
+    const lastErr = validateName(personalForm.lastName);
+    if (lastErr) errors.lastName = lastErr;
+    if (isXdigitalEmail && personalForm.email) {
+      const emailErr = validateEmailOptional(personalForm.email);
+      if (emailErr) errors.email = emailErr;
+    }
+    const normalised = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
+    const phoneErr = validatePhoneOptional(normalised);
+    if (phoneErr) errors.phoneNumber = phoneErr;
+    if (personalForm.city) {
+      const cityErr = validateCity(personalForm.city);
+      if (cityErr) errors.city = cityErr;
+    }
+    return errors;
+  };
+
+  const validateAddressForm = (): Partial<Record<string, string>> => {
+    const errors: Partial<Record<string, string>> = {};
+    if (!addressForm.label.trim()) errors.label = "Nome da morada é obrigatório.";
+    const cityErr = validateCity(addressForm.city);
+    if (cityErr) errors.city = cityErr;
+    const nbErr = validateNeighborhood(addressForm.neighborhood);
+    if (nbErr) errors.neighborhood = nbErr;
+    const streetErr = validateStreet(addressForm.street);
+    if (streetErr) errors.street = streetErr;
+    if (addressForm.googleMapsLink) {
+      const urlErr = validateUrl(addressForm.googleMapsLink);
+      if (urlErr) errors.googleMapsLink = urlErr;
+    }
+    return errors;
+  };
+
+  const scrollToFirstPersonalError = (errors: Partial<Record<string, string>>) => {
+    const fields = ["firstName", "lastName", "email", "phoneNumber", "city"];
+    for (const field of fields) {
+      if (errors[field]) {
+        const el = document.getElementById(`personal-${field}`);
+        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+        break;
+      }
+    }
+  };
+
+  const scrollToFirstAddressError = (errors: Partial<Record<string, string>>) => {
+    const fields = ["label", "city", "neighborhood", "street", "googleMapsLink"];
+    for (const field of fields) {
+      if (errors[field]) {
+        const el = document.getElementById(`addr-${field}`);
+        if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+        break;
+      }
+    }
+  };
+
   const handleSavePersonal = async () => {
     if (!token) return;
+
+    const allTouched: Partial<Record<keyof PersonalForm, boolean>> = {
+      firstName: true, lastName: true, email: true, phoneNumber: true, city: true,
+    };
+    setPersonalTouched(allTouched);
+    const errors = validatePersonalForm();
+    setPersonalErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      scrollToFirstPersonalError(errors);
+      return;
+    }
 
     setIsSavingPersonal(true);
     setFeedback("");
     setDangerFeedback("");
 
     try {
-      const trimmedEmail = personalForm.email.trim();
+      const cleanFirst = cleanName(personalForm.firstName);
+      const cleanLast = cleanName(personalForm.lastName);
+      const cleanPhone = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
+      const cleanCityVal = personalForm.city ? cleanCity(personalForm.city) : "";
+      const trimmedEmail = personalForm.email.trim() ? normalizeEmail(personalForm.email) : "";
+
       const payload = await apiFetch<CustomerProfile>("users/me", {
         method: "PUT",
         token,
         body: JSON.stringify({
-          firstName: personalForm.firstName,
-          lastName: personalForm.lastName,
-          name: fullName,
-          phoneNumber: personalForm.phoneNumber,
+          firstName: cleanFirst,
+          lastName: cleanLast,
+          name: [cleanFirst, cleanLast].filter(Boolean).join(" "),
+          phoneNumber: cleanPhone || null,
           birthDate: personalForm.birthDate || null,
           gender: personalForm.gender || null,
-          city: personalForm.city || null,
+          city: cleanCityVal || null,
           ...(isXdigitalEmail && trimmedEmail ? { email: trimmedEmail } : {}),
         }),
       });
@@ -473,6 +554,8 @@ export default function ProfilePage() {
       setVerifyDestination(payload.verificationDestinationMasked || payload.verificationDestination || payload.email || "");
       await refreshProfile();
       setIsEditingPersonal(false);
+      setPersonalErrors({});
+      setPersonalTouched({});
       setFeedback("Dados pessoais atualizados com sucesso.");
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel guardar os dados pessoais.");
@@ -507,6 +590,18 @@ export default function ProfilePage() {
 
   const handleSubmitAddress = async () => {
     if (!token) return;
+
+    const allTouched: Partial<Record<string, boolean>> = {
+      label: true, city: true, neighborhood: true, street: true, googleMapsLink: true,
+    };
+    setAddressTouched(allTouched);
+    const errors = validateAddressForm();
+    setAddressErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      scrollToFirstAddressError(errors);
+      return;
+    }
+
     setSavingAddress(true);
     setFeedback("");
     setDangerFeedback("");
@@ -517,7 +612,13 @@ export default function ProfilePage() {
       await apiFetch<UserAddress>(path, {
         method,
         token,
-        body: JSON.stringify(addressForm),
+        body: JSON.stringify({
+          ...addressForm,
+          city: cleanCity(addressForm.city),
+          neighborhood: cleanAddress(addressForm.neighborhood),
+          street: cleanAddress(addressForm.street),
+          reference: addressForm.reference ? cleanMessage(addressForm.reference) : "",
+        }),
       });
 
       const savedAddresses = await apiFetch<UserAddress[]>("users/me/addresses", { token });
@@ -527,6 +628,8 @@ export default function ProfilePage() {
       setVerifyDestination(updatedProfile.verificationDestinationMasked || updatedProfile.verificationDestination || updatedProfile.email || "");
       await refreshProfile();
       setAddressForm(emptyAddressForm);
+      setAddressErrors({});
+      setAddressTouched({});
       setAddressFormOpen(false);
       setFeedback(addressForm.id ? "Morada atualizada com sucesso." : "Nova morada adicionada com sucesso.");
     } catch (error) {
@@ -628,6 +731,8 @@ export default function ProfilePage() {
       gender: profile.gender || "",
       city: profile.city || "",
     });
+    setPersonalErrors({});
+    setPersonalTouched({});
     setIsEditingPersonal(false);
   };
 
@@ -909,23 +1014,67 @@ export default function ProfilePage() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <Field label="Nome" disabled={!isEditingPersonal}>
-                <input value={personalForm.firstName} onChange={(event) => setPersonalForm((current) => ({ ...current, firstName: event.target.value }))} disabled={!isEditingPersonal} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle} />
+                <input
+                  id="personal-firstName"
+                  value={personalForm.firstName}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, firstName: event.target.value }))}
+                  onBlur={() => {
+                    setPersonalTouched((t) => ({ ...t, firstName: true }));
+                    if (isEditingPersonal) setPersonalForm((c) => ({ ...c, firstName: cleanName(c.firstName) }));
+                  }}
+                  disabled={!isEditingPersonal}
+                  aria-invalid={!!(personalErrors.firstName && personalTouched.firstName)}
+                  aria-describedby={personalErrors.firstName && personalTouched.firstName ? "personal-firstName-error" : undefined}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal
+                    ? { ...inputStyle, borderColor: personalErrors.firstName && personalTouched.firstName ? RED : "#F2D4CC" }
+                    : inputDisabledStyle}
+                />
+                {personalErrors.firstName && personalTouched.firstName && (
+                  <p id="personal-firstName-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.firstName}</p>
+                )}
               </Field>
               <Field label="Apelido" disabled={!isEditingPersonal}>
-                <input value={personalForm.lastName} onChange={(event) => setPersonalForm((current) => ({ ...current, lastName: event.target.value }))} disabled={!isEditingPersonal} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle} />
+                <input
+                  id="personal-lastName"
+                  value={personalForm.lastName}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, lastName: event.target.value }))}
+                  onBlur={() => {
+                    setPersonalTouched((t) => ({ ...t, lastName: true }));
+                    if (isEditingPersonal) setPersonalForm((c) => ({ ...c, lastName: cleanName(c.lastName) }));
+                  }}
+                  disabled={!isEditingPersonal}
+                  aria-invalid={!!(personalErrors.lastName && personalTouched.lastName)}
+                  aria-describedby={personalErrors.lastName && personalTouched.lastName ? "personal-lastName-error" : undefined}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal
+                    ? { ...inputStyle, borderColor: personalErrors.lastName && personalTouched.lastName ? RED : "#F2D4CC" }
+                    : inputDisabledStyle}
+                />
+                {personalErrors.lastName && personalTouched.lastName && (
+                  <p id="personal-lastName-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.lastName}</p>
+                )}
               </Field>
               <Field label={isXdigitalEmail && isEditingPersonal ? "Email real" : "Email"} disabled={!isXdigitalEmail || !isEditingPersonal}>
                 <div className="relative">
                   {isXdigitalEmail && isEditingPersonal ? (
                     <>
                       <input
+                        id="personal-email"
                         type="email"
+                        inputMode="email"
                         value={personalForm.email}
                         onChange={(event) => setPersonalForm((current) => ({ ...current, email: event.target.value }))}
+                        onBlur={() => setPersonalTouched((t) => ({ ...t, email: true }))}
                         placeholder="o-teu@email.com"
+                        aria-invalid={!!(personalErrors.email && personalTouched.email)}
+                        aria-describedby={personalErrors.email && personalTouched.email ? "personal-email-error" : undefined}
                         className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
-                        style={inputStyle}
+                        style={{ ...inputStyle, borderColor: personalErrors.email && personalTouched.email ? RED : "#F2D4CC" }}
                       />
+                      {personalErrors.email && personalTouched.email && (
+                        <p id="personal-email-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.email}</p>
+                      )}
                       <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
                         A tua conta foi criada via telefone. Adiciona um email real para receber confirmacoes.
                       </p>
@@ -956,13 +1105,44 @@ export default function ProfilePage() {
                 </div>
               </Field>
               <Field label="Telefone" disabled={!isEditingPersonal}>
-                <input value={personalForm.phoneNumber} onChange={(event) => setPersonalForm((current) => ({ ...current, phoneNumber: event.target.value }))} disabled={!isEditingPersonal} placeholder="+258 8X XXX XXXX" className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle} />
+                <input
+                  id="personal-phoneNumber"
+                  type="tel"
+                  inputMode="tel"
+                  value={personalForm.phoneNumber}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, phoneNumber: event.target.value }))}
+                  onBlur={() => setPersonalTouched((t) => ({ ...t, phoneNumber: true }))}
+                  disabled={!isEditingPersonal}
+                  placeholder="+258 8X XXX XXXX"
+                  aria-invalid={!!(personalErrors.phoneNumber && personalTouched.phoneNumber)}
+                  aria-describedby={personalErrors.phoneNumber && personalTouched.phoneNumber ? "personal-phoneNumber-error" : undefined}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal
+                    ? { ...inputStyle, borderColor: personalErrors.phoneNumber && personalTouched.phoneNumber ? RED : "#F2D4CC" }
+                    : inputDisabledStyle}
+                />
+                {personalErrors.phoneNumber && personalTouched.phoneNumber && (
+                  <p id="personal-phoneNumber-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.phoneNumber}</p>
+                )}
               </Field>
               <Field label="Data de nascimento" disabled={!isEditingPersonal}>
-                <input type="date" value={personalForm.birthDate} onChange={(event) => setPersonalForm((current) => ({ ...current, birthDate: event.target.value }))} disabled={!isEditingPersonal} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle} />
+                <input
+                  type="date"
+                  value={personalForm.birthDate}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, birthDate: event.target.value }))}
+                  disabled={!isEditingPersonal}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal ? inputStyle : inputDisabledStyle}
+                />
               </Field>
               <Field label="Genero" disabled={!isEditingPersonal}>
-                <select value={personalForm.gender} onChange={(event) => setPersonalForm((current) => ({ ...current, gender: event.target.value }))} disabled={!isEditingPersonal} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle}>
+                <select
+                  value={personalForm.gender}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, gender: event.target.value }))}
+                  disabled={!isEditingPersonal}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal ? inputStyle : inputDisabledStyle}
+                >
                   <option value="">Selecionar</option>
                   <option value="MASCULINO">Masculino</option>
                   <option value="FEMININO">Feminino</option>
@@ -970,7 +1150,26 @@ export default function ProfilePage() {
                 </select>
               </Field>
               <Field label="Cidade" disabled={!isEditingPersonal} full>
-                <input value={personalForm.city} onChange={(event) => setPersonalForm((current) => ({ ...current, city: event.target.value }))} disabled={!isEditingPersonal} placeholder="Ex: Maputo" className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition" style={isEditingPersonal ? inputStyle : inputDisabledStyle} />
+                <input
+                  id="personal-city"
+                  value={personalForm.city}
+                  onChange={(event) => setPersonalForm((current) => ({ ...current, city: event.target.value }))}
+                  onBlur={() => {
+                    setPersonalTouched((t) => ({ ...t, city: true }));
+                    if (isEditingPersonal) setPersonalForm((c) => ({ ...c, city: cleanCity(c.city) }));
+                  }}
+                  disabled={!isEditingPersonal}
+                  placeholder="Ex: Maputo"
+                  aria-invalid={!!(personalErrors.city && personalTouched.city)}
+                  aria-describedby={personalErrors.city && personalTouched.city ? "personal-city-error" : undefined}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none transition"
+                  style={isEditingPersonal
+                    ? { ...inputStyle, borderColor: personalErrors.city && personalTouched.city ? RED : "#F2D4CC" }
+                    : inputDisabledStyle}
+                />
+                {personalErrors.city && personalTouched.city && (
+                  <p id="personal-city-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.city}</p>
+                )}
               </Field>
             </div>
           </section>
@@ -1039,25 +1238,108 @@ export default function ProfilePage() {
               <div className="mt-6 rounded-[24px] border bg-[#FFFDFC] p-5" style={{ borderColor: "#F2D4CC" }}>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Nome da morada">
-                    <input value={addressForm.label} onChange={(event) => setAddressForm((current) => ({ ...current, label: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      id="addr-label"
+                      value={addressForm.label}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, label: event.target.value }))}
+                      onBlur={() => setAddressTouched((t) => ({ ...t, label: true }))}
+                      aria-invalid={!!(addressErrors.label && addressTouched.label)}
+                      aria-describedby={addressErrors.label && addressTouched.label ? "addr-label-error" : undefined}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ ...inputStyle, borderColor: addressErrors.label && addressTouched.label ? RED : "#F2D4CC" }}
+                    />
+                    {addressErrors.label && addressTouched.label && (
+                      <p id="addr-label-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.label}</p>
+                    )}
                   </Field>
                   <Field label="Cidade">
-                    <input value={addressForm.city} onChange={(event) => setAddressForm((current) => ({ ...current, city: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      id="addr-city"
+                      value={addressForm.city}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, city: event.target.value }))}
+                      onBlur={() => {
+                        setAddressTouched((t) => ({ ...t, city: true }));
+                        setAddressForm((c) => ({ ...c, city: cleanCity(c.city) }));
+                      }}
+                      aria-invalid={!!(addressErrors.city && addressTouched.city)}
+                      aria-describedby={addressErrors.city && addressTouched.city ? "addr-city-error" : undefined}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ ...inputStyle, borderColor: addressErrors.city && addressTouched.city ? RED : "#F2D4CC" }}
+                    />
+                    {addressErrors.city && addressTouched.city && (
+                      <p id="addr-city-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.city}</p>
+                    )}
                   </Field>
                   <Field label="Bairro">
-                    <input value={addressForm.neighborhood} onChange={(event) => setAddressForm((current) => ({ ...current, neighborhood: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      id="addr-neighborhood"
+                      value={addressForm.neighborhood}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, neighborhood: event.target.value }))}
+                      onBlur={() => {
+                        setAddressTouched((t) => ({ ...t, neighborhood: true }));
+                        setAddressForm((c) => ({ ...c, neighborhood: cleanAddress(c.neighborhood) }));
+                      }}
+                      aria-invalid={!!(addressErrors.neighborhood && addressTouched.neighborhood)}
+                      aria-describedby={addressErrors.neighborhood && addressTouched.neighborhood ? "addr-neighborhood-error" : undefined}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ ...inputStyle, borderColor: addressErrors.neighborhood && addressTouched.neighborhood ? RED : "#F2D4CC" }}
+                    />
+                    {addressErrors.neighborhood && addressTouched.neighborhood && (
+                      <p id="addr-neighborhood-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.neighborhood}</p>
+                    )}
                   </Field>
                   <Field label="Rua">
-                    <input value={addressForm.street} onChange={(event) => setAddressForm((current) => ({ ...current, street: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      id="addr-street"
+                      value={addressForm.street}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, street: event.target.value }))}
+                      onBlur={() => {
+                        setAddressTouched((t) => ({ ...t, street: true }));
+                        setAddressForm((c) => ({ ...c, street: cleanAddress(c.street) }));
+                      }}
+                      aria-invalid={!!(addressErrors.street && addressTouched.street)}
+                      aria-describedby={addressErrors.street && addressTouched.street ? "addr-street-error" : undefined}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ ...inputStyle, borderColor: addressErrors.street && addressTouched.street ? RED : "#F2D4CC" }}
+                    />
+                    {addressErrors.street && addressTouched.street && (
+                      <p id="addr-street-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.street}</p>
+                    )}
                   </Field>
                   <Field label="Casa / Numero">
-                    <input value={addressForm.houseNumber} onChange={(event) => setAddressForm((current) => ({ ...current, houseNumber: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      value={addressForm.houseNumber}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, houseNumber: event.target.value }))}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={inputStyle}
+                    />
                   </Field>
                   <Field label="Google Maps">
-                    <input value={addressForm.googleMapsLink} onChange={(event) => setAddressForm((current) => ({ ...current, googleMapsLink: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      id="addr-googleMapsLink"
+                      type="url"
+                      inputMode="url"
+                      value={addressForm.googleMapsLink}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, googleMapsLink: event.target.value }))}
+                      onBlur={() => setAddressTouched((t) => ({ ...t, googleMapsLink: true }))}
+                      placeholder="https://maps.google.com/..."
+                      aria-invalid={!!(addressErrors.googleMapsLink && addressTouched.googleMapsLink)}
+                      aria-describedby={addressErrors.googleMapsLink && addressTouched.googleMapsLink ? "addr-googleMapsLink-error" : undefined}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={{ ...inputStyle, borderColor: addressErrors.googleMapsLink && addressTouched.googleMapsLink ? RED : "#F2D4CC" }}
+                    />
+                    {addressErrors.googleMapsLink && addressTouched.googleMapsLink && (
+                      <p id="addr-googleMapsLink-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.googleMapsLink}</p>
+                    )}
                   </Field>
                   <Field label="Referencia" full>
-                    <input value={addressForm.reference} onChange={(event) => setAddressForm((current) => ({ ...current, reference: event.target.value }))} className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={inputStyle} />
+                    <input
+                      value={addressForm.reference}
+                      onChange={(event) => setAddressForm((current) => ({ ...current, reference: event.target.value }))}
+                      onBlur={() => setAddressForm((c) => ({ ...c, reference: c.reference ? cleanMessage(c.reference) : "" }))}
+                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      style={inputStyle}
+                    />
                   </Field>
                 </div>
 
@@ -1070,7 +1352,17 @@ export default function ProfilePage() {
                   <button type="button" onClick={handleSubmitAddress} disabled={savingAddress} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
                     {savingAddress ? "A guardar..." : addressForm.id ? "Guardar morada" : "Adicionar morada"}
                   </button>
-                  <button type="button" onClick={() => { setAddressFormOpen(false); setAddressForm(emptyAddressForm); }} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED_DARK }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddressFormOpen(false);
+                      setAddressForm(emptyAddressForm);
+                      setAddressErrors({});
+                      setAddressTouched({});
+                    }}
+                    className="rounded-2xl border px-4 py-2.5 text-sm font-bold"
+                    style={{ borderColor: "#F2D4CC", color: RED_DARK }}
+                  >
                     Cancelar
                   </button>
                 </div>
