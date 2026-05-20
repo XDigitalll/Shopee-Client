@@ -350,9 +350,19 @@ export default function NewExternalOrderPage() {
               </div>
             ) : null}
 
-            <div className="mt-5 inline-flex flex-col gap-1 rounded-2xl px-5 py-4" style={{ background: SOFT, color: RED }}>
-              <span className="text-xs font-black uppercase tracking-[0.18em]">Referencia do pedido</span>
-              <span className="font-[family-name:var(--font-sora)] text-2xl font-black">{successOrder.number}</span>
+            <div className="mt-5 flex flex-wrap items-start gap-4">
+              <div className="inline-flex flex-col gap-1 rounded-2xl px-5 py-4" style={{ background: SOFT, color: RED }}>
+                <span className="text-xs font-black uppercase tracking-[0.18em]">Referencia do pedido</span>
+                <span className="font-[family-name:var(--font-sora)] text-2xl font-black">{successOrder.number}</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: "#ECFDF5" }}>
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="#166534" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+                <span className="text-xs font-black" style={{ color: "#166534" }}>
+                  Respondemos normalmente em menos de 10 minutos
+                </span>
+              </div>
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -385,6 +395,13 @@ export default function NewExternalOrderPage() {
                 </>
               ) : null}
 
+              <Link
+                href={`/track/${encodeURIComponent(successOrder.number)}`}
+                className="rounded-2xl px-5 py-3 text-center text-sm font-black text-white sm:col-span-2"
+                style={{ background: RED }}
+              >
+                Rastrear pedido
+              </Link>
               <a
                 href={buildTelegramUrl(successOrder.number)}
                 target="_blank"
@@ -404,8 +421,8 @@ export default function NewExternalOrderPage() {
               </button>
               <Link
                 href="/store"
-                className="rounded-2xl px-5 py-3 text-center text-sm font-black text-white"
-                style={{ background: RED }}
+                className="rounded-2xl border px-5 py-3 text-center text-sm font-black"
+                style={{ borderColor: BORDER, color: RED, background: "white" }}
               >
                 Continuar comprando
               </Link>

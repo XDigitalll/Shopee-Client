@@ -62,3 +62,9 @@ describe("isProtected — public exceptions within protected prefix", () => {
   test("/orders/external/new/ is public", () => assert.equal(isProtected("/orders/external/new/"), false));
   test("/orders/external (not an exception)", () => assert.equal(isProtected("/orders/external"), true));
 });
+
+describe("isProtected — public tracking routes", () => {
+  test("/track is public (no login required)", () => assert.equal(isProtected("/track"), false));
+  test("/track/SMZ-ORD-2026-000041 is public", () => assert.equal(isProtected("/track/SMZ-ORD-2026-000041"), false));
+  test("/track/REF/anything is public", () => assert.equal(isProtected("/track/REF/anything"), false));
+});

@@ -351,6 +351,7 @@ export default function OrdersPage() {
   const [deliveryFormOrderId, setDeliveryFormOrderId] = useState<number | null>(null);
   const [deliveryForms, setDeliveryForms] = useState<Record<number, DeliveryFormState>>({});
   const [notificationSummary, setNotificationSummary] = useState<Record<number, CustomerOrderNotificationSummary>>({});
+  const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!token) return;
@@ -492,6 +493,55 @@ export default function OrdersPage() {
     { label: "Entregues", value: stats.delivered, accent: GREEN },
   ];
 
+  function buildVerticalTimeline(order: Order) {
+    const s = effectiveOrderStatus(order);
+    const isExternal = order.type === "EXTERNAL";
+    const isCancelled = s === "CANCELLED" || s === "FAILED";
+
+    type Step = { key: string; label: string; desc: string; done: boolean; current: boolean; ts: string | null };
+    const steps: Step[] = [];
+
+    const STAGES_EXT = ["RECEIVED", "PRICING", "AWAITING_PAYMENT", "CONFIRMED", "PROCESSING", "INTERNATIONAL_TRANSIT", "AT_HQ", "ON_THE_WAY", "DELIVERED"];
+    const STAGES_INT = ["RECEIVED", "AWAITING_PAYMENT", "CONFIRMED", "ON_THE_WAY", "DELIVERED"];
+    const stages = isExternal ? STAGES_EXT : STAGES_INT;
+    const currentStage = customerStage(s);
+    const currentIdx = stages.indexOf(currentStage);
+
+    const stageLabels: Record<string, [string, string]> = {
+      RECEIVED:             ["Pedido recebido",        "Enviaste o pedido à equipa ShopeeX."],
+      PRICING:              ["Em análise",             "A equipa está a pesquisar preços e disponibilidade."],
+      AWAITING_PAYMENT:     ["Aguardando pagamento",   "A cotação foi enviada. Confirma e faz o pagamento para avançar."],
+      CONFIRMED:            ["Pagamento confirmado",   "O pagamento foi verificado. Vamos agora comprar o produto."],
+      PROCESSING:           ["Em processamento",       "O produto foi encomendado e está em trânsito internacional."],
+      INTERNATIONAL_TRANSIT:["Em trânsito",            "O produto está a viajar para Moçambique."],
+      AT_HQ:                ["Na nossa sede",          "O produto chegou a Maputo e está pronto para entrega."],
+      ON_THE_WAY:           ["A caminho de ti",        "O estafeta está a caminho da tua morada."],
+      DELIVERED:            ["Entregue!",              "Pedido concluído com sucesso. Obrigado pela confiança!"],
+    };
+
+    const tsForStage = (idx: number): string | null => {
+      const stage = stages[idx];
+      if (stage === "RECEIVED") return order.orderDate ?? null;
+      if (["CONFIRMED", "AWAITING_PAYMENT"].includes(stage)) return order.paymentDate ?? null;
+      if (["DELIVERED", "ON_THE_WAY", "AT_HQ"].includes(stage)) return order.deliveryDate ?? null;
+      return null;
+    };
+
+    for (let i = 0; i < stages.length; i++) {
+      const stage = stages[i];
+      const [label, desc] = stageLabels[stage] ?? [stage, ""];
+      const done = isCancelled ? false : i < currentIdx;
+      const current = !isCancelled && i === currentIdx;
+      steps.push({ key: stage, label, desc, done, current, ts: done || current ? tsForStage(i) : null });
+    }
+
+    if (isCancelled) {
+      steps.push({ key: "CANCELLED", label: "Cancelado", desc: "Este pedido foi cancelado.", done: false, current: true, ts: null });
+    }
+
+    return steps;
+  }
+
   const renderOrderCard = (order: Order, options?: { nested?: boolean }) => {
     const isExternal = order.type === "EXTERNAL";
     const status = effectiveOrderStatus(order);
@@ -503,6 +553,7 @@ export default function OrdersPage() {
     const flowSteps = isExternal ? FLOW_STEPS_EXTERNAL : FLOW_STEPS;
     const stepIndex = isExternal ? externalStepIndex(status) : internalStepIndex(status);
     const showDeliveryForm = deliveryFormOrderId === order.id;
+    const showTimeline = timelineOrderId === order.id;
     const deliveryForm = deliveryForms[order.id] ?? buildInitialDeliveryForm(order);
     const deliveryFee = Number(order.deliveryFee || 0);
     const unreadUpdates = notificationSummary[order.id]?.unreadCount ?? 0;
@@ -749,6 +800,62 @@ export default function OrdersPage() {
             Este pedido ja entrou em processamento e nao pode ser cancelado pelo portal. Fala connosco pelo suporte.
           </div>
         )}
+
+        <div className="mt-4 border-t pt-3" style={{ borderColor: "#F2D4CC" }}>
+          <button
+            type="button"
+            onClick={() => setTimelineOrderId((prev) => (prev === order.id ? null : order.id))}
+            className="flex items-center gap-1.5 text-xs font-black"
+            style={{ color: RED }}
+          >
+            <svg
+              width="12" height="12" viewBox="0 0 20 20" fill="currentColor"
+              className={`transition-transform ${showTimeline ? "rotate-180" : ""}`}
+              aria-hidden="true"
+            >
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+            {showTimeline ? "Ocultar histórico" : "Ver histórico do pedido"}
+          </button>
+
+          {showTimeline && (
+            <ol className="mt-4 space-y-0" aria-label="Histórico do pedido">
+              {buildVerticalTimeline(order).map((step, i, arr) => {
+                const isLast = i === arr.length - 1;
+                const dotColor = step.current ? RED : step.done ? "#166534" : "#D1D5DB";
+                const lineColor = step.done ? "#166534" : "#E5E7EB";
+                return (
+                  <li key={step.key} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-black"
+                        style={{
+                          borderColor: dotColor,
+                          background: step.current ? RED : step.done ? "#ECFDF5" : "white",
+                          color: step.current ? "white" : step.done ? "#166534" : "#D1D5DB",
+                        }}
+                      >
+                        {step.done ? "✓" : step.current ? "●" : "○"}
+                      </div>
+                      {!isLast && <div className="w-px grow" style={{ background: lineColor, minHeight: "20px" }} />}
+                    </div>
+                    <div className="pb-4 pt-0.5">
+                      <p className="text-sm font-black" style={{ color: step.current ? RED : step.done ? "#1A1410" : "#9CA3AF" }}>
+                        {step.label}
+                      </p>
+                      <p className="text-xs font-medium leading-5" style={{ color: "#6B7280" }}>{step.desc}</p>
+                      {step.ts && (
+                        <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "#9CA3AF" }}>
+                          {formatDate(step.ts)}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
 
         <div className="mt-5 flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div>
