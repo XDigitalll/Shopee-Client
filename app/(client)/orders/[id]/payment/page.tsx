@@ -325,6 +325,7 @@ export default function OrderPaymentPage() {
       setFeedback(null);
       emitClientDataChanged();
       window.scrollTo({ top: 0, behavior: "smooth" });
+      return true;
     });
     if (!result) {
       setFeedback({ type: "error", msg: normalizeClientError(submitAction.error, "Não foi possível validar o pagamento. Tenta novamente.").message });

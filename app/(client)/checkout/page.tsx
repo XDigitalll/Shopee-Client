@@ -7,7 +7,6 @@ import { ClientActionFeedback, ClientFeedbackBanner, ClientSectionSkeleton } fro
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
-import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import { normalizeClientError } from "@/lib/client-errors";
 import type { Cart, CartItem, CheckoutResponse, CouponValidation, CustomerProfile, Order, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
@@ -56,7 +55,7 @@ function getInternalOrderForPayment(result: CheckoutResponse) {
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, userEmail } = useAuth();
   const [cart, setCart] = useState<Cart | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | "manual" | null>(null);
@@ -187,7 +186,7 @@ export default function CheckoutPage() {
     const sanitized = {
       ...form,
       fullName: sanitizeTextField(form.fullName).value || form.fullName,
-      email: normalizeEmail(form.email),
+      email: userEmail ? normalizeEmail(userEmail) : "",
       primaryPhoneNumber: normalizePhone(form.primaryPhoneNumber),
       alternativePhoneNumber: form.alternativePhoneNumber.trim()
         ? normalizePhone(form.alternativePhoneNumber)
@@ -462,20 +461,17 @@ export default function CheckoutPage() {
                 {/* Email */}
                 <div>
                   <label className="mb-2 block text-sm font-semibold" htmlFor="co-email">Email</label>
-                  <input
+                  <div
                     id="co-email"
-                    type="email"
-                    inputMode="email"
-                    value={form.email}
-                    onChange={(e) => setForm((c) => ({ ...c, email: e.target.value }))}
-                    onBlur={() => fv.touch("email")}
-                    className={fieldClass}
-                    style={getFieldStyle(Boolean(fv.errors.email))}
-                    aria-invalid={Boolean(fv.errors.email)}
-                    aria-describedby={fv.errors.email ? "co-email-err" : undefined}
-                    ref={fv.registerRef("email")}
-                  />
-                  {fv.errors.email ? <p id="co-email-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.email}</p> : null}
+                    className={`${fieldClass} flex items-center`}
+                    style={{ borderColor: "#F2D4CC", background: "#F9FAFB", color: userEmail ? "#374151" : "#9CA3AF" }}
+                    aria-readonly="true"
+                  >
+                    {userEmail || "Email não adicionado"}
+                  </div>
+                  <p className="mt-1.5 text-xs" style={{ color: "#6B7280" }}>
+                    O email da conta não é alterado no checkout. Podes adicionar ou verificar email no perfil.
+                  </p>
                 </div>
 
                 {/* Método de entrega */}

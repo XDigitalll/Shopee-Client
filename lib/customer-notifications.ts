@@ -3,6 +3,7 @@ export type CustomerNotificationSeverity = "INFO" | "SUCCESS" | "WARNING" | "ACT
 export type CustomerNotificationType =
   | "ORDER_QUOTE_READY"
   | "ORDER_PAYMENT_APPROVED"
+  | "ORDER_PAYMENT_SUBMITTED"
   | "ORDER_PAYMENT_REJECTED"
   | "ORDER_READY_FOR_PAYMENT"
   | "ORDER_READY_FOR_DELIVERY"

@@ -5,11 +5,13 @@ export function buildDisplayName(profile: CustomerProfile | null) {
 }
 
 export function createPrefilledContact(profile: CustomerProfile | null) {
+  const email = profile?.email?.trim() || "";
+  const realEmail = email && !email.toLowerCase().endsWith("@xdigital.local") ? email : "";
   return {
     fullName: buildDisplayName(profile),
     primaryPhoneNumber: profile?.phoneNumber || "+258",
     alternativePhoneNumber: profile?.alternativePhoneNumber || "",
-    email: profile?.email || "",
+    email: realEmail,
   };
 }
 
