@@ -8,7 +8,6 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
 import { cleanDisplayText } from "@/lib/text";
-import type { CustomerOrderNotificationSummary } from "@/lib/customer-notifications";
 import type { Order, OrderItem, OrderStats } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 
@@ -350,7 +349,6 @@ export default function OrdersPage() {
   const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
   const [deliveryFormOrderId, setDeliveryFormOrderId] = useState<number | null>(null);
   const [deliveryForms, setDeliveryForms] = useState<Record<number, DeliveryFormState>>({});
-  const [notificationSummary, setNotificationSummary] = useState<Record<number, CustomerOrderNotificationSummary>>({});
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -359,14 +357,12 @@ export default function OrdersPage() {
       setIsLoading(true);
     }
     try {
-      const [ordersData, statsData, notificationData] = await Promise.all([
+      const [ordersData, statsData] = await Promise.all([
         fetchWithToken<Order[]>("/api/orders/my-orders", token),
         fetchWithToken<OrderStats>("/api/orders/my-stats", token),
-        apiFetch<CustomerOrderNotificationSummary[]>("customer/orders/notification-summary", { token }),
       ]);
       setOrders(ordersData);
       setStats(statsData);
-      setNotificationSummary(Object.fromEntries((notificationData ?? []).map((item) => [item.orderId, item])));
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar os pedidos." });
     } finally {
@@ -487,6 +483,12 @@ export default function OrdersPage() {
     }
   };
 
+  const markOrderUpdatesSeen = async (orderId: number) => {
+    if (!token) return;
+    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, unreadUpdatesCount: 0, requiresAction: false } : order));
+    await apiFetch(`customer/orders/${orderId}/mark-updates-seen`, { method: "PATCH", token }).catch(() => null);
+  };
+
   const statsCards = [
     { label: "Total de pedidos", value: stats.totalOrders, accent: RED },
     { label: "Em andamento", value: stats.inProgress, accent: "#92400E" },
@@ -556,7 +558,9 @@ export default function OrdersPage() {
     const showTimeline = timelineOrderId === order.id;
     const deliveryForm = deliveryForms[order.id] ?? buildInitialDeliveryForm(order);
     const deliveryFee = Number(order.deliveryFee || 0);
-    const unreadUpdates = notificationSummary[order.id]?.unreadCount ?? 0;
+    const unreadUpdates = Number(order.unreadUpdatesCount ?? 0);
+    const requiresAction = Boolean(order.requiresAction);
+    const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
 
     return (
       <article
@@ -578,10 +582,10 @@ export default function OrdersPage() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Pedido {orderDisplayCode(order)}</h2>
-                {unreadUpdates > 0 ? (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black" style={{ background: "#FFF7ED", color: "#C2410C" }}>
+                {requiresAction || unreadUpdates > 0 ? (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black" style={{ background: requiresAction ? "#FEE2E2" : "#FFF7ED", color: requiresAction ? "#B42318" : "#C2410C" }}>
                     <span className="h-2 w-2 rounded-full" style={{ background: "#F97316" }} />
-                    Nova atualização
+                    {requiresAction ? "Ação necessária" : "Nova atualização"} · {attentionLabel}
                   </span>
                 ) : null}
                 <span className="rounded-full px-2.5 py-1 text-xs font-black" style={{ background: isExternal ? "#FFF7ED" : "#ECFDF5", color: isExternal ? "#C2410C" : GREEN }}>
@@ -634,7 +638,7 @@ export default function OrdersPage() {
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href={`/orders/${order.id}/quote`} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>Ver proposta</Link>
+              <Link href={`/orders/${order.id}/quote`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.nextActionLabel || "Ver cotação"}</Link>
               <button type="button" onClick={() => setConfirmAction({ kind: "cancel", orderId: order.id })} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-bold" style={{ background: "#FCEBEB", color: "#B42318" }}>
                 {busyOrderId === order.id ? "A recusar..." : "Recusar"}
               </button>
@@ -804,7 +808,10 @@ export default function OrdersPage() {
         <div className="mt-4 border-t pt-3" style={{ borderColor: "#F2D4CC" }}>
           <button
             type="button"
-            onClick={() => setTimelineOrderId((prev) => (prev === order.id ? null : order.id))}
+            onClick={() => {
+              setTimelineOrderId((prev) => (prev === order.id ? null : order.id));
+              if (!showTimeline) void markOrderUpdatesSeen(order.id);
+            }}
             className="flex items-center gap-1.5 text-xs font-black"
             style={{ color: RED }}
           >
@@ -864,8 +871,8 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {(status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{status === "PAYMENT_REJECTED" ? "Reenviar pagamento" : "Pagar agora"}</Link>}
-            {status === "SHIPPED" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear envio</a>}
+            {(status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.nextActionLabel || (status === "PAYMENT_REJECTED" ? "Enviar novo comprovativo" : "Submeter pagamento")}</Link>}
+            {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
             {(status === "OUT_FOR_DELIVERY" || (status === "ARRIVED" && order.deliveryMethod === "STORE_PICKUP")) && (
               <button
                 type="button"
@@ -877,7 +884,7 @@ export default function OrdersPage() {
                 {busyOrderId === order.id ? "A confirmar..." : "Confirmar recebido"}
               </button>
             )}
-            {status === "DELIVERED" && <Link href={`/orders/${order.id}/receipt`} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>Ver recibo</Link>}
+            {status === "DELIVERED" && <Link href={`/orders/${order.id}/receipt`} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>Ver detalhes</Link>}
             {status === "DELIVERED" && <Link href="/store" className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>Repetir pedido</Link>}
             {canCustomerCancel(status) && (
               <button

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { emitClientDataChanged } from "@/lib/api-client";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
@@ -15,6 +15,7 @@ import type { Order } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientActionFeedback } from "@/components/client-feedback-state";
 import { RelatedPurchasePanel } from "@/components/orders/related-purchase-panel";
+import { expireStoredSession } from "@/lib/auth";
 
 const RED = "#E8431A";
 const GREEN = "#2E8B57";
@@ -150,13 +151,19 @@ function methodInstructions(method: PaymentMethodType, amount: number) {
   ];
 }
 
-function paymentSubmitErrorMessage(payload: unknown) {
+function paymentSubmitErrorMessage(payload: unknown, status?: number) {
   const message = payload && typeof payload === "object"
     ? String((payload as Record<string, unknown>).message || (payload as Record<string, unknown>).error || "")
     : "";
+  const code = payload && typeof payload === "object"
+    ? String((payload as Record<string, unknown>).code || "")
+    : "";
 
-  if (/conta.*dados|telefone.*email|email.*telefone/i.test(message)) {
-    return "Nao foi possivel submeter o pagamento nesta sessao. Confirma que continuas autenticado e tenta novamente.";
+  if (status === 401 || code === "AUTHENTICATION_REQUIRED") {
+    return "A tua sessão expirou. Entra novamente para submeter o pagamento.";
+  }
+  if (code === "VERIFICATION_REQUIRED") {
+    return "Verifica o teu email ou telefone antes de submeter o pagamento.";
   }
 
   return message || "Nao foi possivel submeter o pagamento.";
@@ -164,7 +171,8 @@ function paymentSubmitErrorMessage(payload: unknown) {
 
 export default function OrderPaymentPage() {
   const params = useParams<{ id: string }>();
-  const { token } = useAuth();
+  const router = useRouter();
+  const { token, isAuthenticated } = useAuth();
   const orderId = Number(params.id);
   const [order, setOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -279,7 +287,14 @@ export default function OrderPaymentPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token || !order) return;
+    if (!isAuthenticated || !token) {
+      const message = "A tua sessão expirou. Entra novamente para submeter o pagamento.";
+      setFeedback({ type: "error", msg: message });
+      await expireStoredSession();
+      router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
+      return;
+    }
+    if (!order) return;
 
     const validationError = validateForm();
     if (validationError) {
@@ -318,7 +333,12 @@ export default function OrderPaymentPage() {
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(paymentSubmitErrorMessage(data));
+        const message = paymentSubmitErrorMessage(data, response.status);
+        if (response.status === 401) {
+          await expireStoredSession();
+          router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
+        }
+        throw new Error(message);
       }
       setSubmission(data as SubmissionResponse);
       setOrder((current) => current ? { ...current, status: "PAYMENT_SUBMITTED" } : current);
@@ -328,7 +348,7 @@ export default function OrderPaymentPage() {
       return true;
     });
     if (!result) {
-      setFeedback({ type: "error", msg: normalizeClientError(submitAction.error, "Não foi possível validar o pagamento. Tenta novamente.").message });
+      setFeedback({ type: "error", msg: normalizeClientError(submitAction.error, "Não foi possível submeter o pagamento. Tenta novamente.").message });
     }
   }
 

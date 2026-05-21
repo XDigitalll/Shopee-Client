@@ -8,7 +8,7 @@ import { GlobalAppLoader } from "@/components/global-app-loader";
 import { Logo } from "@/components/logo";
 import { NotificationBadge } from "@/components/notification-badge";
 import { SiteFooter } from "@/components/site-footer";
-import { useCustomerNotifications } from "@/hooks/useCustomerNotifications";
+import { useOrdersAttention } from "@/hooks/useOrdersAttention";
 import type { Cart } from "@/lib/types";
 import { CLIENT_DATA_CHANGED_EVENT } from "@/lib/api-client";
 
@@ -69,7 +69,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
   const pathname = usePathname();
   const router = useRouter();
   const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, profileIncomplete, accountCompletionPercentage } = useAuth();
-  const { summary } = useCustomerNotifications();
+  const { attentionCount } = useOrdersAttention();
   const needsAuth = useMemo(() => {
     const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
     const isPublicCatalogRoute = PUBLIC_CATALOG_ROUTES.some((p) => pathname === p || (p !== "/" && pathname?.startsWith(p + "/")));
@@ -192,7 +192,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                 >
                   <span className="inline-flex items-center gap-1.5">
                     {item.label}
-                    {item.href === "/orders" && summary.ordersUnread > 0 ? <NotificationBadge count={summary.ordersUnread} tone={isActive ? "warm" : "light"} /> : null}
+                    {item.href === "/orders" && attentionCount > 0 ? <NotificationBadge count={attentionCount} tone={isActive ? "warm" : "light"} /> : null}
                   </span>
                 </Link>
               );
@@ -239,7 +239,6 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                       ) : (
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{userInitials}</span>
                       )}
-                      {summary.criticalUnread > 0 ? <NotificationBadge dot tone="light" className="absolute -right-0.5 -top-0.5" /> : null}
                     </span>
                     <div className="pr-2">
                       <p className="max-w-28 truncate text-xs font-semibold">{userLabel}</p>
@@ -261,7 +260,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
           </div>
 
           <button type="button" className="relative sm:hidden ml-auto p-2 rounded-lg text-white/90 hover:bg-white/15" onClick={() => setMenuOpen((value) => !value)} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
-            {summary.unreadTotal > 0 ? <NotificationBadge count={summary.unreadTotal} tone="light" className="absolute -right-1 -top-1" /> : null}
+            {attentionCount > 0 ? <NotificationBadge count={attentionCount} tone="light" className="absolute -right-1 -top-1" /> : null}
             {menuOpen ? <CloseIcon /> : <MenuIcon />}
           </button>
         </div>
@@ -289,11 +288,6 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                   </div>
                   <Link href="/profile" onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
                     Meu perfil
-                    {summary.criticalUnread > 0 ? <NotificationBadge count={summary.criticalUnread} tone="light" /> : null}
-                  </Link>
-                  <Link href="/notifications" onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
-                    Notificações
-                    {summary.unreadTotal > 0 ? <NotificationBadge count={summary.unreadTotal} tone="light" /> : null}
                   </Link>
                   <Link href="/cart" onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
                     Carrinho
@@ -308,7 +302,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
               {navItems.map((item) => (
                 <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
                   {item.label}
-                  {item.href === "/orders" && summary.ordersUnread > 0 ? <NotificationBadge count={summary.ordersUnread} tone="light" /> : null}
+                  {item.href === "/orders" && attentionCount > 0 ? <NotificationBadge count={attentionCount} tone="light" /> : null}
                 </Link>
               ))}
               {token && (

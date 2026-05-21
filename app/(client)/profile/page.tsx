@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
 import { ClientConfirmDialog, ClientFeedbackDock } from "@/components/client-feedback-state";
+import { GoogleMapsLocationField } from "@/components/google-maps-location-field";
 import type { CustomerProfile, OrderStats, UserAddress, VerificationDispatchResponse } from "@/lib/types";
 import { normalizePhone, normalizeEmail } from "@/utils/input-normalizer";
 import { cleanName, cleanCity, cleanAddress, cleanMessage } from "@/utils/text-cleaner";
@@ -423,11 +424,6 @@ export default function ProfilePage() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [verifyCooldown]);
-
-  const notificationCount = useMemo(() => {
-    if (!profile) return "0";
-    return String([profile.notifyOrderUpdates, profile.notifyQuoteReady, profile.notifyPromotions, profile.notifySms].filter(Boolean).length);
-  }, [profile]);
 
   const fullName = useMemo(() => {
     const names = [personalForm.firstName, personalForm.lastName].filter(Boolean).join(" ").trim();
@@ -863,7 +859,7 @@ export default function ProfilePage() {
           <section className="rounded-[28px] border bg-white p-3 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
             <SidebarButton active={active === "personal"} icon={<ProfileIcon />} label="Dados pessoais" onClick={() => goToSection("personal")} />
             <SidebarButton active={active === "addresses"} icon={<LocationIcon />} label="Moradas" onClick={() => goToSection("addresses")} />
-            <SidebarButton active={active === "notifications"} icon={<BellIcon />} label="Notificacoes" badge={notificationCount} onClick={() => goToSection("notifications")} />
+            <SidebarButton active={active === "notifications"} icon={<BellIcon />} label="Notificacoes" onClick={() => goToSection("notifications")} />
             <SidebarButton active={active === "security"} icon={<ShieldIcon />} label="Seguranca" onClick={() => goToSection("security")} />
             <SidebarButton icon={<OrdersIcon />} label="Os meus pedidos" onClick={() => router.push("/orders")} />
             <SidebarButton danger icon={<LogoutIcon />} label="Terminar sessao" onClick={() => setConfirmLogoutOpen(true)} />
@@ -1315,22 +1311,17 @@ export default function ProfilePage() {
                     />
                   </Field>
                   <Field label="Google Maps">
-                    <input
+                    <GoogleMapsLocationField
                       id="addr-googleMapsLink"
-                      type="url"
-                      inputMode="url"
+                      label=""
                       value={addressForm.googleMapsLink}
-                      onChange={(event) => setAddressForm((current) => ({ ...current, googleMapsLink: event.target.value }))}
+                      onChange={(value) => setAddressForm((current) => ({ ...current, googleMapsLink: value }))}
                       onBlur={() => setAddressTouched((t) => ({ ...t, googleMapsLink: true }))}
-                      placeholder="https://maps.google.com/..."
-                      aria-invalid={!!(addressErrors.googleMapsLink && addressTouched.googleMapsLink)}
-                      aria-describedby={addressErrors.googleMapsLink && addressTouched.googleMapsLink ? "addr-googleMapsLink-error" : undefined}
-                      className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                      style={{ ...inputStyle, borderColor: addressErrors.googleMapsLink && addressTouched.googleMapsLink ? RED : "#F2D4CC" }}
+                      inputClassName="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                      inputStyle={{ ...inputStyle, borderColor: addressErrors.googleMapsLink && addressTouched.googleMapsLink ? RED : "#F2D4CC" }}
+                      error={addressErrors.googleMapsLink && addressTouched.googleMapsLink ? addressErrors.googleMapsLink : null}
+                      hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
                     />
-                    {addressErrors.googleMapsLink && addressTouched.googleMapsLink && (
-                      <p id="addr-googleMapsLink-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{addressErrors.googleMapsLink}</p>
-                    )}
                   </Field>
                   <Field label="Referencia" full>
                     <input

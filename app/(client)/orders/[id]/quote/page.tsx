@@ -322,17 +322,6 @@ export default function OrderQuotePage() {
             </>
           ) : null}
         </div>
-        {!showPaymentSection && order?.code && (
-          <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "#FDBA74", background: "#FFFBF5", color: "#92400E" }}>
-            <span className="font-bold">Tens o Telegram?</span>{" "}
-            Responde diretamente no chat:{" "}
-            <span className="rounded px-1 font-mono text-xs font-bold" style={{ background: "rgba(146,64,14,0.1)" }}>SIM {order.code}</span>{" "}
-            para aceitar ou{" "}
-            <span className="rounded px-1 font-mono text-xs font-bold" style={{ background: "rgba(146,64,14,0.1)" }}>NAO {order.code}</span>{" "}
-            para recusar — sem precisar de abrir o site.
-          </div>
-        )}
-
         {showPaymentSection ? (
           <section className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

@@ -7,7 +7,6 @@ const PROTECTED_PREFIXES = [
   "/profile",
   "/orders",
   "/checkout",
-  "/notifications",
   "/delivery-address",
   "/settings",
 ];

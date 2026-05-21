@@ -38,6 +38,15 @@ function getErrorMessage(payload: unknown) {
   return null;
 }
 
+function getErrorCode(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  return typeof record.code === "string" && record.code.trim() ? record.code.trim() : null;
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -67,6 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           message: getErrorMessage(payload) || "Falha ao autenticar no backend.",
+          code: getErrorCode(payload) || undefined,
         },
         { status: response.status }
       );

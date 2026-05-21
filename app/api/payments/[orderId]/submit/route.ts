@@ -19,8 +19,21 @@ function apiErrorMessage(payload: unknown) {
   return null;
 }
 
-function paymentSubmitErrorMessage(payload: unknown) {
+function apiErrorCode(payload: unknown) {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, unknown>;
+  return typeof record.code === "string" && record.code.trim() ? record.code.trim() : null;
+}
+
+function paymentSubmitErrorMessage(payload: unknown, status: number) {
+  const code = apiErrorCode(payload);
   const message = apiErrorMessage(payload);
+  if (status === 401 || code === "AUTHENTICATION_REQUIRED") {
+    return "A tua sessão expirou. Entra novamente para submeter o pagamento.";
+  }
+  if (code === "VERIFICATION_REQUIRED") {
+    return "Verifica o teu email ou telefone antes de submeter o pagamento.";
+  }
   if (message && /csrf|xsrf|token.*invalid|token.*missing|csrf.*invalido|csrf.*ausente/i.test(message)) {
     return "A validação de segurança expirou. Atualiza a página e tenta novamente.";
   }
@@ -90,7 +103,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     }
     return NextResponse.json(
-      { message: paymentSubmitErrorMessage(payload) },
+      {
+        message: paymentSubmitErrorMessage(payload, backendResponse.status),
+        code: apiErrorCode(payload) || (backendResponse.status === 401 ? "AUTHENTICATION_REQUIRED" : undefined),
+      },
       { status: backendResponse.status }
     );
   }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useMemo, useState } from "react";
+import { GoogleMapsLocationField } from "@/components/google-maps-location-field";
 import { apiFetch } from "@/lib/api-client";
 
 type FormState = {
@@ -43,7 +44,6 @@ function DeliveryAddressForm() {
     phone: normalizePhone(initialPhone) || emptyForm.phone,
   }));
   const [loading, setLoading] = useState(false);
-  const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,28 +51,6 @@ function DeliveryAddressForm() {
 
   function updateField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
-  }
-
-  function shareLocation() {
-    setError(null);
-    if (!navigator.geolocation) {
-      setError("O teu navegador nao permite partilhar localizacao automaticamente.");
-      return;
-    }
-
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        updateField("googleMapsLink", `https://www.google.com/maps?q=${latitude},${longitude}`);
-        setLocating(false);
-      },
-      () => {
-        setError("Nao foi possivel obter a localizacao. Podes colar o link do Google Maps manualmente.");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -169,16 +147,13 @@ function DeliveryAddressForm() {
           </div>
 
           <div className="rounded-[22px] bg-[#FFF7F4] p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-[#14110F]">Localizacao Google Maps</p>
-                <p className="mt-1 text-xs text-[#5F6A7A]">Opcional, mas ajuda o estafeta a encontrar mais rapido.</p>
-              </div>
-              <button type="button" onClick={shareLocation} disabled={locating} className="rounded-full border border-[#EF3B18] px-4 py-2 text-sm font-bold text-[#EF3B18] disabled:opacity-60">
-                {locating ? "A obter..." : "Partilhar localizacao"}
-              </button>
-            </div>
-            <input value={form.googleMapsLink} onChange={(event) => updateField("googleMapsLink", event.target.value)} className={fieldClass} placeholder="https://maps.google.com/..." />
+            <GoogleMapsLocationField
+              label="Localizacao Google Maps"
+              value={form.googleMapsLink}
+              onChange={(value) => updateField("googleMapsLink", value)}
+              inputClassName={fieldClass}
+              hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+            />
           </div>
 
           {error ? <p className="rounded-2xl bg-[#FFE8E1] px-4 py-3 text-sm font-semibold text-[#C71F00]">{error}</p> : null}

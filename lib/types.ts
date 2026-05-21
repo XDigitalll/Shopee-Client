@@ -234,6 +234,11 @@ export type Order = {
   lastIssueType?: string;
   deliveryNotes?: string;
   adminMessageForClient?: string;
+  unreadUpdatesCount?: number;
+  requiresAction?: boolean;
+  attentionLabel?: string;
+  nextActionLabel?: string;
+  nextActionUrl?: string;
   items?: OrderItem[];
   quote?: Quote;
   payment?: Payment;

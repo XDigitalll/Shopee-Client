@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
+import { GoogleMapsLocationField } from "@/components/google-maps-location-field";
 import { apiFetch } from "@/lib/api-client";
 import type { CustomerProfile } from "@/lib/types";
 
@@ -169,7 +170,13 @@ export default function SettingsPage() {
           <InputField label="Rua" value={form.deliveryStreet || ""} onChange={(event) => updateField("deliveryStreet", event.target.value)} />
           <InputField label="Numero da casa" value={form.houseNumber || ""} onChange={(event) => updateField("houseNumber", event.target.value)} />
           <InputField label="Referencia" value={form.deliveryReference || ""} onChange={(event) => updateField("deliveryReference", event.target.value)} hint="Vai ajudar no checkout e nas entregas ao domicilio." />
-          <InputField label="Google Maps" value={form.googleMapsLink || ""} onChange={(event) => updateField("googleMapsLink", event.target.value)} hint="Link opcional da localizacao para facilitar a entrega." />
+          <GoogleMapsLocationField
+            value={form.googleMapsLink || ""}
+            onChange={(value) => updateField("googleMapsLink", value)}
+            inputClassName="w-full rounded-2xl border bg-[#FFFBFA] px-4 py-3 text-sm outline-none"
+            inputStyle={{ borderColor: "#F2D4CC", color: "#4B5563" }}
+            hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+          />
         </div>
       );
     }

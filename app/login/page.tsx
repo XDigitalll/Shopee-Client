@@ -7,6 +7,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ClientActionError, ClientProcessingOverlay } from "@/components/client-feedback-state";
 import { Logo } from "@/components/logo";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { normalizeGoogleAuthMessage } from "@/lib/google-auth";
 
 type AuthTab = "login" | "register";
 
@@ -14,6 +15,7 @@ type LoginResponse = {
   authenticated?: boolean;
   user?: unknown;
   message?: string;
+  code?: string;
   mustChangePassword?: boolean;
 };
 
@@ -125,7 +127,7 @@ function LoginPageContent() {
     const expiredParam = searchParams.get("expired");
     if (errorParam) {
       setActiveTab("login");
-      setLoginError(errorParam);
+      setLoginError(normalizeGoogleAuthMessage(errorParam));
       return;
     }
     if (expiredParam) {
@@ -159,10 +161,13 @@ function LoginPageContent() {
       const payload = (await response.json().catch(() => ({}))) as LoginResponse;
 
       if (!response.ok || !payload.authenticated) {
+        if (payload.code === "GOOGLE_ACCOUNT_PASSWORD_NOT_SET") {
+          throw new Error(normalizeGoogleAuthMessage(payload.message));
+        }
         if (response.status === 401) {
           throw new Error(payload.message || "Email/telefone ou senha incorretos.");
         }
-        throw new Error(payload.message || "Nao foi possivel entrar na conta.");
+        throw new Error(normalizeGoogleAuthMessage(payload.message || "Nao foi possivel entrar na conta."));
       }
 
       login();

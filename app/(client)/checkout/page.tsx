@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClientActionFeedback, ClientFeedbackBanner, ClientSectionSkeleton } from "@/components/client-feedback-state";
+import { GoogleMapsLocationField } from "@/components/google-maps-location-field";
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
@@ -549,19 +550,17 @@ export default function CheckoutPage() {
                   <textarea id="co-ref" value={form.deliveryReference} onChange={(e) => setForm((c) => ({ ...c, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={isDelivery} />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-maps">Google Maps</label>
-                  <input
+                  <GoogleMapsLocationField
                     id="co-maps"
+                    label="Google Maps"
                     value={form.googleMapsLink}
-                    onChange={(e) => setForm((c) => ({ ...c, googleMapsLink: e.target.value }))}
+                    onChange={(value) => setForm((c) => ({ ...c, googleMapsLink: value }))}
                     onBlur={() => fv.touch("googleMapsLink")}
-                    className={fieldClass}
-                    style={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
-                    placeholder="https://maps.google.com/..."
-                    inputMode="url"
-                    ref={fv.registerRef("googleMapsLink")}
+                    inputClassName={fieldClass}
+                    inputStyle={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
+                    error={fv.errors.googleMapsLink}
+                    hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
                   />
-                  {fv.errors.googleMapsLink ? <p className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.googleMapsLink}</p> : null}
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold" htmlFor="co-notes">Notas</label>

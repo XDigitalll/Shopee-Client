@@ -13,7 +13,6 @@ const PROTECTED_PREFIXES = [
   "/profile",
   "/orders",
   "/checkout",
-  "/notifications",
   "/delivery-address",
   "/settings",
 ];
@@ -41,6 +40,7 @@ describe("isProtected — public routes pass through", () => {
   test("/reset-password", () => assert.equal(isProtected("/reset-password"), false));
   test("/privacy", () => assert.equal(isProtected("/privacy"), false));
   test("/terms", () => assert.equal(isProtected("/terms"), false));
+  test("/notifications redirects from the page itself", () => assert.equal(isProtected("/notifications"), false));
   test("/complete-account/profile", () => assert.equal(isProtected("/complete-account/profile"), false));
   test("/complete-account/password", () => assert.equal(isProtected("/complete-account/password"), false));
 });
@@ -52,7 +52,6 @@ describe("isProtected — protected routes require session", () => {
   test("/orders/42", () => assert.equal(isProtected("/orders/42"), true));
   test("/orders/42/payment", () => assert.equal(isProtected("/orders/42/payment"), true));
   test("/checkout", () => assert.equal(isProtected("/checkout"), true));
-  test("/notifications", () => assert.equal(isProtected("/notifications"), true));
   test("/delivery-address/PROMO123", () => assert.equal(isProtected("/delivery-address/PROMO123"), true));
   test("/settings", () => assert.equal(isProtected("/settings"), true));
 });
