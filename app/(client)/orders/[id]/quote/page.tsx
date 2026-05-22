@@ -163,12 +163,12 @@ export default function OrderQuotePage() {
     setIsBusy(true);
     setFeedback(null);
     try {
-      await apiFetch(`orders/${order.id}/payment/manual`, {
-        method: "POST",
-        token,
-        body: JSON.stringify({ method, payerName, payerPhone, transactionId, notes }),
-      });
-      router.push("/orders");
+      void method;
+      void payerName;
+      void payerPhone;
+      void transactionId;
+      void notes;
+      router.push(`/orders/${order.id}/payment`);
     } catch (error) {
       const message =
         error instanceof AuthExpiredError
