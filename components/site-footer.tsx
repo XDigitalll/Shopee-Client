@@ -12,10 +12,12 @@ const platformLinks = [
 ];
 
 const supportLinks = [
-  { href: "/#como-funciona", label: "Como funciona" },
-  { href: "/#produtos", label: "Produtos" },
-  { href: "/#pedido-externo", label: "Compra internacional" },
-  { href: "/#confianca", label: "Confianca" },
+  { href: "/how-it-works", label: "Como funciona" },
+  { href: "/privacy", label: "Politica de Privacidade" },
+  { href: "/terms", label: "Termos" },
+  { href: "/refunds", label: "Reembolsos" },
+  { href: "/delivery-policy", label: "Entrega" },
+  { href: "/contact", label: "Contacto" },
 ];
 
 export function SiteFooter() {

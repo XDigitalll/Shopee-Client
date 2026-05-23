@@ -74,6 +74,7 @@ export default function NewExternalOrderPage() {
   const [whatsappSameAsPrimary, setWhatsappSameAsPrimary] = useState<boolean | null>(null);
   const [communicationPhone, setCommunicationPhone] = useState("+258");
   const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{
@@ -147,6 +148,10 @@ export default function NewExternalOrderPage() {
       if (!PHONE_PATTERN.test(normalizePhone(communicationPhone))) {
         return "Numero WhatsApp invalido. Ex: +25884xxxxxxx.";
       }
+    }
+
+    if (!acceptedLegalTerms) {
+      return "Confirma que leste e concordas com os Termos de Uso e a Politica de Privacidade.";
     }
 
     return null;
@@ -266,6 +271,7 @@ export default function NewExternalOrderPage() {
       setPhoneNumber(phoneToKeep);
       setWhatsappSameAsPrimary(null);
       setCommunicationPhone("+258");
+      setAcceptedLegalTerms(false);
       setScreenshot(null);
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
@@ -697,9 +703,30 @@ export default function NewExternalOrderPage() {
                   </div>
                 </div>
 
+                <label className="flex items-start gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
+                  <input
+                    type="checkbox"
+                    checked={acceptedLegalTerms}
+                    onChange={(event) => setAcceptedLegalTerms(event.target.checked)}
+                    disabled={isSubmitting}
+                    className="mt-1 h-4 w-4 shrink-0 accent-[#E8431A]"
+                  />
+                  <span className="text-sm font-semibold leading-6" style={{ color: TEXT }}>
+                    Li e concordo com os{" "}
+                    <Link href="/terms" className="font-black" style={{ color: RED }}>
+                      Termos de Uso
+                    </Link>{" "}
+                    e a{" "}
+                    <Link href="/privacy" className="font-black" style={{ color: RED }}>
+                      Politica de Privacidade
+                    </Link>
+                    .
+                  </span>
+                </label>
+
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !acceptedLegalTerms}
                   className="w-full rounded-2xl px-5 py-4 text-base font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ background: RED }}
                 >
