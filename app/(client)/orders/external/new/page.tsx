@@ -47,14 +47,6 @@ function looksLikeUrl(value: string): boolean {
   return spaceCount < 3 && trimmed.includes(".");
 }
 
-const TELEGRAM_BOT_URL = process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL ?? "https://t.me/shopeexdigital_bot";
-
-function buildTelegramUrl(orderReference?: string) {
-  if (!orderReference) return TELEGRAM_BOT_URL;
-  const encoded = encodeURIComponent(orderReference.replace(/[^A-Za-z0-9_-]/g, "_"));
-  return `${TELEGRAM_BOT_URL}?start=${encoded}`;
-}
-
 type SubmissionResponse = Order & {
   success?: boolean;
   orderId?: number;
@@ -86,7 +78,7 @@ export default function NewExternalOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{
     id: number;
-    number: string;
+    number: string | null;
     message: string;
     firstOrder: boolean;
     firstGuestOrder: boolean;
@@ -249,8 +241,8 @@ export default function NewExternalOrderPage() {
       const nextOrderNumber =
         response.orderReference?.trim() ||
         response.orderNumber?.trim() ||
-        response.code ||
-        (nextOrderId ? `#${nextOrderId}` : "#---");
+        response.code?.trim() ||
+        null;
       const nextMessage = response.message || "Recebemos o teu pedido. Vamos analisar e entrar em contacto pelo telefone informado.";
 
       setSuccessOrder({
@@ -353,7 +345,9 @@ export default function NewExternalOrderPage() {
             <div className="mt-5 flex flex-wrap items-start gap-4">
               <div className="inline-flex flex-col gap-1 rounded-2xl px-5 py-4" style={{ background: SOFT, color: RED }}>
                 <span className="text-xs font-black uppercase tracking-[0.18em]">Referencia do pedido</span>
-                <span className="font-[family-name:var(--font-sora)] text-2xl font-black">{successOrder.number}</span>
+                <span className="font-[family-name:var(--font-sora)] text-2xl font-black">
+                  {successOrder.number ?? "---"}
+                </span>
               </div>
               <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: "#ECFDF5" }}>
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="#166534" aria-hidden="true">
@@ -395,30 +389,25 @@ export default function NewExternalOrderPage() {
                 </>
               ) : null}
 
-              <Link
-                href={`/track/${encodeURIComponent(successOrder.number)}`}
-                className="rounded-2xl px-5 py-3 text-center text-sm font-black text-white sm:col-span-2"
-                style={{ background: RED }}
-              >
-                Rastrear pedido
-              </Link>
-              <a
-                href={buildTelegramUrl(successOrder.number)}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-2xl border px-5 py-3 text-center text-sm font-black"
-                style={{ borderColor: BORDER, color: RED, background: "white" }}
-              >
-                Continuar pelo Telegram
-              </a>
-              <button
-                type="button"
-                onClick={() => void saveOrderReference(successOrder.number)}
-                className="rounded-2xl border px-5 py-3 text-sm font-black"
-                style={{ borderColor: BORDER, color: RED, background: "white" }}
-              >
-                Guardar referencia
-              </button>
+              {successOrder.number ? (
+                <Link
+                  href={`/track/${encodeURIComponent(successOrder.number)}`}
+                  className="rounded-2xl px-5 py-3 text-center text-sm font-black text-white sm:col-span-2"
+                  style={{ background: RED }}
+                >
+                  Rastrear pedido
+                </Link>
+              ) : null}
+              {successOrder.number ? (
+                <button
+                  type="button"
+                  onClick={() => void saveOrderReference(successOrder.number!)}
+                  className="rounded-2xl border px-5 py-3 text-sm font-black"
+                  style={{ borderColor: BORDER, color: RED, background: "white" }}
+                >
+                  Guardar referencia
+                </button>
+              ) : null}
               <Link
                 href="/store"
                 className="rounded-2xl border px-5 py-3 text-center text-sm font-black"

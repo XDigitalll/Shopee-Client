@@ -184,6 +184,15 @@ export type OrderItem = {
   variantAttributes?: Record<string, string>;
 };
 
+export type ClientTrackingStep = {
+  key: string;
+  label: string;
+  description?: string | null;
+  /** COMPLETED | CURRENT | PENDING | FAILED */
+  state: "COMPLETED" | "CURRENT" | "PENDING" | "FAILED";
+  occurredAt?: string | null;
+};
+
 export type Order = {
   id: number;
   code?: string;
@@ -220,6 +229,13 @@ export type Order = {
   houseNumber?: string;
   deliveryReference?: string;
   googleMapsLink?: string;
+  hasAddresses?: boolean;
+  defaultAddress?: UserAddress | null;
+  deliveryAddressSnapshot?: UserAddress | null;
+  savedAddresses?: UserAddress[];
+  requiresAddressSelection?: boolean;
+  requiresAddressCreation?: boolean;
+  requiresDeliveryConfirmation?: boolean;
   assignedDriverId?: string;
   assignedDriverName?: string;
   assignedDriverEmail?: string;
@@ -242,6 +258,8 @@ export type Order = {
   items?: OrderItem[];
   quote?: Quote;
   payment?: Payment;
+  trackingSummarySteps?: ClientTrackingStep[] | null;
+  trackingDetailSteps?: ClientTrackingStep[] | null;
 };
 
 export type CheckoutResponse = {

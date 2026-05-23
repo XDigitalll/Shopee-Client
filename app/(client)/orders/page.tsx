@@ -8,7 +8,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
 import { cleanDisplayText } from "@/lib/text";
-import type { Order, OrderItem, OrderStats } from "@/lib/types";
+import type { ClientTrackingStep, Order, OrderItem, OrderStats, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 
 const RED = "#E8431A";
@@ -19,8 +19,6 @@ const FILTERS = [
   { key: "INTERNAL", label: "Internos" },
   { key: "DELIVERED", label: "Entregues" },
 ] as const;
-const FLOW_STEPS = ["Recebido", "Aguardando pagamento", "Confirmado", "Pronto", "A caminho", "Entregue"];
-const FLOW_STEPS_EXTERNAL = ["Recebido", "Em analise", "Aguardando pagamento", "Confirmado", "Em processamento", "Em transito", "Na nossa sede", "A caminho", "Entregue"];
 const DELIVERY_ISSUE_LABELS: Record<string, string> = {
   CLIENTE_AUSENTE: "Cliente ausente",
   ENDERECO_INCORRECTO: "Morada incorreta",
@@ -35,11 +33,15 @@ type OrderGroup = {
   isComposite: boolean;
   orders: Order[];
 };
-type DeliveryFormState = {
-  name: string;
-  phone: string;
-  address: string;
-  notes: string;
+type AddressDraftState = {
+  label: string;
+  city: string;
+  neighborhood: string;
+  street: string;
+  houseNumber: string;
+  reference: string;
+  googleMapsLink: string;
+  saveToProfile: boolean;
 };
 
 function PackageIcon() {
@@ -88,11 +90,14 @@ function customerStage(status: string) {
     PAYMENT_REJECTED: "AWAITING_PAYMENT",
     PAID: "CONFIRMED",
     CONFIRMED: "CONFIRMED",
+    TO_PURCHASE: "PROCESSING",
+    PURCHASED: "PROCESSING",
     ORDERED: "PROCESSING",
     PROCESSING: "PROCESSING",
     SHIPPED: "INTERNATIONAL_TRANSIT",
     IN_TRANSIT: "INTERNATIONAL_TRANSIT",
     ARRIVED: "AT_HQ",
+    READY_FOR_DELIVERY: "ON_THE_WAY",
     OUT_FOR_DELIVERY: "ON_THE_WAY",
     DELIVERED: "DELIVERED",
     CANCELLED: "CANCELLED",
@@ -121,51 +126,6 @@ function statusMeta(status: string) {
   };
 
   return map[status] || map[customerStage(status)] || { label: status, bg: "#F3F4F6", color: "#4B5563" };
-}
-
-function stepIndexForStatus(status: string) {
-  const map: Record<string, number> = {
-    RECEIVED: 0,
-    PRICING: 1,
-    AWAITING_PAYMENT: 2,
-    CONFIRMED: 3,
-    PROCESSING: 4,
-    INTERNATIONAL_TRANSIT: 5,
-    AT_HQ: 6,
-    ON_THE_WAY: 7,
-    DELIVERED: 8,
-    CANCELLED: 0,
-    FAILED: 0,
-  };
-
-  return map[customerStage(status)] ?? 0;
-}
-
-function externalStepIndex(status: string) {
-  return stepIndexForStatus(status);
-}
-
-function internalStepIndex(status: string) {
-  const map: Record<string, number> = {
-    CREATED: 0,
-    PENDING: 0,
-    APPROVED: 1,
-    PENDING_PAYMENT: 1,
-    PAYMENT_SUBMITTED: 1,
-    PAYMENT_UNDER_REVIEW: 1,
-    PAYMENT_REJECTED: 1,
-    PAID: 2,
-    CONFIRMED: 2,
-    ORDERED: 3,
-    ARRIVED: 3,
-    SHIPPED: 4,
-    OUT_FOR_DELIVERY: 4,
-    DELIVERED: 5,
-    CANCELLED: 0,
-    FAILED: 0,
-  };
-
-  return map[status] ?? 0;
 }
 
 function orderTotal(order: Order) {
@@ -197,41 +157,22 @@ function buildDeliveryAddress(order: Order) {
   ].filter(Boolean).join(", ");
 }
 
-function hasDeliveryAddress(order: Order) {
-  return Boolean(
-    order.deliveryCity?.trim() &&
-    order.deliveryNeighborhood?.trim() &&
-    order.deliveryStreet?.trim() &&
-    order.deliveryReference?.trim()
-  );
-}
-
-function buildDeliveryAddressFormUrl(order: Order) {
-  const code = order.code || String(order.id);
-  const params = new URLSearchParams();
-  if (order.primaryPhoneNumber) {
-    params.set("phone", order.primaryPhoneNumber);
-  }
-  const query = params.toString();
-  return `/delivery-address/${encodeURIComponent(code)}${query ? `?${query}` : ""}`;
-}
-
 function buildPhoneHref(phone: string | null | undefined) {
   const trimmed = phone?.trim();
   return trimmed ? `tel:${trimmed.replace(/\s/g, "")}` : null;
 }
 
-function buildInitialDeliveryForm(order: Order): DeliveryFormState {
+function emptyAddressDraft(order?: Order): AddressDraftState {
   return {
-    name: order.customerFullName || "",
-    phone: order.primaryPhoneNumber || "",
-    address: buildDeliveryAddress(order),
-    notes: order.customerNotes || "",
+    label: "Casa",
+    city: order?.deliveryCity || "Maputo",
+    neighborhood: order?.deliveryNeighborhood || "",
+    street: order?.deliveryStreet || "",
+    houseNumber: order?.houseNumber || "",
+    reference: order?.deliveryReference || "",
+    googleMapsLink: order?.googleMapsLink || "",
+    saveToProfile: !order?.hasAddresses,
   };
-}
-
-function canScheduleDelivery(order: Order) {
-  return order.status === "ARRIVED" && order.deliveryMethod !== "STORE_PICKUP" && Number(order.deliveryFee || 0) > 0;
 }
 
 function canCustomerCancel(status: string) {
@@ -347,8 +288,10 @@ export default function OrdersPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
-  const [deliveryFormOrderId, setDeliveryFormOrderId] = useState<number | null>(null);
-  const [deliveryForms, setDeliveryForms] = useState<Record<number, DeliveryFormState>>({});
+  const [selectedAddressByOrder, setSelectedAddressByOrder] = useState<Record<number, number>>({});
+  const [addressDrafts, setAddressDrafts] = useState<Record<number, AddressDraftState>>({});
+  const [addressCreateOrderId, setAddressCreateOrderId] = useState<number | null>(null);
+  const [addressChangeOrderId, setAddressChangeOrderId] = useState<number | null>(null);
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -413,43 +356,105 @@ export default function OrdersPage() {
 
   const orderGroups = useMemo(() => buildOrderGroups(filteredOrders, filter), [filter, filteredOrders]);
 
-  const showAddressBanner = useMemo(
-    () => !isLoading && orders.some(
-      (o) => o.status === "ARRIVED" && o.deliveryMethod !== "STORE_PICKUP" && !hasDeliveryAddress(o)
-    ),
-    [isLoading, orders]
-  );
-
-  const openDeliveryForm = (order: Order) => {
-    setDeliveryForms((current) => ({
-      ...current,
-      [order.id]: current[order.id] ?? buildInitialDeliveryForm(order),
-    }));
-    setDeliveryFormOrderId((current) => (current === order.id ? null : order.id));
+  const replaceOrder = (updated: Order) => {
+    setOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
   };
 
-  const updateDeliveryForm = (orderId: number, patch: Partial<DeliveryFormState>) => {
-    setDeliveryForms((current) => ({
+  const selectedAddressIdFor = (order: Order) => {
+    return selectedAddressByOrder[order.id]
+      ?? order.defaultAddress?.id
+      ?? order.savedAddresses?.[0]?.id
+      ?? 0;
+  };
+
+  const selectDeliveryAddress = async (order: Order) => {
+    if (!token) return;
+    const addressId = selectedAddressIdFor(order);
+    if (!addressId) {
+      setFeedback({ type: "error", msg: "Escolhe uma morada para este pedido." });
+      return;
+    }
+    setBusyOrderId(order.id);
+    try {
+      const updated = await apiFetch<Order>(`orders/${order.id}/delivery-address/select`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ addressId }),
+      });
+      replaceOrder(updated);
+      setAddressChangeOrderId(null);
+      setAddressCreateOrderId(null);
+      setFeedback({ type: "success", msg: "Morada escolhida para este pedido." });
+    } catch (error) {
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel escolher a morada." });
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const updateAddressDraft = (order: Order, patch: Partial<AddressDraftState>) => {
+    setAddressDrafts((current) => ({
       ...current,
-      [orderId]: {
-        ...(current[orderId] ?? { name: "", phone: "", address: "", notes: "" }),
+      [order.id]: {
+        ...(current[order.id] ?? emptyAddressDraft(order)),
         ...patch,
       },
     }));
   };
 
-  const submitDeliveryForm = (order: Order) => {
-    const form = deliveryForms[order.id] ?? buildInitialDeliveryForm(order);
-    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
-      setFeedback({ type: "error", msg: "Preenche nome, celular e morada para a entrega." });
+  const createDeliveryAddress = async (order: Order) => {
+    if (!token) return;
+    const draft = addressDrafts[order.id] ?? emptyAddressDraft(order);
+    if (!draft.label.trim() || !draft.city.trim() || !draft.neighborhood.trim() || !draft.street.trim() || !draft.reference.trim()) {
+      setFeedback({ type: "error", msg: "Preenche nome, cidade, bairro, rua e referencia." });
       return;
     }
 
-    setDeliveryFormOrderId(null);
-    setFeedback({
-      type: "success",
-      msg: `Pedido ${orderDisplayCode(order)} pronto para contacto de entrega. A equipa vai usar estes dados para combinar contigo.`,
-    });
+    setBusyOrderId(order.id);
+    try {
+      const updated = await apiFetch<Order>(`orders/${order.id}/delivery-address/create`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          saveToProfile: draft.saveToProfile,
+          address: {
+            label: draft.label,
+            city: draft.city,
+            neighborhood: draft.neighborhood,
+            street: draft.street,
+            houseNumber: draft.houseNumber,
+            reference: draft.reference,
+            googleMapsLink: draft.googleMapsLink,
+            defaultAddress: draft.saveToProfile && !order.hasAddresses,
+          },
+        }),
+      });
+      replaceOrder(updated);
+      setAddressCreateOrderId(null);
+      setAddressChangeOrderId(null);
+      setFeedback({ type: "success", msg: draft.saveToProfile ? "Morada guardada e escolhida para este pedido." : "Morada escolhida apenas para este pedido." });
+    } catch (error) {
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel guardar a morada do pedido." });
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const confirmDeliveryAddress = async (order: Order) => {
+    if (!token) return;
+    setBusyOrderId(order.id);
+    try {
+      const updated = await apiFetch<Order>(`orders/${order.id}/delivery-address/confirm`, {
+        method: "PATCH",
+        token,
+      });
+      replaceOrder(updated);
+      setFeedback({ type: "success", msg: "Morada confirmada. A equipa de entrega já pode avançar." });
+    } catch (error) {
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel confirmar a morada." });
+    } finally {
+      setBusyOrderId(null);
+    }
   };
 
   const handleCancel = async (orderId: number) => {
@@ -495,54 +500,115 @@ export default function OrdersPage() {
     { label: "Entregues", value: stats.delivered, accent: GREEN },
   ];
 
-  function buildVerticalTimeline(order: Order) {
-    const s = effectiveOrderStatus(order);
-    const isExternal = order.type === "EXTERNAL";
-    const isCancelled = s === "CANCELLED" || s === "FAILED";
-
-    type Step = { key: string; label: string; desc: string; done: boolean; current: boolean; ts: string | null };
-    const steps: Step[] = [];
-
-    const STAGES_EXT = ["RECEIVED", "PRICING", "AWAITING_PAYMENT", "CONFIRMED", "PROCESSING", "INTERNATIONAL_TRANSIT", "AT_HQ", "ON_THE_WAY", "DELIVERED"];
-    const STAGES_INT = ["RECEIVED", "AWAITING_PAYMENT", "CONFIRMED", "ON_THE_WAY", "DELIVERED"];
-    const stages = isExternal ? STAGES_EXT : STAGES_INT;
-    const currentStage = customerStage(s);
-    const currentIdx = stages.indexOf(currentStage);
-
-    const stageLabels: Record<string, [string, string]> = {
-      RECEIVED:             ["Pedido recebido",        "Enviaste o pedido à equipa ShopeeX."],
-      PRICING:              ["Em análise",             "A equipa está a pesquisar preços e disponibilidade."],
-      AWAITING_PAYMENT:     ["Aguardando pagamento",   "A cotação foi enviada. Confirma e faz o pagamento para avançar."],
-      CONFIRMED:            ["Pagamento confirmado",   "O pagamento foi verificado. Vamos agora comprar o produto."],
-      PROCESSING:           ["Em processamento",       "O produto foi encomendado e está em trânsito internacional."],
-      INTERNATIONAL_TRANSIT:["Em trânsito",            "O produto está a viajar para Moçambique."],
-      AT_HQ:                ["Na nossa sede",          "O produto chegou a Maputo e está pronto para entrega."],
-      ON_THE_WAY:           ["A caminho de ti",        "O estafeta está a caminho da tua morada."],
-      DELIVERED:            ["Entregue!",              "Pedido concluído com sucesso. Obrigado pela confiança!"],
-    };
-
-    const tsForStage = (idx: number): string | null => {
-      const stage = stages[idx];
-      if (stage === "RECEIVED") return order.orderDate ?? null;
-      if (["CONFIRMED", "AWAITING_PAYMENT"].includes(stage)) return order.paymentDate ?? null;
-      if (["DELIVERED", "ON_THE_WAY", "AT_HQ"].includes(stage)) return order.deliveryDate ?? null;
-      return null;
-    };
-
-    for (let i = 0; i < stages.length; i++) {
-      const stage = stages[i];
-      const [label, desc] = stageLabels[stage] ?? [stage, ""];
-      const done = isCancelled ? false : i < currentIdx;
-      const current = !isCancelled && i === currentIdx;
-      steps.push({ key: stage, label, desc, done, current, ts: done || current ? tsForStage(i) : null });
+  function buildVerticalTimeline(order: Order): { key: string; label: string; desc: string; done: boolean; current: boolean; failed: boolean; ts: string | null }[] {
+    const backendSteps = order.trackingDetailSteps;
+    if (backendSteps && backendSteps.length > 0) {
+      return backendSteps.map((step: ClientTrackingStep) => ({
+        key: step.key,
+        label: step.label,
+        desc: step.description ?? "",
+        done: step.state === "COMPLETED",
+        current: step.state === "CURRENT",
+        failed: step.state === "FAILED",
+        ts: step.occurredAt ?? null,
+      }));
     }
-
-    if (isCancelled) {
-      steps.push({ key: "CANCELLED", label: "Cancelado", desc: "Este pedido foi cancelado.", done: false, current: true, ts: null });
-    }
-
-    return steps;
+    return [];
   }
+
+  const renderAddressChoice = (order: Order) => {
+    const addresses = order.savedAddresses ?? [];
+    const selectedId = selectedAddressIdFor(order);
+    const showCreate = addressCreateOrderId === order.id || order.requiresAddressCreation;
+    const draft = addressDrafts[order.id] ?? emptyAddressDraft(order);
+
+    return (
+      <div className="mt-4 space-y-4">
+        {addresses.length > 0 && !showCreate ? (
+          <div className="space-y-2">
+            <p className="text-sm font-black" style={{ color: "#5B21B6" }}>Escolhe onde queres receber:</p>
+            {addresses.map((address: UserAddress) => (
+              <label key={address.id} className="flex cursor-pointer gap-3 rounded-2xl border p-3 text-sm" style={{ borderColor: selectedId === address.id ? RED : "#DDD6FE", background: selectedId === address.id ? "#FFF8F5" : "white" }}>
+                <input
+                  type="radio"
+                  name={`address-${order.id}`}
+                  checked={selectedId === address.id}
+                  onChange={() => setSelectedAddressByOrder((current) => ({ ...current, [order.id]: address.id }))}
+                />
+                <span>
+                  <strong className="block" style={{ color: "#1A1410" }}>{address.label}{address.defaultAddress ? " · Predefinida" : ""}</strong>
+                  <span style={{ color: "#5B21B6" }}>{address.fullAddress}</span>
+                </span>
+              </label>
+            ))}
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => void selectDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
+                {busyOrderId === order.id ? "A guardar..." : "Usar esta morada"}
+              </button>
+              <button type="button" onClick={() => setAddressCreateOrderId(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                Adicionar novo local
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {showCreate ? (
+          <div className="rounded-2xl border p-4" style={{ borderColor: "#DDD6FE", background: "white" }}>
+            <p className="text-sm font-black" style={{ color: "#5B21B6" }}>
+              {addresses.length ? "Adicionar novo local" : "Ainda não tens uma morada guardada"}
+            </p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {([
+                ["label", "Nome da morada"],
+                ["city", "Cidade"],
+                ["neighborhood", "Bairro"],
+                ["street", "Rua/Avenida"],
+                ["houseNumber", "Casa/apartamento"],
+                ["reference", "Referência"],
+              ] as const).map(([key, label]) => (
+                <label key={key} className={key === "reference" ? "block md:col-span-2" : "block"}>
+                  <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>{label}</span>
+                  <input
+                    value={draft[key]}
+                    onChange={(event) => updateAddressDraft(order, { [key]: event.target.value })}
+                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={{ borderColor: "#DDD6FE", background: "#FFFDFC" }}
+                  />
+                </label>
+              ))}
+              <label className="block md:col-span-2">
+                <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Link Google Maps</span>
+                <input
+                  value={draft.googleMapsLink}
+                  onChange={(event) => updateAddressDraft(order, { googleMapsLink: event.target.value })}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "#DDD6FE", background: "#FFFDFC" }}
+                />
+              </label>
+            </div>
+            <label className="mt-3 flex items-center gap-2 text-sm font-semibold" style={{ color: "#5B21B6" }}>
+              <input
+                type="checkbox"
+                checked={draft.saveToProfile}
+                onChange={(event) => updateAddressDraft(order, { saveToProfile: event.target.checked })}
+              />
+              Guardar no perfil
+            </label>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button type="button" onClick={() => void createDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
+                {busyOrderId === order.id ? "A guardar..." : "Guardar morada do pedido"}
+              </button>
+              {addresses.length ? (
+                <button type="button" onClick={() => setAddressCreateOrderId(null)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                  Voltar às moradas
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderOrderCard = (order: Order, options?: { nested?: boolean }) => {
     const isExternal = order.type === "EXTERNAL";
@@ -552,12 +618,8 @@ export default function OrdersPage() {
     const meta = (isExternal && status === "ARRIVED")
       ? { label: "Na nossa sede", bg: "#EDE9FE", color: "#5B21B6" }
       : statusMeta(status);
-    const flowSteps = isExternal ? FLOW_STEPS_EXTERNAL : FLOW_STEPS;
-    const stepIndex = isExternal ? externalStepIndex(status) : internalStepIndex(status);
-    const showDeliveryForm = deliveryFormOrderId === order.id;
+    const trackingSteps = order.trackingSummarySteps ?? [];
     const showTimeline = timelineOrderId === order.id;
-    const deliveryForm = deliveryForms[order.id] ?? buildInitialDeliveryForm(order);
-    const deliveryFee = Number(order.deliveryFee || 0);
     const unreadUpdates = Number(order.unreadUpdatesCount ?? 0);
     const requiresAction = Boolean(order.requiresAction);
     const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
@@ -606,27 +668,32 @@ export default function OrdersPage() {
           ))}
         </div>
 
-        <div className="mt-5 overflow-x-auto pb-2">
-          <div className={`flex items-center ${isExternal ? "min-w-[900px]" : "min-w-[760px]"}`}>
-            {flowSteps.map((step, index) => {
-              const isDelivered = status === "DELIVERED";
-              const done = isDelivered ? true : index < stepIndex;
-              const current = !isDelivered && index === stepIndex;
-              return (
-                <div key={step} className="flex min-w-[84px] flex-1 items-center">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="h-4 w-4 rounded-full border-2" style={{ background: done ? RED : current ? "white" : "transparent", borderColor: RED }} />
-                    <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: current || done ? RED : "#9CA3AF" }}>
-                      {current && unreadUpdates > 0 ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#F97316" }} /> : null}
-                      {step}
-                    </span>
+        {trackingSteps.length > 0 && (
+          <div className="mt-5 overflow-x-auto pb-2">
+            <div className="flex items-center" style={{ minWidth: `${Math.max(trackingSteps.length * 84, 500)}px` }}>
+              {trackingSteps.map((step, index) => {
+                const done = step.state === "COMPLETED";
+                const current = step.state === "CURRENT";
+                const failed = step.state === "FAILED";
+                const dotBg = done ? RED : current ? "white" : failed ? "#B42318" : "transparent";
+                const dotBorder = failed ? "#B42318" : RED;
+                const labelColor = failed ? "#B42318" : current || done ? RED : "#9CA3AF";
+                return (
+                  <div key={step.key} className="flex min-w-[84px] flex-1 items-center">
+                    <div className="flex flex-col items-center text-center">
+                      <div className="h-4 w-4 rounded-full border-2" style={{ background: dotBg, borderColor: dotBorder }} />
+                      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: labelColor }}>
+                        {current && unreadUpdates > 0 ? <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#F97316" }} /> : null}
+                        {step.label}
+                      </span>
+                    </div>
+                    {index < trackingSteps.length - 1 && <div className="mx-2 h-[2px] flex-1" style={{ background: done ? RED : "#F2D4CC" }} />}
                   </div>
-                  {index < flowSteps.length - 1 && <div className="mx-2 h-[2px] flex-1" style={{ background: done ? RED : "#F2D4CC" }} />}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {isExternal && status === "QUOTED" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}>
@@ -651,7 +718,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {status === "ARRIVED" && (isExternal || order.lastIssueType) && (
+        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || order.requiresDeliveryConfirmation) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             {order.lastIssueType ? (
               <>
@@ -662,104 +729,34 @@ export default function OrdersPage() {
               </>
             ) : (
               <>
-                <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>A tua encomenda chegou a Maputo!</h3>
-                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                  {hasDeliveryAddress(order)
-                    ? "O teu produto ja esta na nossa sede. A equipa vai preparar a entrega com os dados que ja temos."
-                    : "O teu produto ja esta na nossa sede. Confirma a tua morada para a equipa combinar a entrega ao domicilio."}
-                </p>
+                <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>A tua encomenda chegou a Maputo</h3>
+                {order.deliveryAddressSnapshot && addressChangeOrderId !== order.id ? (
+                  <>
+                    <p className="mt-1 text-sm font-semibold" style={{ color: "#5B21B6" }}>Entrega prevista para:</p>
+                    <div className="mt-3 rounded-2xl bg-white p-4 text-sm" style={{ color: "#1A1410" }}>
+                      <strong className="block">{order.deliveryAddressSnapshot.label || "Morada escolhida"}</strong>
+                      <span>{order.deliveryAddressSnapshot.fullAddress || buildDeliveryAddress(order)}</span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button type="button" onClick={() => setAddressChangeOrderId(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                        Alterar morada
+                      </button>
+                      <button type="button" onClick={() => void confirmDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
+                        {busyOrderId === order.id ? "A confirmar..." : "Confirmar entrega"}
+                      </button>
+                    </div>
+                  </>
+                ) : order.requiresAddressSelection || addressChangeOrderId === order.id ? (
+                  renderAddressChoice(order)
+                ) : order.requiresAddressCreation ? (
+                  renderAddressChoice(order)
+                ) : (
+                  <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>A equipa vai preparar a entrega com a morada escolhida para este pedido.</p>
+                )}
               </>
             )}
-            {!order.lastIssueType && !hasDeliveryAddress(order) ? (
-              <Link
-                href={buildDeliveryAddressFormUrl(order)}
-                className="mt-4 inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                style={{ background: RED }}
-              >
-                Informar morada
-              </Link>
-            ) : null}
           </div>
         )}
-
-        {canScheduleDelivery(order) && showDeliveryForm ? (
-          <section className="mt-4 rounded-[24px] border p-4" style={{ background: "#FFFDFC", borderColor: "#F2D4CC" }}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Delivery</p>
-                <h3 className="mt-1 text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
-                  Confirmar dados de entrega
-                </h3>
-              </div>
-              <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF8F5" }}>
-                <span style={{ color: "#6B7280" }}>Delivery </span>
-                <strong style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(deliveryFee)}</strong>
-                <span style={{ color: "#6B7280" }}> · Total </span>
-                <strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(orderTotal(order))}</strong>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Nome</span>
-                <input
-                  value={deliveryForm.name}
-                  onChange={(event) => updateDeliveryForm(order.id, { name: event.target.value })}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                  style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}
-                />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Celular</span>
-                <input
-                  value={deliveryForm.phone}
-                  onChange={(event) => updateDeliveryForm(order.id, { phone: event.target.value })}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                  style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}
-                  placeholder="+258"
-                />
-              </label>
-              <label className="block md:col-span-2">
-                <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Morada</span>
-                <textarea
-                  value={deliveryForm.address}
-                  onChange={(event) => updateDeliveryForm(order.id, { address: event.target.value })}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                  style={{ borderColor: "#F2D4CC", background: "#FFFDFC", minHeight: 86 }}
-                />
-              </label>
-              <label className="block md:col-span-2">
-                <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Notas para o estafeta</span>
-                <textarea
-                  value={deliveryForm.notes}
-                  onChange={(event) => updateDeliveryForm(order.id, { notes: event.target.value })}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                  style={{ borderColor: "#F2D4CC", background: "#FFFDFC", minHeight: 78 }}
-                  placeholder="Horario preferido, ponto de referencia ou instrucao especial."
-                />
-              </label>
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => submitDeliveryForm(order)}
-                className="rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                style={{ background: RED }}
-              >
-                Confirmar dados de delivery
-              </button>
-              <button
-                type="button"
-                onClick={() => setDeliveryFormOrderId(null)}
-                className="rounded-2xl border px-4 py-2.5 text-sm font-bold"
-                style={{ borderColor: "#F2D4CC", color: "#6B7280" }}
-              >
-                Cancelar
-              </button>
-            </div>
-          </section>
-        ) : null}
 
         {isExternal && status === "OUT_FOR_DELIVERY" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
@@ -829,7 +826,8 @@ export default function OrdersPage() {
             <ol className="mt-4 space-y-0" aria-label="Histórico do pedido">
               {buildVerticalTimeline(order).map((step, i, arr) => {
                 const isLast = i === arr.length - 1;
-                const dotColor = step.current ? RED : step.done ? "#166534" : "#D1D5DB";
+                const active = step.current || step.failed;
+                const dotColor = step.failed ? "#B42318" : step.current ? RED : step.done ? "#166534" : "#D1D5DB";
                 const lineColor = step.done ? "#166534" : "#E5E7EB";
                 return (
                   <li key={step.key} className="flex gap-3">
@@ -838,16 +836,16 @@ export default function OrdersPage() {
                         className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-black"
                         style={{
                           borderColor: dotColor,
-                          background: step.current ? RED : step.done ? "#ECFDF5" : "white",
-                          color: step.current ? "white" : step.done ? "#166534" : "#D1D5DB",
+                          background: step.failed ? "#FEE2E2" : step.current ? RED : step.done ? "#ECFDF5" : "white",
+                          color: step.failed ? "#B42318" : step.current ? "white" : step.done ? "#166534" : "#D1D5DB",
                         }}
                       >
-                        {step.done ? "✓" : step.current ? "●" : "○"}
+                        {step.failed ? "✕" : step.done ? "✓" : step.current ? "●" : "○"}
                       </div>
                       {!isLast && <div className="w-px grow" style={{ background: lineColor, minHeight: "20px" }} />}
                     </div>
                     <div className="pb-4 pt-0.5">
-                      <p className="text-sm font-black" style={{ color: step.current ? RED : step.done ? "#1A1410" : "#9CA3AF" }}>
+                      <p className="text-sm font-black" style={{ color: active ? (step.failed ? "#B42318" : RED) : step.done ? "#1A1410" : "#9CA3AF" }}>
                         {step.label}
                       </p>
                       <p className="text-xs font-medium leading-5" style={{ color: "#6B7280" }}>{step.desc}</p>
@@ -947,38 +945,6 @@ export default function OrdersPage() {
           );
         })}
       </section>
-
-      {showAddressBanner && (
-        <section className="rounded-[28px] border p-5 shadow-sm" style={{ borderColor: "#BAE6FD", background: "#F0F9FF" }}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: "#BAE6FD", color: "#0369A1" }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z" /><circle cx="12" cy="10" r="3" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-black" style={{ color: "#0369A1" }}>Tens um pedido pronto para entrega</p>
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: "#E0F2FE", color: "#0369A1" }}>
-                    Recomendado
-                  </span>
-                </div>
-                <p className="mt-1 text-sm" style={{ color: "#0C4A6E" }}>
-                  Adiciona uma morada de entrega ao teu perfil para a equipa poder contactar-te e entregar mais depressa.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/profile"
-              className="shrink-0 rounded-2xl px-4 py-2.5 text-sm font-black text-white transition hover:opacity-90"
-              style={{ background: "#0284C7" }}
-            >
-              Adicionar morada
-            </Link>
-          </div>
-        </section>
-      )}
 
       <section className="relative space-y-4" aria-busy={isLoading}>
         {isLoading && !orderGroups.length ? (
