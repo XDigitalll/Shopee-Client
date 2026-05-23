@@ -191,13 +191,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         profile = await loadSessionProfile();
       } catch (error) {
-        if (error instanceof AuthExpiredError) {
-          if (!cancelled) {
-            clearExpiredSessionAndRedirect();
-          }
-          return;
-        }
-        throw error;
+        if (!(error instanceof AuthExpiredError)) throw error;
+        // /auth/me returned 401: access token absent or expired.
+        // Fall through to safeRefresh — this avoids incorrectly redirecting the
+        // Google OAuth callback page, which hasn't persisted its tokens yet when
+        // bootstrap fires concurrently. safeRefresh handles graceful failure and
+        // only redirects for auth-required paths, which the callback page is not.
       }
       if (cancelled) return;
 
@@ -236,11 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener(AUTH_CHANGE_EVENT, handleAuthChange);
       window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     };
-  }, [clearExpiredSessionAndRedirect, pathname, refreshProfile, router, safeRefresh]);
-
-  useEffect(() => {
-    console.log("isAuth", isAuthenticated, "user", sessionProfile);
-  }, [isAuthenticated, sessionProfile]);
+  }, [pathname, refreshProfile, router, safeRefresh]);
 
   useEffect(() => {
     const isProtectedRoute = isAuthRequiredPath(pathname);
