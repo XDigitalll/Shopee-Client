@@ -236,6 +236,10 @@ export type Order = {
   requiresAddressSelection?: boolean;
   requiresAddressCreation?: boolean;
   requiresDeliveryConfirmation?: boolean;
+  canConfirmDelivery?: boolean;
+  canConfirmAddress?: boolean;
+  canChangeDeliveryAddress?: boolean;
+  deliveryStatusLabel?: string;
   assignedDriverId?: string;
   assignedDriverName?: string;
   assignedDriverEmail?: string;

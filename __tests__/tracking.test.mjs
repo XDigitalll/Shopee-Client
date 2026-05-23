@@ -76,6 +76,19 @@ function customerStage(status) {
   return map[status] || "RECEIVED";
 }
 
+function effectiveOrderStatus(order) {
+  return order.status === "PAYMENT_REJECTED" || order.status === "FAILED" ? "FAILED" : order.status;
+}
+
+function visibleOrderActions(order) {
+  const actions = [];
+  if (order.canConfirmAddress) actions.push("confirm-address");
+  if (order.canChangeDeliveryAddress) actions.push("change-address");
+  if (order.canConfirmDelivery) actions.push("confirm-delivery");
+  if (order.status === "DELIVERED") actions.push("delivered-label");
+  return actions;
+}
+
 // ── buildVerticalTimeline adapter (mirrors orders/page.tsx) ───────────────────
 
 function buildVerticalTimeline(order) {
@@ -259,6 +272,40 @@ describe("customerStage — status mappings", () => {
 
   test("unknown status falls back to RECEIVED", () => {
     assert.equal(customerStage("SOME_FUTURE_STATUS"), "RECEIVED");
+  });
+});
+
+describe("delivery actions — backend permission flags", () => {
+  test("READY_FOR_DELIVERY does not show confirm delivery", () => {
+    const actions = visibleOrderActions({
+      status: "READY_FOR_DELIVERY",
+      canConfirmAddress: true,
+      canChangeDeliveryAddress: true,
+      canConfirmDelivery: false,
+    });
+
+    assert.ok(!actions.includes("confirm-delivery"));
+    assert.ok(actions.includes("confirm-address"));
+    assert.ok(actions.includes("change-address"));
+  });
+
+  test("OUT_FOR_DELIVERY shows confirm delivery only when backend allows it", () => {
+    assert.ok(visibleOrderActions({ status: "OUT_FOR_DELIVERY", canConfirmDelivery: true }).includes("confirm-delivery"));
+    assert.ok(!visibleOrderActions({ status: "OUT_FOR_DELIVERY", canConfirmDelivery: false }).includes("confirm-delivery"));
+  });
+
+  test("DELIVERED shows delivered label without confirm delivery", () => {
+    const actions = visibleOrderActions({ status: "DELIVERED", canConfirmDelivery: false });
+    assert.ok(actions.includes("delivered-label"));
+    assert.ok(!actions.includes("confirm-delivery"));
+  });
+
+  test("old failed payment does not override delivered order status", () => {
+    assert.equal(effectiveOrderStatus({ status: "DELIVERED", payment: { status: "FAILED" } }), "DELIVERED");
+  });
+
+  test("payment rejected message appears only for current rejected order", () => {
+    assert.equal(effectiveOrderStatus({ status: "PAYMENT_REJECTED", payment: { status: "FAILED" } }), "FAILED");
   });
 });
 

@@ -74,7 +74,7 @@ function EmptyIcon() {
 }
 
 function effectiveOrderStatus(order: Pick<Order, "status" | "payment">) {
-  return order.payment?.status === "FAILED" ? "FAILED" : order.status;
+  return order.status === "PAYMENT_REJECTED" || order.status === "FAILED" ? "FAILED" : order.status;
 }
 
 function customerStage(status: string) {
@@ -623,6 +623,9 @@ export default function OrdersPage() {
     const unreadUpdates = Number(order.unreadUpdatesCount ?? 0);
     const requiresAction = Boolean(order.requiresAction);
     const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
+    const canConfirmAddress = Boolean(order.canConfirmAddress);
+    const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
+    const canConfirmDelivery = Boolean(order.canConfirmDelivery);
 
     return (
       <article
@@ -718,7 +721,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || order.requiresDeliveryConfirmation) && (
+        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canConfirmAddress || canChangeDeliveryAddress) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             {order.lastIssueType ? (
               <>
@@ -730,6 +733,9 @@ export default function OrdersPage() {
             ) : (
               <>
                 <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>A tua encomenda chegou a Maputo</h3>
+                {order.deliveryStatusLabel ? (
+                  <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>{order.deliveryStatusLabel}</p>
+                ) : null}
                 {order.deliveryAddressSnapshot && addressChangeOrderId !== order.id ? (
                   <>
                     <p className="mt-1 text-sm font-semibold" style={{ color: "#5B21B6" }}>Entrega prevista para:</p>
@@ -738,12 +744,16 @@ export default function OrdersPage() {
                       <span>{order.deliveryAddressSnapshot.fullAddress || buildDeliveryAddress(order)}</span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <button type="button" onClick={() => setAddressChangeOrderId(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
-                        Alterar morada
-                      </button>
-                      <button type="button" onClick={() => void confirmDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
-                        {busyOrderId === order.id ? "A confirmar..." : "Confirmar entrega"}
-                      </button>
+                      {canChangeDeliveryAddress ? (
+                        <button type="button" onClick={() => setAddressChangeOrderId(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                          Alterar morada
+                        </button>
+                      ) : null}
+                      {canConfirmAddress ? (
+                        <button type="button" onClick={() => void confirmDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
+                          {busyOrderId === order.id ? "A confirmar..." : "Confirmar morada"}
+                        </button>
+                      ) : null}
                     </div>
                   </>
                 ) : order.requiresAddressSelection || addressChangeOrderId === order.id ? (
@@ -758,10 +768,10 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {isExternal && status === "OUT_FOR_DELIVERY" && (
+        {status === "OUT_FOR_DELIVERY" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
-            <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua entrega ja saiu da nossa sede!</h3>
-            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>A equipa de delivery esta a caminho da tua morada com a tua encomenda.</p>
+            <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua encomenda está a caminho</h3>
+            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>{order.deliveryStatusLabel || "A equipa de delivery está a caminho da tua morada com a tua encomenda."}</p>
             {(order.assignedDriverName || order.assignedDriverPhone) && (
               <div className="mt-4 flex flex-col gap-3 rounded-[20px] bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -871,7 +881,7 @@ export default function OrdersPage() {
           <div className="flex flex-wrap gap-3">
             {(status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.nextActionLabel || (status === "PAYMENT_REJECTED" ? "Enviar novo comprovativo" : "Submeter pagamento")}</Link>}
             {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
-            {(status === "OUT_FOR_DELIVERY" || (status === "ARRIVED" && order.deliveryMethod === "STORE_PICKUP")) && (
+            {canConfirmDelivery && (
               <button
                 type="button"
                 onClick={() => setConfirmAction({ kind: "received", orderId: order.id })}
@@ -879,7 +889,7 @@ export default function OrdersPage() {
                 className="rounded-2xl px-4 py-2.5 text-sm font-black text-white"
                 style={{ background: busyOrderId === order.id ? "#FDB8A7" : RED }}
               >
-                {busyOrderId === order.id ? "A confirmar..." : "Confirmar recebido"}
+                {busyOrderId === order.id ? "A confirmar..." : "Confirmar receção"}
               </button>
             )}
             {status === "DELIVERED" && <Link href={`/orders/${order.id}/receipt`} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>Ver detalhes</Link>}
