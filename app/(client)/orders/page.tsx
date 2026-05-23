@@ -99,6 +99,7 @@ function customerStage(status: string) {
     ARRIVED: "AT_HQ",
     READY_FOR_DELIVERY: "ON_THE_WAY",
     OUT_FOR_DELIVERY: "ON_THE_WAY",
+    DELIVERY_FAILED: "ON_THE_WAY",
     DELIVERED: "DELIVERED",
     CANCELLED: "CANCELLED",
     FAILED: "CANCELLED",
@@ -123,6 +124,7 @@ function statusMeta(status: string) {
     DELIVERED: { label: "Entregue", bg: "#DCFCE7", color: "#166534" },
     CANCELLED: { label: "Cancelado", bg: "#FEE2E2", color: "#991B1B" },
     FAILED: { label: "Pagamento recusado", bg: "#FEE2E2", color: "#991B1B" },
+    DELIVERY_FAILED: { label: "Tentativa falhada", bg: "#FEF3C7", color: "#92400E" },
   };
 
   return map[status] || map[customerStage(status)] || { label: status, bg: "#F3F4F6", color: "#4B5563" };
@@ -721,7 +723,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canConfirmAddress || canChangeDeliveryAddress) && (
+        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY" || status === "DELIVERY_FAILED") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canConfirmAddress || canChangeDeliveryAddress) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             {order.lastIssueType ? (
               <>
