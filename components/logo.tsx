@@ -13,7 +13,7 @@ const sizes = {
 export function Logo({ size = "md", variant = "full", white = false }: LogoProps) {
   const { icon, titleSize } = sizes[size];
   const textColor = white ? "white" : "#1A1410";
-  const accentColor = white ? "rgba(255,255,255,0.75)" : "#E8431A";
+  const accentColor = white ? "#FFE0D2" : "#E8431A";
 
   return (
     <div className="flex items-center gap-2">
@@ -47,7 +47,18 @@ export function Logo({ size = "md", variant = "full", white = false }: LogoProps
           className={`${titleSize} font-black leading-none tracking-tight`}
           style={{ fontFamily: "'Sora', sans-serif", color: textColor }}
         >
-          ShopeeX <span style={{ fontWeight: 300, color: accentColor }}>Digital</span>
+          Shopee
+          <span
+            className="ml-0.5 inline-block font-black italic tracking-tighter"
+            style={{
+              color: accentColor,
+              fontFamily: "'DM Sans', sans-serif",
+              letterSpacing: "-0.04em",
+              transform: "skewX(-4deg)",
+            }}
+          >
+            Mz
+          </span>
         </span>
       )}
     </div>

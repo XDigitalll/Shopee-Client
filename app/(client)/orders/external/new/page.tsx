@@ -309,7 +309,7 @@ export default function NewExternalOrderPage() {
         {successOrder ? (
           <section className="rounded-[28px] border bg-white p-6 shadow-sm sm:p-8" style={{ borderColor: successOrder.firstGuestOrder ? RED : BORDER }}>
             <p className="text-sm font-black uppercase tracking-[0.2em]" style={{ color: RED }}>
-              {successOrder.authenticatedOrder ? "Pedido registado" : successOrder.firstGuestOrder ? "Bem-vindo ao ShopeeX Digital" : "Ja temos uma conta para ti"}
+              {successOrder.authenticatedOrder ? "Pedido registado" : successOrder.firstGuestOrder ? "Bem-vindo ao ShopeeMz" : "Ja temos uma conta para ti"}
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-sora)] text-3xl font-black">
               {successOrder.authenticatedOrder
@@ -449,7 +449,7 @@ export default function NewExternalOrderPage() {
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Pedido ligado a tua conta</p>
                     <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
-                      {userLabel || userEmail || "Cliente ShopeeX"}
+                      {userLabel || userEmail || "Cliente ShopeeMz"}
                     </p>
                     {userEmail && (
                       <p className="text-xs" style={{ color: MUTED }}>{userEmail}</p>

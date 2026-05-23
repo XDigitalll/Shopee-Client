@@ -258,7 +258,7 @@ function compositeStageMeta(orders: Order[]) {
 
 function compositeHeadline(orders: Order[]) {
   if (orders.some((order) => effectiveOrderStatus(order) === "FAILED")) {
-    return "Um pagamento desta compra foi recusado. Acompanha a mensagem da ShopeeX para saber o motivo.";
+    return "Um pagamento desta compra foi recusado. Acompanha a mensagem da ShopeeMz para saber o motivo.";
   }
 
   if (orders.some((order) => customerStage(effectiveOrderStatus(order)) === "PRICING")) {
@@ -803,7 +803,7 @@ export default function OrdersPage() {
 
         {order.adminMessageForClient && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#93C5FD" }}>
-            <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: "#1D4ED8" }}>Mensagem da ShopeeX</p>
+            <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: "#1D4ED8" }}>Mensagem da ShopeeMz</p>
             <p className="mt-2 text-sm" style={{ color: "#1D4ED8", whiteSpace: "pre-wrap" }}>{cleanDisplayText(order.adminMessageForClient)}</p>
           </div>
         )}

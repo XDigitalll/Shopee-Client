@@ -31,14 +31,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!product) {
     return {
       title: "Produto",
-      description: "Detalhes do produto no ShopeeX Digital.",
+      description: "Detalhes do produto no ShopeeMz.",
     };
   }
 
   const title = product.name ?? "Produto";
   const description = product.description
     ? product.description.slice(0, 155)
-    : `Compra ${title} no ShopeeX Digital e recebe em Moçambique. Cotação em 24h.`;
+    : `Compra ${title} no ShopeeMz e recebe em Moçambique. Cotação em 24h.`;
   const image =
     product.primaryThumbnailUrl ||
     product.primaryImageUrl ||
@@ -49,14 +49,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     openGraph: {
-      title: `${title} | ShopeeX Digital`,
+      title: `${title} | ShopeeMz`,
       description,
       type: "website",
       ...(image ? { images: [{ url: image, alt: title }] } : {}),
     },
     twitter: {
       card: "summary_large_image",
-      title: `${title} | ShopeeX Digital`,
+      title: `${title} | ShopeeMz`,
       description,
       ...(image ? { images: [image] } : {}),
     },

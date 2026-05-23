@@ -1,6 +1,6 @@
 # Order attention alerts
 
-ShopeeX Cliente treats customer notifications as an internal order event log. The customer-facing experience is centered on `Pedidos`.
+ShopeeMz Cliente treats customer notifications as an internal order event log. The customer-facing experience is centered on `Pedidos`.
 
 - `useOrdersAttention()` fetches `/customer/orders/attention-summary` when the authenticated shell loads.
 - The hook refreshes on app data changes, browser focus, visible tab changes, and every 60 seconds.

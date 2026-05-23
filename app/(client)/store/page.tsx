@@ -362,7 +362,7 @@ export default function StorePage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED }}>Catálogo</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
-              Loja ShopeeX
+              Loja ShopeeMz
             </h1>
             <p className="mt-1 text-sm" style={{ color: "#9CA3AF" }}>
               Produtos prontos para comprar, pagamento local e entrega em Mocambique.

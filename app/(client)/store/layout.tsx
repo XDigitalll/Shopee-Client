@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   title: "Catálogo de Produtos",
   description: "Explora o nosso catálogo de produtos disponíveis para importação. Electrónica, moda, beleza, casa e muito mais — entregues em Moçambique.",
   openGraph: {
-    title: "Catálogo de Produtos | ShopeeX Digital",
+    title: "Catálogo de Produtos | ShopeeMz",
     description: "Explora o nosso catálogo de produtos disponíveis para importação e entrega em Moçambique.",
     type: "website",
   },

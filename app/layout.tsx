@@ -4,22 +4,22 @@ import { AuthProvider } from "@/components/auth-provider";
 
 export const metadata: Metadata = {
   title: {
-    default: "ShopeeX Digital — Importação para Moçambique",
-    template: "%s | ShopeeX Digital",
+    default: "ShopeeMz",
+    template: "%s | ShopeeMz",
   },
-  description: "Compra nas melhores lojas internacionais — Amazon, Shein, Temu, AliExpress — e recebe em Moçambique. Cotações em 24h, pagamento via M-Pesa e e-Mola.",
+  description: "Plataforma moçambicana de compras internacionais assistidas.",
   keywords: ["importação Moçambique", "compras online Moçambique", "Amazon Moçambique", "Shein Moçambique", "M-Pesa compras"],
   openGraph: {
     type: "website",
     locale: "pt_MZ",
-    siteName: "ShopeeX Digital",
-    title: "ShopeeX Digital — Importação para Moçambique",
-    description: "Compra nas melhores lojas internacionais e recebe em Moçambique. Cotações em 24h.",
+    siteName: "ShopeeMz",
+    title: "ShopeeMz",
+    description: "Plataforma moçambicana de compras internacionais assistidas.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "ShopeeX Digital — Importação para Moçambique",
-    description: "Compra nas melhores lojas internacionais e recebe em Moçambique. Cotações em 24h.",
+    title: "ShopeeMz",
+    description: "Plataforma moçambicana de compras internacionais assistidas.",
   },
   robots: {
     index: true,

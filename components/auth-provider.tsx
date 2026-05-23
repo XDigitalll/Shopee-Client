@@ -297,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? sessionProfile.name
           : typeof sessionProfile?.email === "string" && sessionProfile.email.trim()
             ? sessionProfile.email
-            : "Cliente ShopeeX";
+            : "Cliente ShopeeMz";
     const rawEmail = typeof sessionProfile?.email === "string" && sessionProfile.email.trim()
       ? sessionProfile.email.trim()
       : "";
@@ -308,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const avatarUrlValue = typeof sessionProfile?.avatarUrl === "string" && sessionProfile.avatarUrl.trim()
       ? sessionProfile.avatarUrl.trim()
       : "";
-    const userLabelValue = toDisplayName(rawName) || "Cliente ShopeeX";
+    const userLabelValue = toDisplayName(rawName) || "Cliente ShopeeMz";
     const phoneValue = typeof sessionProfile?.phoneNumber === "string" && sessionProfile.phoneNumber.trim()
       ? sessionProfile.phoneNumber.trim()
       : "";

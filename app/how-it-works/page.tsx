@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Como Funciona",
-  description: "Passo a passo da compra assistida internacional na ShopeeX Digital.",
+  description: "Passo a passo da compra assistida internacional na ShopeeMz.",
 };
 
 const steps = [
@@ -47,7 +47,7 @@ export default function HowItWorksPage() {
                   Compra internacional com acompanhamento local
                 </h1>
                 <p className="mt-4 max-w-2xl text-sm leading-7 text-[#6B7280] sm:text-base">
-                  A ShopeeX simplifica compras em lojas como SHEIN, TEMU, Amazon e AliExpress. Tu envias o pedido, nos analisamos, cotamos, compramos e acompanhamos ate a entrega.
+                  A ShopeeMz simplifica compras em lojas como SHEIN, TEMU, Amazon e AliExpress. Tu envias o pedido, nos analisamos, cotamos, compramos e acompanhamos ate a entrega.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link href="/orders/external/new" className="rounded-2xl bg-[#E8431A] px-5 py-3 text-sm font-black text-white">

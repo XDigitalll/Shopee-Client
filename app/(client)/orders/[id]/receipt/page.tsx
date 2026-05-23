@@ -119,7 +119,7 @@ export default function OrderReceiptPage() {
       { label: "Envio África do Sul → Maputo", value: shippingAmount },
       { label: "Reserva de risco", value: riskReserveAmount },
       { label: "Taxa das alfândegas sul-africana", value: operationalCostAmount },
-      { label: "Comissao ShopeeX Digital", value: siteFeeAmount },
+      { label: "Comissao ShopeeMz", value: siteFeeAmount },
       { label: "Subtotal da cotacao", value: subtotalAmount, highlight: true },
       { label: "Entrega local", value: localDelivery },
       { label: "Total final", value: finalAmount, accent: true },
@@ -154,7 +154,7 @@ export default function OrderReceiptPage() {
       <section id="receipt-sheet" className="min-w-0 rounded-[24px] border bg-white p-4 shadow-sm sm:rounded-[32px] sm:p-6 md:p-8" style={{ borderColor: "#F2D4CC" }}>
         <div className="flex flex-col gap-6 border-b pb-6 md:flex-row md:items-start md:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div className="min-w-0">
-            <p className="text-sm font-semibold" style={{ color: RED }}>ShopeeX Digital</p>
+            <p className="text-sm font-semibold" style={{ color: RED }}>ShopeeMz</p>
             <h1 className="mt-2 text-2xl font-black sm:text-3xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Recibo do pedido</h1>
             <p className="mt-2 max-w-xl text-sm" style={{ color: "#6B7280" }}>
               Comprovativo completo do teu pedido, pronto para imprimir ou guardar em PDF.
@@ -173,7 +173,7 @@ export default function OrderReceiptPage() {
             { label: "Estado final", value: humanize(order?.status) },
             { label: "Tipo de pedido", value: humanize(order?.type) },
             { label: "Entrega", value: humanize(order?.deliveryMethod) },
-            { label: "Loja", value: order?.sourceStore ? humanize(order.sourceStore) : "Loja ShopeeX Digital" },
+            { label: "Loja", value: order?.sourceStore ? humanize(order.sourceStore) : "Loja ShopeeMz" },
           ].map((item) => (
             <article key={item.label} className="min-w-0 rounded-[24px] border px-4 py-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{item.label}</p>

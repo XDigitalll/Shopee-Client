@@ -3,7 +3,7 @@ import { LegalPage } from "@/components/legal-page";
 
 export const metadata: Metadata = {
   title: "Reembolsos e Cancelamentos",
-  description: "Regras simples de cancelamento e reembolso para pedidos ShopeeX Digital.",
+  description: "Regras simples de cancelamento e reembolso para pedidos ShopeeMz.",
 };
 
 export default function RefundsPage() {
@@ -32,14 +32,14 @@ export default function RefundsPage() {
         },
         {
           title: "Produto ja comprado ao fornecedor",
-          body: "Quando a compra internacional ja foi feita, a ShopeeX fica sujeita as politicas do fornecedor, transportadora e plataforma de origem. Se o fornecedor aceitar devolucao ou cancelamento, ajudamos a conduzir o processo.",
+          body: "Quando a compra internacional ja foi feita, a ShopeeMz fica sujeita as politicas do fornecedor, transportadora e plataforma de origem. Se o fornecedor aceitar devolucao ou cancelamento, ajudamos a conduzir o processo.",
         },
         {
           title: "Casos elegiveis para reembolso",
           items: [
             "Produto indisponivel depois do pagamento e antes da compra.",
             "Pagamento confirmado em duplicado.",
-            "Pedido cancelado pela ShopeeX por impossibilidade operacional antes da compra.",
+            "Pedido cancelado pela ShopeeMz por impossibilidade operacional antes da compra.",
             "Falha de entrega causada por erro comprovado da nossa operacao, quando nao for possivel nova entrega.",
           ],
         },

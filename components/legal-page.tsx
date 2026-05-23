@@ -102,7 +102,7 @@ export function LegalPage({ eyebrow, title, description, updatedAt, sections, ct
           <section className="mt-5 rounded-[24px] border p-5 sm:p-6" style={{ borderColor: "#F8C7B8", background: "#FFF0EC" }}>
             <h2 className="text-lg font-black" style={{ color: TEXT }}>Precisas de ajuda?</h2>
             <p className="mt-2 text-sm leading-7" style={{ color: MUTED }}>
-              A equipa X Digital pode esclarecer dúvidas sobre pedidos, pagamentos, privacidade e dados da tua conta.
+              A equipa ShopeeMz pode esclarecer dúvidas sobre pedidos, pagamentos, privacidade e dados da tua conta.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/contact" className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>

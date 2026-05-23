@@ -27,7 +27,7 @@ export function SiteFooter() {
         <div className="mb-10 grid grid-cols-2 gap-8 sm:grid-cols-4">
           <div>
             <Link href="/" className="mb-3 inline-block text-lg font-black text-white" style={{ fontFamily: "'Sora', sans-serif" }}>
-              ShopeeX <span style={{ color: RED }}>Digital</span>
+              ShopeeMz
             </Link>
             <p className="text-xs leading-6">
               Plataforma de importacao intermediaria para o mercado mocambicano, ligada a todas as areas do cliente.
@@ -74,7 +74,7 @@ export function SiteFooter() {
         <div className="mb-6 border-t" style={{ borderColor: "rgba(255,255,255,0.1)" }} />
 
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-          <p className="text-xs">© 2026 ShopeeX Digital. Todos os direitos reservados.</p>
+          <p className="text-xs">© 2026 ShopeeMz. Todos os direitos reservados.</p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {["M-Pesa", "e-Mola", "Visa", "Mastercard"].map((method) => (
               <span

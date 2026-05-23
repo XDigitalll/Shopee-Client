@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidade — X Digital",
-  description: "Como a X Digital (ShopeeX) recolhe, usa, protege e trata dados pessoais de clientes em Moçambique. Direitos de acesso, correcção e eliminação conforme a Lei n.º 1/2021.",
+  title: "Política de Privacidade",
+  description: "Como a ShopeeMz recolhe, usa, protege e trata dados pessoais de clientes em Moçambique. Direitos de acesso, correcção e eliminação conforme a Lei n.º 1/2021.",
   openGraph: {
-    title: "Política de Privacidade — X Digital",
-    description: "Transparência total sobre como gerimos os teus dados pessoais no âmbito dos serviços de compra assistida internacional da X Digital.",
+    title: "Política de Privacidade",
+    description: "Transparência total sobre como gerimos os teus dados pessoais no âmbito dos serviços de compra assistida internacional da ShopeeMz.",
   },
 };
 
@@ -15,12 +15,12 @@ export default function PrivacyPage() {
     <LegalPage
       eyebrow="Privacidade"
       title="Política de Privacidade"
-      description="A X Digital trata os teus dados com responsabilidade e transparência. Esta política explica quais dados recolhemos, porque precisamos deles, com quem partilhamos e como podes exercer os teus direitos — em conformidade com a Lei n.º 1/2021 de Protecção de Dados Pessoais de Moçambique."
+      description="A ShopeeMz trata os teus dados com responsabilidade e transparência. Esta política explica quais dados recolhemos, porque precisamos deles, com quem partilhamos e como podes exercer os teus direitos — em conformidade com a Lei n.º 1/2021 de Protecção de Dados Pessoais de Moçambique."
       updatedAt="23 de maio de 2026"
       sections={[
         {
           title: "1. Quem somos",
-          body: "A X Digital (operada sob a marca ShopeeX Digital) é uma plataforma moçambicana de compra assistida internacional. Actuamos como responsáveis pelo tratamento dos dados pessoais que recolhemos no âmbito dos nossos serviços. Contacto: suporte@xdigital.co.mz.",
+          body: "A ShopeeMz é uma plataforma moçambicana de compra assistida internacional. Actuamos como responsáveis pelo tratamento dos dados pessoais que recolhemos no âmbito dos nossos serviços. Contacto: suporte@xdigital.co.mz.",
         },
         {
           title: "2. Dados que recolhemos",
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
           title: "6. OTP, autenticação e recuperação de acesso",
           bodyLines: [
             "Podemos usar SMS, WhatsApp, Telegram ou email para enviar códigos de confirmação (OTP), links de recuperação de conta e alertas de segurança sobre actividade suspeita.",
-            "A X Digital nunca te pedirá a senha completa por chamada telefónica, mensagem de texto ou email. Qualquer pedido deste tipo é fraudulento — reporta imediatamente ao suporte.",
+            "A ShopeeMz nunca te pedirá a senha completa por chamada telefónica, mensagem de texto ou email. Qualquer pedido deste tipo é fraudulento — reporta imediatamente ao suporte.",
           ],
         },
         {
@@ -75,8 +75,8 @@ export default function PrivacyPage() {
             "Fornecedores de produto: partilhamos apenas os dados estritamente necessários para concluir a compra (morada de entrega, variante, quantidade). Não partilhamos dados de pagamento locais.",
             "Transportadoras e estafetas: morada de entrega, número de telefone de contacto e referências necessárias para a entrega.",
             "Supabase: utilizado para armazenamento seguro de imagens, capturas de ecrã e ficheiros relacionados aos pedidos.",
-            "Serviços de email e notificação: processam dados apenas para entregar mensagens transaccionais em nome da X Digital.",
-            "N8N e automações internas: podem processar dados de pedido para acções automáticas de acompanhamento e notificação, operando exclusivamente em nome da X Digital.",
+            "Serviços de email e notificação: processam dados apenas para entregar mensagens transaccionais em nome da ShopeeMz.",
+            "N8N e automações internas: podem processar dados de pedido para acções automáticas de acompanhamento e notificação, operando exclusivamente em nome da ShopeeMz.",
             "Autoridades competentes: partilhamos dados quando legalmente obrigados, nomeadamente perante a Autoridade Tributária de Moçambique (ATM), Ministério Público ou tribunal com competência.",
           ],
         },
@@ -129,7 +129,7 @@ export default function PrivacyPage() {
         },
         {
           title: "15. Prevenção de fraude e monitorização",
-          body: "A X Digital monitoriza padrões de comportamento para prevenir fraude, uso indevido da plataforma e tentativas de esquemas com pagamentos. Dados recolhidos para este fim são tratados com base no interesse legítimo da empresa e dos clientes em garantir um ambiente seguro. Não utilizamos estes dados para qualquer outra finalidade.",
+          body: "A ShopeeMz monitoriza padrões de comportamento para prevenir fraude, uso indevido da plataforma e tentativas de esquemas com pagamentos. Dados recolhidos para este fim são tratados com base no interesse legítimo da empresa e dos clientes em garantir um ambiente seguro. Não utilizamos estes dados para qualquer outra finalidade.",
         },
         {
           title: "16. Base legal para o tratamento",

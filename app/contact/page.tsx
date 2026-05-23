@@ -5,14 +5,14 @@ import { SiteFooter } from "@/components/site-footer";
 
 export const metadata: Metadata = {
   title: "Contactos",
-  description: "Contactos e horarios de atendimento da ShopeeX Digital.",
+  description: "Contactos e horarios de atendimento da ShopeeMz.",
 };
 
 const contacts = [
-  { title: "WhatsApp", value: "Atendimento disponivel pelos canais oficiais da ShopeeX", detail: "Ideal para cotacoes, actualizacoes e suporte rapido." },
+  { title: "WhatsApp", value: "Atendimento disponivel pelos canais oficiais da ShopeeMz", detail: "Ideal para cotacoes, actualizacoes e suporte rapido." },
   { title: "Email", value: "suporte@xdigital.co.mz", detail: "Para pedidos formais, privacidade, reembolsos e suporte de conta." },
   { title: "Horario", value: "Segunda a sexta, 08h-18h", detail: "Pedidos podem ser enviados online a qualquer momento." },
-  { title: "X Digital", value: "Maputo, Mocambique", detail: "Operacao digital focada em compra assistida internacional." },
+  { title: "ShopeeMz", value: "Maputo, Mocambique", detail: "Operacao digital focada em compra assistida internacional." },
 ];
 
 export default function ContactPage() {
@@ -31,7 +31,7 @@ export default function ContactPage() {
 
           <section className="rounded-[28px] border border-[#F2D4CC] bg-white p-6 shadow-[0_24px_80px_rgba(80,34,14,0.08)] sm:p-8 lg:p-10">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-[#E8431A]">Contacto</p>
-            <h1 className="mt-3 text-3xl font-black leading-tight sm:text-4xl lg:text-5xl">Fala com a ShopeeX Digital</h1>
+            <h1 className="mt-3 text-3xl font-black leading-tight sm:text-4xl lg:text-5xl">Fala com a ShopeeMz</h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-[#6B7280] sm:text-base">
               Estamos aqui para ajudar com cotacoes, pagamentos, entregas, acesso a conta e pedidos de privacidade.
             </p>

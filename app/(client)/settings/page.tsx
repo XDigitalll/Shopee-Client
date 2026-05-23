@@ -154,7 +154,7 @@ export default function SettingsPage() {
     if (activeSection === "profile") {
       return (
         <div className="grid gap-4 md:grid-cols-2">
-          <InputField label="Nome" value={form.name || userLabel || "Cliente ShopeeX"} hint="Este nome ja aparece no header e nos pedidos." />
+          <InputField label="Nome" value={form.name || userLabel || "Cliente ShopeeMz"} hint="Este nome ja aparece no header e nos pedidos." />
           <InputField label="Email" value={(form.email?.endsWith("@xdigital.local") ? "" : form.email) || userEmail || "Email ainda nao configurado"} hint={form.email?.endsWith("@xdigital.local") ? "Adiciona um email real no teu perfil para receber confirmacoes de pedidos." : "Quando o Google entrar, este campo vai refletir os dados reais da conta."} />
           <InputField label="Telefone" value={form.phoneNumber || ""} onChange={(event) => updateField("phoneNumber", event.target.value)} hint="Vamos usar este numero para pagamentos e notificacoes." />
           <InputField label="Origem da conta" value={authSourceLabel} hint="Preparado para sincronizar dados reais do login Google." />

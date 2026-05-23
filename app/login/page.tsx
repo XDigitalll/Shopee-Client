@@ -269,7 +269,7 @@ function LoginPageContent() {
                 Compra global com suporte local e controlo total.
               </h1>
               <p className="max-w-lg text-base leading-8 text-white/82 xl:text-lg">
-                Entra na tua conta ShopeeX Digital para acompanhar pedidos, pagar em metical e receber atualizacoes claras desde a cotacao ate a entrega final.
+                Entra na tua conta ShopeeMz para acompanhar pedidos, pagar em metical e receber atualizacoes claras desde a cotacao ate a entrega final.
               </p>
             </div>
 
