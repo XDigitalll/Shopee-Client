@@ -78,7 +78,7 @@ export default function NewExternalOrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{
     id: number;
-    number: string | null;
+    number: string;
     message: string;
     firstOrder: boolean;
     firstGuestOrder: boolean;
@@ -243,6 +243,9 @@ export default function NewExternalOrderPage() {
         response.orderNumber?.trim() ||
         response.code?.trim() ||
         null;
+      if (!nextOrderNumber) {
+        throw new Error("O pedido foi recebido, mas a referencia nao veio na resposta. Tenta novamente ou contacta o suporte.");
+      }
       const nextMessage = response.message || "Recebemos o teu pedido. Vamos analisar e entrar em contacto pelo telefone informado.";
 
       setSuccessOrder({
@@ -346,7 +349,7 @@ export default function NewExternalOrderPage() {
               <div className="inline-flex flex-col gap-1 rounded-2xl px-5 py-4" style={{ background: SOFT, color: RED }}>
                 <span className="text-xs font-black uppercase tracking-[0.18em]">Referencia do pedido</span>
                 <span className="font-[family-name:var(--font-sora)] text-2xl font-black">
-                  {successOrder.number ?? "---"}
+                  {successOrder.number}
                 </span>
               </div>
               <div className="flex items-center gap-2 rounded-2xl px-4 py-3" style={{ background: "#ECFDF5" }}>
@@ -607,13 +610,10 @@ export default function NewExternalOrderPage() {
                     className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
                     style={{ borderColor: BORDER, background: "#FFFDFC" }}
                   />
-                  <p className="mt-1 text-xs font-semibold" style={{ color: MUTED }}>
-                    Usado para chamadas, M-Pesa/eMola e identificação do pedido.
-                  </p>
                 </div>
 
                 {/* WhatsApp same-as-primary question */}
-                <div>
+                <div className="pt-1">
                   <p className="text-sm font-black">Recebe WhatsApp neste mesmo número?</p>
                   <div className="mt-2 flex gap-3">
                     {[
@@ -639,6 +639,11 @@ export default function NewExternalOrderPage() {
                       );
                     })}
                   </div>
+                  {whatsappSameAsPrimary === true ? (
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      O número principal será usado para atualizações do pedido, códigos de confirmação e recuperação da conta.
+                    </p>
+                  ) : null}
                 </div>
 
                 {/* Alternative WhatsApp number — shown only when Não */}
@@ -656,6 +661,9 @@ export default function NewExternalOrderPage() {
                       className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
                       style={{ borderColor: BORDER, background: "#FFFDFC" }}
                     />
+                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                      Este número será usado para atualizações do pedido, códigos de confirmação e recuperação da conta.
+                    </p>
                   </div>
                 )}
 

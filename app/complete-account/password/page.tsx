@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
-import { apiFetch } from "@/lib/api-client";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 
 const RED = "#E8431A";
@@ -28,7 +27,7 @@ function EyeIcon({ open }: { open: boolean }) {
 
 export default function CompleteAccountPasswordPage() {
   const router = useRouter();
-  const { token, isReady } = useAuth();
+  const { token, isReady, mustChangePassword, profileIncomplete, refreshProfile } = useAuth();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -43,6 +42,13 @@ export default function CompleteAccountPasswordPage() {
     }
   }, [isReady, token, router]);
 
+  useEffect(() => {
+    if (!isReady || !token || mustChangePassword) {
+      return;
+    }
+    router.replace(profileIncomplete ? "/complete-account/profile" : "/profile");
+  }, [isReady, mustChangePassword, profileIncomplete, router, token]);
+
   const passwordsMatch = newPassword.length >= 8 && confirmPassword === newPassword;
   const canSubmit = passwordsMatch && !saving;
 
@@ -54,12 +60,24 @@ export default function CompleteAccountPasswordPage() {
     setDanger("");
 
     const result = await saveAction.run(async () => {
-      await apiFetch<{ success: boolean; mustChangePassword: boolean; profileIncomplete: boolean }>("auth/complete-first-password", {
+      const apiResponse = await fetch("/api/auth/complete-password", {
         method: "POST",
-        token,
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
         body: JSON.stringify({ newPassword, confirmPassword }),
       });
-      router.push("/complete-account/profile");
+      const response = await apiResponse.json().catch(() => null) as {
+        success?: boolean;
+        mustChangePassword?: boolean;
+        profileIncomplete?: boolean;
+        message?: string;
+      } | null;
+      if (!apiResponse.ok) {
+        throw new Error(response?.message || "Nao foi possivel atualizar a senha.");
+      }
+      await refreshProfile();
+      router.replace(response?.profileIncomplete ? "/complete-account/profile" : "/profile");
     });
     if (!result) {
       setDanger(saveAction.error || "Não foi possível atualizar a senha.");
