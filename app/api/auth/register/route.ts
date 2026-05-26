@@ -1,15 +1,9 @@
-﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  buildProfileJson,
-  cookieOpts,
-  PROFILE_COOKIE,
-  REFRESH_COOKIE_NAME,
-  REFRESH_MAX_AGE,
-  SESSION_COOKIE,
-  SESSION_MAX_AGE,
+  setClientAuthCookies,
 } from "@/lib/session";
 import { XSRF_COOKIE } from "@/lib/csrf";
+import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
@@ -76,11 +70,6 @@ export async function POST(request: Request) {
 
     const token: string = payload.token;
     const refreshToken: string = payload.refreshToken;
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, token, cookieOpts(true, SESSION_MAX_AGE));
-    cookieStore.set(REFRESH_COOKIE_NAME, refreshToken, cookieOpts(true, REFRESH_MAX_AGE));
-    cookieStore.set(PROFILE_COOKIE, buildProfileJson(token), cookieOpts(false, SESSION_MAX_AGE));
-
     const nextResponse = NextResponse.json(
       {
         authenticated: true,
@@ -89,20 +78,11 @@ export async function POST(request: Request) {
       { status: 200 }
     );
 
+    setClientAuthCookies(nextResponse, token, refreshToken);
+
     // Forward XSRF-TOKEN cookie from Spring Boot so JS can read it immediately
     // after registration and include it in subsequent mutation requests.
-    const setCookieValues: string[] =
-      typeof response.headers.getSetCookie === "function"
-        ? response.headers.getSetCookie()
-        : response.headers.get("set-cookie")
-          ? [response.headers.get("set-cookie")!]
-          : [];
-
-    for (const value of setCookieValues) {
-      if (value.startsWith(`${XSRF_COOKIE}=`)) {
-        nextResponse.headers.append("Set-Cookie", value);
-      }
-    }
+    forwardNamedSetCookies(nextResponse, response.headers, [XSRF_COOKIE]);
 
     return nextResponse;
   } catch {

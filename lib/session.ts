@@ -19,6 +19,26 @@ export function cookieOpts(httpOnly: boolean, maxAge: number) {
   };
 }
 
+type CookieResponse = {
+  cookies: {
+    set: (name: string, value: string, options: ReturnType<typeof cookieOpts>) => void;
+  };
+};
+
+export function setClientAuthCookies(response: CookieResponse, token: string, refreshToken: string) {
+  response.cookies.set(SESSION_COOKIE, token, cookieOpts(true, SESSION_MAX_AGE));
+  response.cookies.set(REFRESH_COOKIE_NAME, refreshToken, cookieOpts(true, REFRESH_MAX_AGE));
+  response.cookies.set(PROFILE_COOKIE, buildProfileJson(token), cookieOpts(false, SESSION_MAX_AGE));
+}
+
+export function clearClientAuthCookies(response: CookieResponse) {
+  response.cookies.set(SESSION_COOKIE, "", cookieOpts(true, 0));
+  response.cookies.set(REFRESH_COOKIE_NAME, "", cookieOpts(true, 0));
+  response.cookies.set(BACKEND_ACCESS_COOKIE, "", cookieOpts(true, 0));
+  response.cookies.set(BACKEND_REFRESH_COOKIE, "", cookieOpts(true, 0));
+  response.cookies.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
+}
+
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const [, payload] = token.split(".");

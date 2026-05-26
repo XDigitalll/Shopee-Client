@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   BACKEND_ACCESS_COOKIE,
   BACKEND_REFRESH_COOKIE,
-  cookieOpts,
-  PROFILE_COOKIE,
+  clearClientAuthCookies,
   REFRESH_COOKIE_NAME,
   SESSION_COOKIE,
 } from "@/lib/session";
@@ -30,14 +29,9 @@ export async function POST(request: NextRequest) {
     });
   } catch {
     // Best effort — always clear cookies even if backend is unreachable
-  } finally {
-    const cookieStore = await cookies();
-    cookieStore.set(SESSION_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(REFRESH_COOKIE_NAME, "", cookieOpts(true, 0));
-    cookieStore.set(BACKEND_ACCESS_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(BACKEND_REFRESH_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
   }
 
-  return new NextResponse(null, { status: 204 });
+  const nextResponse = new NextResponse(null, { status: 204 });
+  clearClientAuthCookies(nextResponse);
+  return nextResponse;
 }

@@ -1,15 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
-  BACKEND_ACCESS_COOKIE,
   BACKEND_REFRESH_COOKIE,
-  buildProfileJson,
-  cookieOpts,
-  PROFILE_COOKIE,
+  clearClientAuthCookies,
   REFRESH_COOKIE_NAME,
-  REFRESH_MAX_AGE,
-  SESSION_COOKIE,
-  SESSION_MAX_AGE,
+  setClientAuthCookies,
 } from "@/lib/session";
 import { XSRF_COOKIE } from "@/lib/csrf";
 import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
@@ -21,7 +16,9 @@ export async function POST() {
   const refreshToken = cookieStore.get(REFRESH_COOKIE_NAME)?.value || cookieStore.get(BACKEND_REFRESH_COOKIE)?.value;
 
   if (!refreshToken) {
-    return NextResponse.json({ message: "Sem token de renovacao disponivel." }, { status: 401 });
+    const nextResponse = NextResponse.json({ message: "Sem token de renovacao disponivel." }, { status: 401 });
+    clearClientAuthCookies(nextResponse);
+    return nextResponse;
   }
 
   const backendResponse = await fetch(`${BACKEND_URL}/auth/refresh`, {
@@ -34,24 +31,19 @@ export async function POST() {
   const payload = await backendResponse.json().catch(() => null);
 
   if (!backendResponse.ok || !payload?.token || !payload?.refreshToken) {
-    cookieStore.set(SESSION_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(REFRESH_COOKIE_NAME, "", cookieOpts(true, 0));
-    cookieStore.set(BACKEND_ACCESS_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(BACKEND_REFRESH_COOKIE, "", cookieOpts(true, 0));
-    cookieStore.set(PROFILE_COOKIE, "", cookieOpts(false, 0));
-    return NextResponse.json(
+    const nextResponse = NextResponse.json(
       { message: (payload as { message?: string })?.message || "Nao foi possivel renovar a sessao." },
       { status: 401 }
     );
+    clearClientAuthCookies(nextResponse);
+    return nextResponse;
   }
 
   const newToken: string = payload.token;
   const newRefreshToken: string = payload.refreshToken;
-  cookieStore.set(SESSION_COOKIE, newToken, cookieOpts(true, SESSION_MAX_AGE));
-  cookieStore.set(REFRESH_COOKIE_NAME, newRefreshToken, cookieOpts(true, REFRESH_MAX_AGE));
-  cookieStore.set(PROFILE_COOKIE, buildProfileJson(newToken), cookieOpts(false, SESSION_MAX_AGE));
 
   const nextResponse = NextResponse.json({ authenticated: true }, { status: 200 });
+  setClientAuthCookies(nextResponse, newToken, newRefreshToken);
   forwardNamedSetCookies(nextResponse, backendResponse.headers, [XSRF_COOKIE]);
   return nextResponse;
 }

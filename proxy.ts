@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "shopee_client_session";
+const REFRESH_COOKIE = "shopee_client_refresh";
 
 const PROTECTED_PREFIXES = [
   "/profile",
@@ -32,7 +33,8 @@ export function proxy(request: NextRequest) {
   }
 
   const session = request.cookies.get(SESSION_COOKIE);
-  if (!session?.value) {
+  const refresh = request.cookies.get(REFRESH_COOKIE);
+  if (!session?.value && !refresh?.value) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);
