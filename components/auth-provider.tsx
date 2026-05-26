@@ -140,18 +140,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    const authRequired = isAuthRequiredPath(pathname);
     refreshFailureHandledRef.current = true;
     currentRefreshPromiseRef.current = null;
     clearLegacyAuthStorage();
     setSessionProfile(null);
     setIsReady(true);
-    void expireStoredSession();
+    if (authRequired) {
+      void expireStoredSession();
+    }
 
     if (process.env.NODE_ENV !== "production") {
       console.debug("[auth] refresh failed", reason);
     }
 
-    if (isAuthRequiredPath(pathname)) {
+    if (authRequired) {
       router.replace("/login?expired=true");
     }
   }, [pathname, router]);
@@ -202,6 +205,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (profile) {
         setSessionProfile(profile);
+        setIsReady(true);
+        return;
+      }
+
+      if (!isAuthRequiredPath(pathname)) {
+        setSessionProfile(null);
         setIsReady(true);
         return;
       }

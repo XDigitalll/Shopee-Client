@@ -15,7 +15,9 @@ export async function GET() {
   const token = cookieStore.get(SESSION_COOKIE)?.value || cookieStore.get(BACKEND_ACCESS_COOKIE)?.value;
 
   if (!token) {
-    return NextResponse.json({ message: "Nao autenticado." }, { status: 401 });
+    const nextResponse = NextResponse.json({ message: "Nao autenticado." }, { status: 401 });
+    nextResponse.headers.set("X-Shopee-Session-Cookie", "missing");
+    return nextResponse;
   }
 
   const backendResponse = await fetch(`${BACKEND_URL}/users/me`, {
@@ -28,12 +30,14 @@ export async function GET() {
       { message: "Sessao invalida ou expirada." },
       { status: 401 }
     );
+    nextResponse.headers.set("X-Shopee-Session-Cookie", "present-invalid");
     clearClientAuthCookies(nextResponse);
     return nextResponse;
   }
 
   const profile = await backendResponse.json().catch(() => null);
   const nextResponse = NextResponse.json(profile);
+  nextResponse.headers.set("X-Shopee-Session-Cookie", "present-valid");
   forwardNamedSetCookies(nextResponse, backendResponse.headers, [XSRF_COOKIE]);
   return nextResponse;
 }

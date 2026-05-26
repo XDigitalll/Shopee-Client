@@ -17,6 +17,7 @@ export async function POST() {
 
   if (!refreshToken) {
     const nextResponse = NextResponse.json({ message: "Sem token de renovacao disponivel." }, { status: 401 });
+    nextResponse.headers.set("X-Shopee-Refresh-Cookie", "missing");
     clearClientAuthCookies(nextResponse);
     return nextResponse;
   }
@@ -35,6 +36,7 @@ export async function POST() {
       { message: (payload as { message?: string })?.message || "Nao foi possivel renovar a sessao." },
       { status: 401 }
     );
+    nextResponse.headers.set("X-Shopee-Refresh-Cookie", "present-invalid");
     clearClientAuthCookies(nextResponse);
     return nextResponse;
   }
@@ -44,6 +46,7 @@ export async function POST() {
 
   const nextResponse = NextResponse.json({ authenticated: true }, { status: 200 });
   setClientAuthCookies(nextResponse, newToken, newRefreshToken);
+  nextResponse.headers.set("X-Shopee-Refresh-Cookie", "present-rotated");
   forwardNamedSetCookies(nextResponse, backendResponse.headers, [XSRF_COOKIE]);
   return nextResponse;
 }

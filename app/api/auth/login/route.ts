@@ -89,6 +89,7 @@ export async function POST(request: Request) {
     );
 
     setClientAuthCookies(nextResponse, token, refreshToken);
+    nextResponse.headers.set("X-Shopee-Auth-Cookies", "session,refresh,profile");
 
     // Forward XSRF-TOKEN cookie from Spring Boot so JS can read it immediately
     // after login and include it in subsequent mutation requests.
