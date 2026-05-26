@@ -243,11 +243,11 @@ type HeroBanner = {
 
 function bannerObjectPosition(focus?: HeroBanner["imageFocus"]) {
   const positions: Record<NonNullable<HeroBanner["imageFocus"]>, string> = {
-    center: "center",
+    center: "center 25%",
     top: "top center",
     bottom: "bottom center",
-    left: "left center",
-    right: "right center",
+    left: "left 25%",
+    right: "right 25%",
   };
   return positions[focus ?? "center"];
 }
@@ -326,8 +326,8 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
           <div className="hero-banner-overlay absolute inset-0" style={{ zIndex: 1 }} />
           {/* Bottom gradient for dots */}
           <div
-            className="absolute bottom-0 left-0 right-0 h-28"
-            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.45), transparent)", zIndex: 1 }}
+            className="hero-banner-bottom-shade absolute bottom-0 left-0 right-0 h-24 sm:h-28"
+            style={{ zIndex: 1 }}
           />
         </>
       ) : (
@@ -351,10 +351,10 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
       )}
 
       {/* Content */}
-      <div className="hero-banner-content relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-14 sm:px-6 lg:py-20" style={{ zIndex: 2 }}>
-        <div className="max-w-2xl space-y-5 text-white">
+      <div className="hero-banner-content relative mx-auto flex max-w-7xl flex-col justify-between px-4 py-8 sm:justify-center sm:px-6 sm:py-14 lg:py-20" style={{ zIndex: 2 }}>
+        <div className="hero-banner-copy w-[calc(100vw-2rem)] max-w-2xl space-y-3 text-white sm:w-full sm:space-y-5">
           <div
-            className="inline-flex items-center gap-2.5 rounded-full px-4 py-2 text-xs font-bold"
+            className="inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-[11px] font-bold sm:gap-2.5 sm:px-4 sm:text-xs"
             style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
           >
             {isLoadingBanners ? (
@@ -376,7 +376,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
           </div>
 
           <h1
-            className="text-3xl font-black leading-[1.08] sm:text-4xl lg:text-5xl"
+            className="max-w-[13ch] text-[1.8rem] font-black leading-[1.08] sm:max-w-none sm:text-4xl lg:text-5xl"
             style={{ fontFamily: "'Sora',sans-serif", textShadow: "0 2px 32px rgba(0,0,0,0.5)" }}
           >
             {isLoadingBanners ? (
@@ -398,32 +398,36 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
               <div className="h-4 w-8/12 animate-pulse rounded-full bg-white/15" />
             </div>
           ) : hasBanners && banner?.subtitle ? (
-            <p className="max-w-lg text-base leading-7 opacity-90" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+            <p className="max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
               {banner.subtitle}
             </p>
           ) : (
-            <p className="max-w-lg text-base leading-7 opacity-90" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+            <p className="max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
               Produtos prontos para comprar, pagamento local e compra internacional assistida.
             </p>
           )}
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex w-full flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-3">
             <button
               type="button"
               onClick={() => scrollTo("produtos")}
-              className="flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold shadow-lg transition-all"
+              className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl px-3 py-3 text-sm font-bold shadow-lg transition-all sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
               style={{ background: "white", color: RED }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#FFD4C8")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
             >
-              Ver produtos <ArrowRight />
+              <span className="sm:hidden">Produtos</span>
+              <span className="hidden sm:inline">Ver produtos</span>
+              <ArrowRight />
             </button>
             <button
               type="button"
               onClick={() => scrollTo("pedido-externo")}
-              className="flex items-center gap-2 rounded-2xl border-2 border-white/40 px-6 py-3.5 text-sm font-bold text-white transition-all hover:bg-white/10 hover:border-white/70"
+              className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/40 px-3 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 hover:border-white/70 sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
             >
-              Comprar do estrangeiro <ArrowRight />
+              <span className="sm:hidden">Encomenda</span>
+              <span className="hidden sm:inline">Comprar do estrangeiro</span>
+              <ArrowRight />
             </button>
           </div>
 
@@ -436,7 +440,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <button
               type="button"
               onClick={() => resetTimer(current - 1)}
-              className="absolute left-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full text-white hover:bg-white/20"
+              className="absolute left-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-white hover:bg-white/20 sm:flex"
               style={{
                 background: "rgba(0,0,0,0.28)",
                 backdropFilter: "blur(4px)",
@@ -452,7 +456,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <button
               type="button"
               onClick={() => resetTimer(current + 1)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full text-white hover:bg-white/20"
+              className="absolute right-4 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-white hover:bg-white/20 sm:flex"
               style={{
                 background: "rgba(0,0,0,0.28)",
                 backdropFilter: "blur(4px)",
@@ -467,7 +471,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             </button>
 
             {/* Dot indicators */}
-            <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2" style={{ zIndex: 3 }}>
+            <div className="absolute bottom-9 left-1/2 flex -translate-x-1/2 gap-2 sm:bottom-6" style={{ zIndex: 3 }}>
               {banners.map((_, i) => (
                 <button
                   key={i}

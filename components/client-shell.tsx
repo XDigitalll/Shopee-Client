@@ -259,7 +259,14 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
             )}
           </div>
 
-          <button type="button" className="relative sm:hidden ml-auto p-2 rounded-lg text-white/90 hover:bg-white/15" onClick={() => setMenuOpen((value) => !value)} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
+          <Link href="/cart" className="relative ml-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/16 text-white transition hover:bg-white/24 sm:hidden" aria-label="Carrinho">
+            <CartIcon />
+            {cartCount > 0 ? (
+              <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-white px-1.5 text-center text-[10px] font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{cartCount}</span>
+            ) : null}
+          </Link>
+
+          <button type="button" className="relative sm:hidden p-2 rounded-lg text-white/90 hover:bg-white/15" onClick={() => setMenuOpen((value) => !value)} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
             {attentionCount > 0 ? <NotificationBadge count={attentionCount} tone="light" className="absolute -right-1 -top-1" /> : null}
             {menuOpen ? <CloseIcon /> : <MenuIcon />}
           </button>

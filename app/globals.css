@@ -101,6 +101,10 @@ textarea {
     linear-gradient(to top, rgba(0, 0, 0, 0.24), transparent 45%);
 }
 
+.hero-banner-bottom-shade {
+  background: linear-gradient(to top, rgba(0,0,0,0.45), transparent);
+}
+
 @media (max-width: 1023px) {
   .hero-banner-section,
   .hero-banner-content {
@@ -121,7 +125,8 @@ textarea {
 @media (max-width: 767px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(560px, 133.33vw, 760px);
+    min-height: clamp(500px, 76svh, 620px);
+    height: clamp(500px, 76svh, 620px);
   }
 
   .hero-banner-section {
@@ -130,14 +135,34 @@ textarea {
 
   .hero-banner-overlay {
     background:
-      linear-gradient(180deg, rgba(10, 5, 3, 0.5) 0%, rgba(10, 5, 3, 0.78) 52%, rgba(10, 5, 3, 0.88) 100%),
-      linear-gradient(90deg, rgba(10, 5, 3, 0.42), rgba(10, 5, 3, 0.18));
+      radial-gradient(circle at 50% 30%, rgba(10, 5, 3, 0.12) 0%, rgba(10, 5, 3, 0.3) 56%, rgba(10, 5, 3, 0.5) 100%),
+      linear-gradient(180deg, rgba(10, 5, 3, 0.42) 0%, rgba(10, 5, 3, 0.35) 45%, rgba(10, 5, 3, 0.5) 100%);
+  }
+
+  .hero-banner-bottom-shade {
+    background: linear-gradient(to top, rgba(0,0,0,0.32), transparent);
+  }
+
+  .hero-banner-image {
+    object-position: center 25%;
+  }
+
+  .hero-banner-content {
+    justify-content: flex-start;
+    padding-top: clamp(10rem, 31vh, 14rem);
+  }
+
+  .hero-banner-copy {
+    max-width: 100%;
+    border-radius: 26px;
+    padding: 1rem;
   }
 }
 
 @media (max-width: 480px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(560px, 138vw, 740px);
+    min-height: clamp(500px, 74svh, 600px);
+    height: clamp(500px, 74svh, 600px);
   }
 }
