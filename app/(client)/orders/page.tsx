@@ -134,10 +134,22 @@ function orderTotal(order: Order) {
   return orderVisibleTotal(order);
 }
 
+function orderItemChipKey(item: OrderItem, index: number) {
+  return [
+    "item",
+    item.productId ?? "no-product",
+    item.variantId ?? item.variantSku ?? item.selectedVariantLabel ?? item.variantLabel ?? "no-variant",
+    item.productCode ?? item.productName ?? "no-name",
+    item.quantity,
+    item.subtotal ?? item.price ?? "no-total",
+    index,
+  ].join("-");
+}
+
 function itemChips(order: Order) {
   if (order.items?.length) {
     return order.items.slice(0, 4).map((item: OrderItem, index) => ({
-      key: `${item.productId || item.productName || index}`,
+      key: orderItemChipKey(item, index),
       label: `${item.productCode ? `${item.productCode} · ` : ""}${item.productName || "Item"}${item.quantity > 1 ? ` x${item.quantity}` : ""}`,
     }));
   }
@@ -404,6 +416,38 @@ export default function OrdersPage() {
     }));
   };
 
+  const startAddressChange = (order: Order) => {
+    setAddressChangeOrderId(order.id);
+    setAddressCreateOrderId((order.savedAddresses?.length ?? 0) > 0 ? null : order.id);
+    setAddressDrafts((current) => ({
+      ...current,
+      [order.id]: current[order.id] ?? emptyAddressDraft(order),
+    }));
+  };
+
+  const useCurrentLocationForAddress = (order: Order) => {
+    if (!navigator.geolocation) {
+      setFeedback({ type: "error", msg: "Este navegador nao permite obter a localizacao actual." });
+      return;
+    }
+
+    setBusyOrderId(order.id);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const mapsLink = `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+        updateAddressDraft(order, { googleMapsLink: mapsLink });
+        setFeedback({ type: "success", msg: "Localizacao actual adicionada ao link do Google Maps." });
+        setBusyOrderId(null);
+      },
+      () => {
+        setFeedback({ type: "error", msg: "Nao foi possivel obter a localizacao. Confirma a permissao do GPS no navegador." });
+        setBusyOrderId(null);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+    );
+  };
+
   const createDeliveryAddress = async (order: Order) => {
     if (!token) return;
     const draft = addressDrafts[order.id] ?? emptyAddressDraft(order);
@@ -437,23 +481,6 @@ export default function OrdersPage() {
       setFeedback({ type: "success", msg: draft.saveToProfile ? "Morada guardada e escolhida para este pedido." : "Morada escolhida apenas para este pedido." });
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel guardar a morada do pedido." });
-    } finally {
-      setBusyOrderId(null);
-    }
-  };
-
-  const confirmDeliveryAddress = async (order: Order) => {
-    if (!token) return;
-    setBusyOrderId(order.id);
-    try {
-      const updated = await apiFetch<Order>(`orders/${order.id}/delivery-address/confirm`, {
-        method: "PATCH",
-        token,
-      });
-      replaceOrder(updated);
-      setFeedback({ type: "success", msg: "Morada confirmada. A equipa de entrega já pode avançar." });
-    } catch (error) {
-      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel confirmar a morada." });
     } finally {
       setBusyOrderId(null);
     }
@@ -521,7 +548,10 @@ export default function OrdersPage() {
   const renderAddressChoice = (order: Order) => {
     const addresses = order.savedAddresses ?? [];
     const selectedId = selectedAddressIdFor(order);
-    const showCreate = addressCreateOrderId === order.id || order.requiresAddressCreation;
+    const showCreate =
+      addressCreateOrderId === order.id ||
+      order.requiresAddressCreation ||
+      (addressChangeOrderId === order.id && addresses.length === 0);
     const draft = addressDrafts[order.id] ?? emptyAddressDraft(order);
 
     return (
@@ -580,12 +610,24 @@ export default function OrdersPage() {
               ))}
               <label className="block md:col-span-2">
                 <span className="mb-1 block text-sm font-semibold" style={{ color: "#6B7280" }}>Link Google Maps</span>
-                <input
-                  value={draft.googleMapsLink}
-                  onChange={(event) => updateAddressDraft(order, { googleMapsLink: event.target.value })}
-                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                  style={{ borderColor: "#DDD6FE", background: "#FFFDFC" }}
-                />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={draft.googleMapsLink}
+                    onChange={(event) => updateAddressDraft(order, { googleMapsLink: event.target.value })}
+                    className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={{ borderColor: "#DDD6FE", background: "#FFFDFC" }}
+                    placeholder="Cola o link ou usa a tua localização actual"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => useCurrentLocationForAddress(order)}
+                    disabled={busyOrderId === order.id}
+                    className="rounded-2xl border px-4 py-3 text-sm font-black disabled:opacity-60"
+                    style={{ borderColor: "#DDD6FE", color: "#5B21B6", background: "#F5F3FF" }}
+                  >
+                    {busyOrderId === order.id ? "A obter..." : "Usar localização actual"}
+                  </button>
+                </div>
               </label>
             </div>
             <label className="mt-3 flex items-center gap-2 text-sm font-semibold" style={{ color: "#5B21B6" }}>
@@ -625,9 +667,8 @@ export default function OrdersPage() {
     const unreadUpdates = Number(order.unreadUpdatesCount ?? 0);
     const requiresAction = Boolean(order.requiresAction);
     const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
-    const canConfirmAddress = Boolean(order.canConfirmAddress);
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
-    const canConfirmDelivery = Boolean(order.canConfirmDelivery);
+    const canConfirmDelivery = Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY";
 
     return (
       <article
@@ -723,7 +764,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY" || status === "DELIVERY_FAILED") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canConfirmAddress || canChangeDeliveryAddress) && (
+        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY" || status === "DELIVERY_FAILED") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canChangeDeliveryAddress || order.canConfirmAddress) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             {order.lastIssueType ? (
               <>
@@ -735,9 +776,9 @@ export default function OrdersPage() {
             ) : (
               <>
                 <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>A tua encomenda chegou a Maputo</h3>
-                {order.deliveryStatusLabel ? (
-                  <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>{order.deliveryStatusLabel}</p>
-                ) : null}
+                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                  A morada abaixo sera usada para esta entrega. Altera apenas se quiseres receber noutro local.
+                </p>
                 {order.deliveryAddressSnapshot && addressChangeOrderId !== order.id ? (
                   <>
                     <p className="mt-1 text-sm font-semibold" style={{ color: "#5B21B6" }}>Entrega prevista para:</p>
@@ -747,13 +788,8 @@ export default function OrdersPage() {
                     </div>
                     <div className="mt-4 flex flex-wrap gap-3">
                       {canChangeDeliveryAddress ? (
-                        <button type="button" onClick={() => setAddressChangeOrderId(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                        <button type="button" onClick={() => startAddressChange(order)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
                           Alterar morada
-                        </button>
-                      ) : null}
-                      {canConfirmAddress ? (
-                        <button type="button" onClick={() => void confirmDeliveryAddress(order)} disabled={busyOrderId === order.id} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
-                          {busyOrderId === order.id ? "A confirmar..." : "Confirmar morada"}
                         </button>
                       ) : null}
                     </div>
@@ -1037,17 +1073,17 @@ export default function OrdersPage() {
         title={
           confirmAction?.kind === "cancel" ? "Recusar esta proposta?" :
           confirmAction?.kind === "cancel_order" ? "Cancelar este pedido?" :
-          "Confirmar recebimento?"
+          "Recebeste este pedido?"
         }
         message={
           confirmAction?.kind === "cancel"
             ? `O pedido ${orderDisplayCode(orders.find((order) => order.id === confirmAction.orderId))} sera marcado como recusado e a equipa sera informada.`
             : confirmAction?.kind === "cancel_order"
             ? "Esta acao nao pode ser desfeita. O pedido sera cancelado e a equipa sera informada."
-            : `Vamos marcar o pedido ${orderDisplayCode(orders.find((order) => order.id === confirmAction?.orderId))} como recebido para fechar esta etapa.`
+            : `Confirma apenas se o pedido ${orderDisplayCode(orders.find((order) => order.id === confirmAction?.orderId))} ja foi entregue nas tuas maos. Depois disso vamos marcar esta entrega como recebida.`
         }
         confirmLabel={
-          confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order" ? "Cancelar pedido" : "Confirmar recebido"
+          confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order" ? "Cancelar pedido" : "Sim, recebi"
         }
         danger={confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order"}
         pending={busyOrderId === confirmAction?.orderId}
