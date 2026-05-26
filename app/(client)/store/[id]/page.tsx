@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image, { type ImageLoaderProps } from "next/image";
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
@@ -321,6 +321,8 @@ export default function ProductDetailPage() {
   const [wishlist, setWishlist] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const [imgFading, setImgFading] = useState(false);
+  const imageSwipeRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressImageClickRef = useRef(false);
 
   useEffect(() => {
     const loadPage = async () => {
@@ -460,6 +462,32 @@ export default function ProductDetailPage() {
     setActiveImage(images[next]);
   };
 
+  const handleImageSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
+    if (images.length < 2) return;
+    imageSwipeRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleImageSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!imageSwipeRef.current || images.length < 2) {
+      imageSwipeRef.current = null;
+      return;
+    }
+
+    const deltaX = event.clientX - imageSwipeRef.current.x;
+    const deltaY = event.clientY - imageSwipeRef.current.y;
+    imageSwipeRef.current = null;
+
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    suppressImageClickRef.current = true;
+    goImage(deltaX < 0 ? 1 : -1);
+    window.setTimeout(() => {
+      suppressImageClickRef.current = false;
+    }, 120);
+  };
+
   const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
     if (!isReady) return;
     if (!token) {
@@ -541,7 +569,18 @@ export default function ProductDetailPage() {
               <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20" onClick={(e) => { e.stopPropagation(); goImage(1); }}><ChevronNextIcon /></button>
             </>
           )}
-          <img src={activeImage} alt={product.name} className="max-h-[88vh] max-w-[90vw] rounded-2xl object-contain" onClick={(e) => e.stopPropagation()} />
+          <img
+            src={activeImage}
+            alt={product.name}
+            className="max-h-[88vh] max-w-[90vw] touch-pan-y rounded-2xl object-contain"
+            onPointerDown={handleImageSwipeStart}
+            onPointerUp={(event) => {
+              event.stopPropagation();
+              handleImageSwipeEnd(event);
+            }}
+            onPointerCancel={() => { imageSwipeRef.current = null; }}
+            onClick={(e) => e.stopPropagation()}
+          />
           {images.length > 1 && <p className="absolute bottom-6 text-sm font-medium text-white/70">{activeImageIndex + 1} / {images.length}</p>}
         </div>
       )}
@@ -577,9 +616,15 @@ export default function ProductDetailPage() {
           {/* ── Gallery ── */}
           <div className="space-y-3">
             <div
-              className="group relative cursor-zoom-in overflow-hidden rounded-3xl border bg-white"
+              className="group relative touch-pan-y cursor-zoom-in overflow-hidden rounded-3xl border bg-white"
               style={{ borderColor: "#F0F0F0" }}
-              onClick={() => setLightbox(true)}
+              onPointerDown={handleImageSwipeStart}
+              onPointerUp={handleImageSwipeEnd}
+              onPointerCancel={() => { imageSwipeRef.current = null; }}
+              onClick={() => {
+                if (suppressImageClickRef.current) return;
+                setLightbox(true);
+              }}
             >
               {discountPct > 0 && (
                 <span className="absolute left-4 top-4 z-10 rounded-full px-3 py-1.5 text-xs font-black text-white" style={{ background: RED }}>

@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
 import { CategoryIcon } from "@/lib/category-icons";
@@ -263,6 +263,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
   const [hovered, setHovered] = useState(false);
   const [failedBannerIds, setFailedBannerIds] = useState<Set<number>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     apiFetch<HeroBanner[]>("banners", {}).then((data) => {
@@ -290,6 +291,27 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
     }
   };
 
+  const handleSwipeStart = (event: ReactPointerEvent<HTMLElement>) => {
+    swipeRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleSwipeEnd = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!swipeRef.current || count < 2) {
+      swipeRef.current = null;
+      return;
+    }
+
+    const deltaX = event.clientX - swipeRef.current.x;
+    const deltaY = event.clientY - swipeRef.current.y;
+    swipeRef.current = null;
+
+    if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+      return;
+    }
+
+    resetTimer(deltaX < 0 ? current + 1 : current - 1);
+  };
+
   const banner = banners[current] ?? null;
   const hasBanners = loaded && count > 0;
   const isLoadingBanners = !loaded;
@@ -299,6 +321,9 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
       className="hero-banner-section relative overflow-hidden"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onPointerDown={handleSwipeStart}
+      onPointerUp={handleSwipeEnd}
+      onPointerCancel={() => { swipeRef.current = null; }}
     >
       {/* Background: banner image or gradient fallback */}
       {hasBanners && banner ? (
