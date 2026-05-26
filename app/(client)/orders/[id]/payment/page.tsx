@@ -23,15 +23,16 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
 const ACCEPTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
 
-const PAYMENT_CONFIG = {
-  MPESA_NUMBER: process.env.NEXT_PUBLIC_MPESA_NUMBER || "",
-  EMOLA_NUMBER: process.env.NEXT_PUBLIC_EMOLA_NUMBER || "",
-  BANK_NAME: process.env.NEXT_PUBLIC_BANK_NAME || "",
-  BANK_ACCOUNT: process.env.NEXT_PUBLIC_BANK_ACCOUNT || "",
-  ACCOUNT_HOLDER: process.env.NEXT_PUBLIC_ACCOUNT_HOLDER || "",
-};
-
 type PaymentMethodType = "MPESA" | "EMOLA" | "BANK_TRANSFER" | "VISA_MANUAL";
+type PublicPaymentSetting = {
+  method: PaymentMethodType;
+  accountNumber?: string | null;
+  accountHolder?: string | null;
+  bankName?: string | null;
+  branch?: string | null;
+  priority?: number | null;
+  instructions?: string | null;
+};
 type Feedback = { type: "success" | "error"; msg: string } | null;
 type SubmissionResponse = {
   id?: number;
@@ -118,37 +119,38 @@ function statusCopy(status?: string, adminMessage?: string) {
   };
 }
 
-function methodInstructions(method: PaymentMethodType, amount: number) {
+function methodInstructions(setting: PublicPaymentSetting | null, amount: number) {
+  if (!setting) {
+    return [["Estado", "Pagamentos temporariamente indisponiveis. Contacte suporte."]];
+  }
+  const method = setting?.method;
   if (method === "MPESA") {
     return [
-      ["Numero da empresa", PAYMENT_CONFIG.MPESA_NUMBER],
-      ["Nome da conta", PAYMENT_CONFIG.ACCOUNT_HOLDER],
+      ["Numero da empresa", setting.accountNumber || "Por confirmar"],
+      ["Nome da conta", setting.accountHolder || "Por confirmar"],
       ["Valor", formatMoney(amount)],
-      ["Depois", "Envia dinheiro e preenche o numero que efectuou o pagamento."],
+      ["Depois", setting.instructions || "Envia dinheiro e preenche o numero que efectuou o pagamento."],
     ];
   }
   if (method === "EMOLA") {
     return [
-      ["Numero da empresa", PAYMENT_CONFIG.EMOLA_NUMBER],
-      ["Nome da conta", PAYMENT_CONFIG.ACCOUNT_HOLDER],
+      ["Numero da empresa", setting.accountNumber || "Por confirmar"],
+      ["Nome da conta", setting.accountHolder || "Por confirmar"],
       ["Valor", formatMoney(amount)],
-      ["Depois", "Envia dinheiro e preenche o numero que efectuou o pagamento."],
+      ["Depois", setting.instructions || "Envia dinheiro e preenche o numero que efectuou o pagamento."],
     ];
   }
   if (method === "BANK_TRANSFER") {
     return [
-      ["Banco", PAYMENT_CONFIG.BANK_NAME],
-      ["Conta / NIB", PAYMENT_CONFIG.BANK_ACCOUNT],
-      ["Titular", PAYMENT_CONFIG.ACCOUNT_HOLDER],
+      ["Banco", setting.bankName || "Por confirmar"],
+      ["Conta / NIB", setting.accountNumber || "Por confirmar"],
+      ["Titular", setting.accountHolder || "Por confirmar"],
+      ["Agencia", setting.branch || "Opcional"],
       ["Valor", formatMoney(amount)],
+      ["Depois", setting.instructions || "Faz a transferencia e submete o comprovativo."],
     ];
   }
-  return [
-    ["Metodo", "Pagamento por cartao/manual"],
-    ["Titular", PAYMENT_CONFIG.ACCOUNT_HOLDER],
-    ["Valor", formatMoney(amount)],
-    ["Nota", "Guarda o comprovativo se estiver disponivel."],
-  ];
+  return [["Estado", "Pagamentos temporariamente indisponiveis. Contacte suporte."]];
 }
 
 function paymentSubmitErrorMessage(payload: unknown, status?: number) {
@@ -189,6 +191,9 @@ export default function OrderPaymentPage() {
   const submitAction = useAsyncAction();
   const isBusy = submitAction.isRunning;
   const [submission, setSubmission] = useState<SubmissionResponse | null>(null);
+  const [paymentSettings, setPaymentSettings] = useState<PublicPaymentSetting[]>([]);
+  const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(true);
+  const [paymentSettingsError, setPaymentSettingsError] = useState("");
 
   const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!token || !orderId) return;
@@ -213,6 +218,40 @@ export default function OrderPaymentPage() {
   }, [loadOrder]);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadPaymentSettings() {
+      setPaymentSettingsLoading(true);
+      setPaymentSettingsError("");
+      try {
+        const response = await fetch("/api/payment-settings/public", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.message || "Pagamentos temporariamente indisponiveis. Contacte suporte.");
+        }
+        if (!cancelled) {
+          setPaymentSettings(Array.isArray(payload) ? payload : []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setPaymentSettingsError(error instanceof Error ? error.message : "Pagamentos temporariamente indisponiveis. Contacte suporte.");
+          setPaymentSettings([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setPaymentSettingsLoading(false);
+        }
+      }
+    }
+    void loadPaymentSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!token || !orderId) return;
     const interval = window.setInterval(() => {
       void loadOrder({ silent: true });
@@ -230,6 +269,13 @@ export default function OrderPaymentPage() {
     return () => URL.revokeObjectURL(preview);
   }, [file]);
 
+  useEffect(() => {
+    if (paymentSettingsLoading || paymentSettings.length === 0) return;
+    if (!paymentSettings.some((setting) => setting.method === method)) {
+      setMethod(paymentSettings[0].method);
+    }
+  }, [method, paymentSettings, paymentSettingsLoading]);
+
   const relatedOrders = useMemo(
     () => (order?.purchaseGroupKey ? allOrders.filter((item) => item.purchaseGroupKey === order.purchaseGroupKey) : []),
     [allOrders, order],
@@ -240,6 +286,11 @@ export default function OrderPaymentPage() {
   const visual = statusCopy(orderStatus, order?.adminMessageForClient || submission?.reviewNote);
   const canSubmit = orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED";
   const isLocked = ["PAYMENT_SUBMITTED", "PAYMENT_UNDER_REVIEW", "PAID"].includes(orderStatus);
+  const availableMethods = METHODS.filter((item) =>
+    paymentSettings.some((setting) => setting.method === item.key)
+  );
+  const selectedSetting = paymentSettings.find((setting) => setting.method === method) ?? null;
+  const paymentsUnavailable = !paymentSettingsLoading && availableMethods.length === 0;
   const inputClass = "w-full rounded-2xl border px-4 py-3 text-base outline-none";
 
   function validateFile(nextFile: File | null) {
@@ -268,6 +319,7 @@ export default function OrderPaymentPage() {
   }
 
   function validateForm() {
+    if (paymentsUnavailable || !selectedSetting) return "Pagamentos temporariamente indisponiveis. Contacte suporte.";
     if (!payerName.trim()) return "Informe o nome do titular.";
     if (!officialAmount || officialAmount <= 0) return "O valor oficial do pedido ainda nao esta disponivel. Actualiza a pagina e tenta novamente.";
     if ((method === "MPESA" || method === "EMOLA") && !validPhoneForMethod(method, payerPhone)) {
@@ -399,16 +451,22 @@ export default function OrderPaymentPage() {
 
         {canSubmit ? (
           <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+            {paymentsUnavailable ? (
+              <div className="rounded-[22px] border px-4 py-4 text-sm font-semibold" style={{ background: "#FFF5F5", borderColor: "#FECACA", color: "#B42318" }}>
+                {paymentSettingsError || "Pagamentos temporariamente indisponiveis. Contacte suporte."}
+              </div>
+            ) : null}
             <section>
               <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Escolhe o método</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {METHODS.map((item) => {
+                {(paymentSettingsLoading ? METHODS.slice(0, 3) : availableMethods).map((item) => {
                   const active = method === item.key;
                   return (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => setMethod(item.key)}
+                      disabled={paymentSettingsLoading}
                       className="rounded-[22px] border p-4 text-left transition"
                       style={{ borderColor: active ? RED : "#F2D4CC", background: active ? "#FFF4EF" : "#FFFDFC" }}
                     >
@@ -425,7 +483,7 @@ export default function OrderPaymentPage() {
               <div className="rounded-[24px] border p-5" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>
                 <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Instrucoes</p>
                 <div className="mt-4 space-y-3">
-                  {methodInstructions(method, officialAmount).map(([label, value]) => (
+                  {methodInstructions(selectedSetting, officialAmount).map(([label, value]) => (
                     <div key={label} className="rounded-2xl bg-white/75 px-4 py-3">
                       <p className="text-xs font-semibold" style={{ color: "#9CA3AF" }}>{label}</p>
                       <p className="mt-1 text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{value}</p>
@@ -514,7 +572,7 @@ export default function OrderPaymentPage() {
             {fieldError ? <div className="rounded-2xl border px-4 py-3 text-sm" style={{ background: "#FFF5F5", borderColor: "#FECACA", color: "#B42318" }}>{fieldError}</div> : null}
 
             <div className="hidden md:block">
-              <button type="submit" disabled={isBusy} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy ? "#FDB8A7" : RED }}>
+              <button type="submit" disabled={isBusy || paymentsUnavailable || paymentSettingsLoading} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy || paymentsUnavailable || paymentSettingsLoading ? "#FDB8A7" : RED }}>
                 {isBusy ? "A submeter..." : "Submeter pagamento"}
               </button>
               <ClientActionFeedback
@@ -526,7 +584,7 @@ export default function OrderPaymentPage() {
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden" style={{ borderColor: "#F2D4CC" }}>
-              <button type="submit" disabled={isBusy} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy ? "#FDB8A7" : RED }}>
+              <button type="submit" disabled={isBusy || paymentsUnavailable || paymentSettingsLoading} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white" style={{ background: isBusy || paymentsUnavailable || paymentSettingsLoading ? "#FDB8A7" : RED }}>
                 {isBusy ? "A submeter..." : "Submeter pagamento"}
               </button>
               <ClientActionFeedback
