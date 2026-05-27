@@ -321,9 +321,6 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
       className="hero-banner-section relative overflow-hidden"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onPointerDown={handleSwipeStart}
-      onPointerUp={handleSwipeEnd}
-      onPointerCancel={() => { swipeRef.current = null; }}
     >
       {/* Background: banner image or gradient fallback */}
       {hasBanners && banner ? (
@@ -375,8 +372,19 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
         </>
       )}
 
+      {count > 1 && (
+        <div
+          className="absolute inset-0 touch-pan-y"
+          style={{ zIndex: 2 }}
+          aria-hidden="true"
+          onPointerDown={handleSwipeStart}
+          onPointerUp={handleSwipeEnd}
+          onPointerCancel={() => { swipeRef.current = null; }}
+        />
+      )}
+
       {/* Content */}
-      <div className="hero-banner-content relative mx-auto flex max-w-7xl flex-col justify-between px-4 py-8 sm:justify-center sm:px-6 sm:py-14 lg:py-20" style={{ zIndex: 2 }}>
+      <div className="hero-banner-content pointer-events-none relative mx-auto flex max-w-7xl flex-col justify-between px-4 py-8 sm:justify-center sm:px-6 sm:py-14 lg:py-20" style={{ zIndex: 3 }}>
         <div className="hero-banner-copy w-[calc(100vw-2rem)] max-w-2xl space-y-3 text-white sm:w-full sm:space-y-5">
           <div
             className="inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-[11px] font-bold sm:gap-2.5 sm:px-4 sm:text-xs"
@@ -436,7 +444,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <button
               type="button"
               onClick={() => scrollTo("produtos")}
-              className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl px-3 py-3 text-sm font-bold shadow-lg transition-all sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
+              className="pointer-events-auto flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl px-3 py-3 text-sm font-bold shadow-lg transition-all sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
               style={{ background: "white", color: RED }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#FFD4C8")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
@@ -448,7 +456,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <button
               type="button"
               onClick={() => scrollTo("pedido-externo")}
-              className="flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/40 px-3 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 hover:border-white/70 sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
+              className="pointer-events-auto flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/40 px-3 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 hover:border-white/70 sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
             >
               <span className="sm:hidden">Encomenda</span>
               <span className="hidden sm:inline">Comprar do estrangeiro</span>
