@@ -17,7 +17,17 @@ type GoogleMapsLocationFieldProps = {
 };
 
 function locationLink(latitude: number, longitude: number) {
-  return `https://www.google.com/maps?q=${latitude},${longitude}`;
+  return `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+}
+
+function getLocationErrorMessage(error: GeolocationPositionError) {
+  if (error.code === error.PERMISSION_DENIED) {
+    return "Permite o acesso a localizacao/GPS no navegador e tenta novamente.";
+  }
+  if (error.code === error.POSITION_UNAVAILABLE) {
+    return "Nao conseguimos ler o GPS. Liga a localizacao do telemovel e tenta novamente.";
+  }
+  return "A localizacao demorou a responder. Tenta novamente ou cola o link do Google Maps.";
 }
 
 export function GoogleMapsLocationField({
@@ -43,18 +53,36 @@ export function GoogleMapsLocationField({
     }
 
     setLocating(true);
+
+    const applyPosition = (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      onChange(locationLink(latitude, longitude));
+      onBlur?.();
+      setLocationMessage("Localizacao atual adicionada.");
+      setLocating(false);
+    };
+
+    const retryWithNormalAccuracy = (firstError: GeolocationPositionError) => {
+      if (firstError.code === firstError.PERMISSION_DENIED) {
+        setLocationMessage(getLocationErrorMessage(firstError));
+        setLocating(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        applyPosition,
+        (secondError) => {
+          setLocationMessage(getLocationErrorMessage(secondError));
+          setLocating(false);
+        },
+        { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 }
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        onChange(locationLink(latitude, longitude));
-        setLocationMessage("Localizacao atual adicionada. Podes editar o link se quiseres.");
-        setLocating(false);
-      },
-      () => {
-        setLocationMessage("Nao foi possivel obter a localizacao. Cola o link manualmente se tiveres.");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
+      applyPosition,
+      retryWithNormalAccuracy,
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 }
     );
   }
 

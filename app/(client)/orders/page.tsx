@@ -432,19 +432,44 @@ export default function OrdersPage() {
     }
 
     setBusyOrderId(order.id);
+
+    const applyPosition = (position: GeolocationPosition) => {
+      const { latitude, longitude } = position.coords;
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
+      updateAddressDraft(order, { googleMapsLink: mapsLink });
+      setFeedback({ type: "success", msg: "Localizacao actual adicionada ao Google Maps." });
+      setBusyOrderId(null);
+    };
+
+    const errorMessage = (error: GeolocationPositionError) => {
+      if (error.code === error.PERMISSION_DENIED) {
+        return "Permite o acesso a localizacao/GPS no navegador e tenta novamente.";
+      }
+      if (error.code === error.POSITION_UNAVAILABLE) {
+        return "Nao conseguimos ler o GPS. Liga a localizacao do telemovel e tenta novamente.";
+      }
+      return "A localizacao demorou a responder. Tenta novamente ou cola o link do Google Maps.";
+    };
+
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const mapsLink = `https://www.google.com/maps?q=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
-        updateAddressDraft(order, { googleMapsLink: mapsLink });
-        setFeedback({ type: "success", msg: "Localizacao actual adicionada ao link do Google Maps." });
-        setBusyOrderId(null);
+      applyPosition,
+      (firstError) => {
+        if (firstError.code === firstError.PERMISSION_DENIED) {
+          setFeedback({ type: "error", msg: errorMessage(firstError) });
+          setBusyOrderId(null);
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          applyPosition,
+          (secondError) => {
+            setFeedback({ type: "error", msg: errorMessage(secondError) });
+            setBusyOrderId(null);
+          },
+          { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 },
+        );
       },
-      () => {
-        setFeedback({ type: "error", msg: "Nao foi possivel obter a localizacao. Confirma a permissao do GPS no navegador." });
-        setBusyOrderId(null);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 },
     );
   };
 
