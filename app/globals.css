@@ -149,7 +149,7 @@ textarea {
 
   .hero-banner-content {
     justify-content: flex-start;
-    padding-top: clamp(10rem, 31vh, 14rem);
+    padding-top: clamp(8.25rem, 25vh, 11.5rem);
   }
 
   .hero-banner-copy {
