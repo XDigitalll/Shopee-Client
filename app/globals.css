@@ -149,13 +149,25 @@ textarea {
 
   .hero-banner-content {
     justify-content: flex-start;
-    padding-top: clamp(8.25rem, 25vh, 11.5rem);
+    padding-top: clamp(7rem, 21vh, 10rem);
   }
 
   .hero-banner-copy {
     max-width: 100%;
     border-radius: 26px;
     padding: 1rem;
+  }
+
+  .hero-banner-title {
+    min-height: 5.9rem;
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .hero-banner-subtitle {
+    min-height: 3rem;
+    display: flex;
+    align-items: flex-start;
   }
 }
 

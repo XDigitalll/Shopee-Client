@@ -385,7 +385,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
 
       {/* Content */}
       <div className="hero-banner-content pointer-events-none relative mx-auto flex max-w-7xl flex-col justify-between px-4 py-8 sm:justify-center sm:px-6 sm:py-14 lg:py-20" style={{ zIndex: 3 }}>
-        <div className="hero-banner-copy w-[calc(100vw-2rem)] max-w-2xl space-y-3 text-white sm:w-full sm:space-y-5">
+        <div className="hero-banner-copy pointer-events-auto w-[calc(100vw-2rem)] max-w-2xl space-y-3 text-white sm:w-full sm:space-y-5">
           <div
             className="inline-flex max-w-full items-center gap-2 rounded-full px-3 py-2 text-[11px] font-bold sm:gap-2.5 sm:px-4 sm:text-xs"
             style={{ background: "rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
@@ -409,7 +409,7 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
           </div>
 
           <h1
-            className="max-w-[13ch] text-[1.8rem] font-black leading-[1.08] sm:max-w-none sm:text-4xl lg:text-5xl"
+            className="hero-banner-title max-w-[13ch] text-[1.8rem] font-black leading-[1.08] sm:max-w-none sm:text-4xl lg:text-5xl"
             style={{ fontFamily: "'Sora',sans-serif", textShadow: "0 2px 32px rgba(0,0,0,0.5)" }}
           >
             {isLoadingBanners ? (
@@ -431,11 +431,11 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
               <div className="h-4 w-8/12 animate-pulse rounded-full bg-white/15" />
             </div>
           ) : hasBanners && banner?.subtitle ? (
-            <p className="max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+            <p className="hero-banner-subtitle max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
               {banner.subtitle}
             </p>
           ) : (
-            <p className="max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
+            <p className="hero-banner-subtitle max-w-lg text-sm leading-6 opacity-90 sm:text-base sm:leading-7" style={{ fontFamily: "'DM Sans',sans-serif" }}>
               Produtos prontos para comprar, pagamento local e compra internacional assistida.
             </p>
           )}
