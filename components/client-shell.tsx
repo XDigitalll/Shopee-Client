@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { GlobalAppLoader } from "@/components/global-app-loader";
@@ -81,8 +81,25 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     if (needsAuth) router.replace("/login?expired=true");
   }, [isReady, needsAuth, token, router]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuPanelRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [avatarFailed, setAvatarFailed] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (menuPanelRef.current?.contains(target)) return;
+      if (menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [menuOpen]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -266,14 +283,14 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
             ) : null}
           </Link>
 
-          <button type="button" className="relative sm:hidden p-2 rounded-lg text-white/90 hover:bg-white/15" onClick={() => setMenuOpen((value) => !value)} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
+          <button ref={menuButtonRef} type="button" className="relative sm:hidden p-2 rounded-lg text-white/90 hover:bg-white/15" onClick={() => setMenuOpen((value) => !value)} aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}>
             {attentionCount > 0 ? <NotificationBadge count={attentionCount} tone="light" className="absolute -right-1 -top-1" /> : null}
             {menuOpen ? <CloseIcon /> : <MenuIcon />}
           </button>
         </div>
 
         {menuOpen && (
-          <div className="sm:hidden border-t" style={{ borderColor: "rgba(255,255,255,0.2)", background: RED_DARK }}>
+          <div ref={menuPanelRef} className="sm:hidden border-t" style={{ borderColor: "rgba(255,255,255,0.2)", background: RED_DARK }}>
             <div className="space-y-2 px-4 py-4">
               {!isReady ? (
                 <div className="h-[68px] rounded-2xl animate-pulse" style={{ background: "rgba(255,255,255,0.1)" }} />

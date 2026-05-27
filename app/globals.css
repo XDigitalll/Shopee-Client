@@ -125,8 +125,8 @@ textarea {
 @media (max-width: 767px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(500px, 76svh, 620px);
-    height: clamp(500px, 76svh, 620px);
+    min-height: clamp(500px, calc(100svh - 56px), 640px);
+    height: clamp(500px, calc(100svh - 56px), 640px);
   }
 
   .hero-banner-section {
@@ -148,33 +148,32 @@ textarea {
   }
 
   .hero-banner-content {
-    justify-content: flex-start;
-    padding-top: clamp(7rem, 21vh, 10rem);
+    justify-content: flex-end;
+    padding-top: 0;
+    padding-bottom: clamp(4.75rem, 12svh, 6rem);
   }
 
   .hero-banner-copy {
     max-width: 100%;
     border-radius: 26px;
-    padding: 1rem;
+    padding: 0.75rem 1rem;
   }
 
   .hero-banner-title {
-    min-height: 5.9rem;
-    display: flex;
-    align-items: flex-start;
+    height: clamp(5.25rem, 15.5svh, 5.9rem);
+    overflow: hidden;
   }
 
   .hero-banner-subtitle {
-    min-height: 3rem;
-    display: flex;
-    align-items: flex-start;
+    height: 3rem;
+    overflow: hidden;
   }
 }
 
 @media (max-width: 480px) {
   .hero-banner-section,
   .hero-banner-content {
-    min-height: clamp(500px, 74svh, 600px);
-    height: clamp(500px, 74svh, 600px);
+    min-height: clamp(500px, calc(100svh - 56px), 620px);
+    height: clamp(500px, calc(100svh - 56px), 620px);
   }
 }
