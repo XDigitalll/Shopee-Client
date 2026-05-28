@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { getBackendUrl } from "@/lib/server/backend-url";
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
 async function fetchProduct(id: string) {
-  const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
+  const backendUrl = getBackendUrl();
   try {
     const response = await fetch(`${backendUrl}/api/products/${id}`, {
       next: { revalidate: 300 },

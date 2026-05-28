@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:proxy-allowlist": "node --test scripts/xdigital-proxy-allowlist.test.mjs",
     "lint": "eslint"
   },
   "dependencies": {

@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Como configurar ambiente local
+
+1. Copie `.env.example` para `.env.local`.
+2. Ajuste `BACKEND_URL` e `NEXT_PUBLIC_API_URL` para o seu localhost.
+3. Preencha dados publicos de pagamento localmente quando necessario.
+4. Nunca commite passwords, tokens, API keys ou ficheiros `.env`.
+
 ## Getting Started
 
 First, run the development server:
@@ -38,6 +45,14 @@ APP_FRONTEND_URL=https://client-vercel-url
 ```
 
 Do not hardcode Render or localhost in source code. Use environment variables for each environment.
+
+## Proxy cliente allowlist-only
+
+O proxy `app/api/xdigital/[...path]` e apenas para chamadas do cliente final. Ele usa allowlist explicita por metodo e path antes de encaminhar para o backend.
+
+Permitido: `auth/*`, `products/*`, `categories/*`, `banners/public`, `cart/*`, endpoints de pedidos do cliente, `payment-settings/public`, `coupons/validate`, `users/me/*`, tracking publico e `public/*`.
+
+Bloqueado: `admin/*`, `super-admin/*`, `finance/*`, `payments/admin/*`, `internal/*`, `management/*`, `actuator/*`, `debug/*` e qualquer path que nao esteja listado. RBAC no backend continua obrigatorio.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

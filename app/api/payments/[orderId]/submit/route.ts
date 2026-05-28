@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
 import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
+import { getBackendUrl } from "@/lib/server/backend-url";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+const BACKEND_URL = getBackendUrl();
 
 type RouteContext = {
   params: Promise<{

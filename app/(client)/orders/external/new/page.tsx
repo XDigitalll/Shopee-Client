@@ -15,6 +15,9 @@ const MUTED = "#6B7280";
 const BORDER = "#F2D4CC";
 const SOFT = "#FFF0EC";
 const PHONE_PATTERN = /^\+258(82|83|84|85|86|87)\d{7}$/;
+const MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024;
+const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
 const STORE_OPTIONS = [
   { id: "SHEIN", label: "Shein" },
@@ -166,12 +169,22 @@ export default function NewExternalOrderPage() {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
+    const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+    if (!ACCEPTED_SCREENSHOT_TYPES.includes(file.type) || !ACCEPTED_SCREENSHOT_EXTENSIONS.includes(extension)) {
       setScreenshot(null);
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
       }
-      setFeedback({ type: "error", msg: "Anexa uma foto ou screenshot em formato de imagem." });
+      setFeedback({ type: "error", msg: "Formato invalido. Envie JPG, PNG ou WebP." });
+      return;
+    }
+
+    if (file.size > MAX_SCREENSHOT_SIZE) {
+      setScreenshot(null);
+      if (screenshotInputRef.current) {
+        screenshotInputRef.current.value = "";
+      }
+      setFeedback({ type: "error", msg: "O screenshot deve ter no maximo 10MB." });
       return;
     }
 
@@ -680,7 +693,7 @@ export default function NewExternalOrderPage() {
                     <input
                       ref={screenshotInputRef}
                       type="file"
-                      accept="image/*"
+                      accept={ACCEPTED_SCREENSHOT_TYPES.join(",")}
                       onChange={(event) => handleScreenshotChange(event.target.files?.[0] ?? null)}
                       disabled={isSubmitting}
                       className="w-full text-sm font-semibold"

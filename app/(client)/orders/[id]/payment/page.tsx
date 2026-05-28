@@ -296,7 +296,7 @@ export default function OrderPaymentPage() {
   function validateFile(nextFile: File | null) {
     if (!nextFile) return null;
     const extension = `.${nextFile.name.split(".").pop()?.toLowerCase() || ""}`;
-    if (!ACCEPTED_TYPES.includes(nextFile.type) && !ACCEPTED_EXTENSIONS.includes(extension)) {
+    if (!ACCEPTED_TYPES.includes(nextFile.type) || !ACCEPTED_EXTENSIONS.includes(extension)) {
       return "Formato inválido. Usa jpg, jpeg, png, webp ou pdf.";
     }
     if (nextFile.size > MAX_FILE_SIZE) {
@@ -544,7 +544,7 @@ export default function OrderPaymentPage() {
                       </div>
                       <label className="inline-flex cursor-pointer justify-center rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>
                         Escolher ficheiro
-                        <input type="file" accept={ACCEPTED_EXTENSIONS.join(",")} onChange={handleFileChange} className="hidden" />
+                        <input type="file" accept={ACCEPTED_TYPES.join(",")} onChange={handleFileChange} className="hidden" />
                       </label>
                     </div>
 

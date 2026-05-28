@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rawOrderVisibleTotal } from "@/lib/order-money";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
+import { getBackendUrl } from "@/lib/server/backend-url";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+const BACKEND_URL = getBackendUrl();
 
 function toAmount(order: Record<string, unknown>) {
   return rawOrderVisibleTotal(order);

@@ -34,7 +34,14 @@ const BENEFITS = [
 ];
 
 const STORES = ["Shein", "Temu", "Amazon", "AliExpress", "Zara"];
-const BACKEND_PUBLIC_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const BACKEND_PUBLIC_URL = getBackendPublicUrl();
+
+function getBackendPublicUrl() {
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (backendUrl) return backendUrl.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "development") return "http://localhost:8080";
+  throw new Error("NEXT_PUBLIC_API_URL is required in production.");
+}
 
 function CheckIcon() {
   return (

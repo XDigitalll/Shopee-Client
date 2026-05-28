@@ -7,8 +7,9 @@ import {
   REFRESH_COOKIE_NAME,
   SESSION_COOKIE,
 } from "@/lib/session";
+import { getBackendUrl } from "@/lib/server/backend-url";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+const BACKEND_URL = getBackendUrl();
 
 export async function POST(request: NextRequest) {
   const body = await request.text().catch(() => "");

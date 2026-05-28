@@ -171,7 +171,14 @@ export default function CartPage() {
     setIsApplyingCoupon(true);
     setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
     try {
-      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, { method: "POST", body: JSON.stringify({ code: couponCode.trim(), subtotal: selectedLocalSubtotal, appliesTo: "INTERNAL_PRODUCTS" }) });
+      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, {
+        method: "POST",
+        body: JSON.stringify({
+          code: couponCode.trim(),
+          selectedItemIds: selectedLocalItems.map((item) => item.itemId),
+          appliesTo: "INTERNAL_PRODUCTS",
+        }),
+      });
       setCoupon(payload);
       setCouponFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
     } catch (error: any) {

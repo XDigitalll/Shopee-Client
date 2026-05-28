@@ -2,10 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
 import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
+import { getBackendUrl } from "@/lib/server/backend-url";
+import { isAllowedXdigitalProxyPath } from "@/lib/server/xdigital-proxy-allowlist";
 
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+const BACKEND_URL = getBackendUrl();
+const FORBIDDEN_MESSAGE = "Endpoint não permitido neste canal.";
+
+function clientIp(request: NextRequest) {
+  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    || request.headers.get("x-real-ip")
+    || "unknown";
+}
 
 async function forward(request: NextRequest, path: string[]) {
+  const endpoint = `/${path.join("/")}`;
+  if (!isAllowedXdigitalProxyPath(path, request.method)) {
+    console.warn("[security:client-proxy-blocked]", {
+      method: request.method,
+      path: endpoint,
+      ip: clientIp(request),
+    });
+    return NextResponse.json(
+      { message: FORBIDDEN_MESSAGE },
+      { status: 403 }
+    );
+  }
+
   const url = new URL(request.url);
   const backendUrl = new URL(`${BACKEND_URL}/${path.join("/")}`);
 
@@ -66,7 +88,7 @@ async function forward(request: NextRequest, path: string[]) {
   if (process.env.NODE_ENV !== "production" && !backendResponse.ok) {
     console.warn("[proxy:xdigital]", {
       status: backendResponse.status,
-      endpoint: `/${path.join("/")}`,
+      endpoint,
       method: request.method,
       hasAuthCookie: Boolean(cookieToken),
       hasXsrfHeader: Boolean(xsrfToken),
@@ -116,6 +138,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return forward(request, path);
+}
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   return forward(request, path);
 }

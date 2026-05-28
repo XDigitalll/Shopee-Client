@@ -297,7 +297,7 @@ export default function CheckoutPage() {
         method: "POST",
         body: JSON.stringify({
           code: couponCode.trim(),
-          subtotal: total,
+          selectedItemIds: localItems.map((item) => item.itemId),
           appliesTo: "INTERNAL_PRODUCTS",
         }),
       });
