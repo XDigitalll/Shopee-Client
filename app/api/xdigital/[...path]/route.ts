@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 import { BACKEND_ACCESS_COOKIE, SESSION_COOKIE } from "@/lib/session";
 import { XSRF_COOKIE, XSRF_HEADER } from "@/lib/csrf";
 import { forwardNamedSetCookies } from "@/lib/proxy-cookies";
@@ -12,6 +15,35 @@ function clientIp(request: NextRequest) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
     || request.headers.get("x-real-ip")
     || "unknown";
+}
+
+function summarizeFormData(form: FormData) {
+  const entries: Array<Record<string, unknown>> = [];
+  for (const [name, value] of form.entries()) {
+    if (typeof value === "string") {
+      const lower = name.toLowerCase();
+      let safeValue = value;
+      if (lower.includes("phone") || lower.includes("whatsapp")) {
+        safeValue = value.replace(/\d(?=\d{3})/g, "*");
+      } else if (lower.includes("url") || lower.includes("link")) {
+        safeValue = value ? "[redacted-url]" : "";
+      } else if (value.length > 120) {
+        safeValue = `${value.slice(0, 120)}...`;
+      }
+      entries.push({ name, type: "field", value: safeValue });
+      continue;
+    }
+
+    const file = value as File;
+    entries.push({
+      name,
+      type: "file",
+      filename: file.name,
+      size: file.size,
+      contentType: file.type,
+    });
+  }
+  return entries;
 }
 
 async function forward(request: NextRequest, path: string[]) {
@@ -41,7 +73,7 @@ async function forward(request: NextRequest, path: string[]) {
     headers.set("Authorization", `Bearer ${cookieToken}`);
   }
 
-  if (contentType) {
+  if (contentType && !contentType.toLowerCase().includes("multipart/form-data")) {
     headers.set("Content-Type", contentType);
   }
 
@@ -67,8 +99,41 @@ async function forward(request: NextRequest, path: string[]) {
   };
 
   if (request.method !== "GET" && request.method !== "HEAD") {
-    if (contentType.includes("multipart/form-data")) {
-      init.body = await request.arrayBuffer();
+    if (contentType.toLowerCase().includes("multipart/form-data")) {
+      const incomingFormData = await request.formData();
+      const outgoingFormData = new FormData();
+
+      for (const [key, value] of incomingFormData.entries()) {
+        outgoingFormData.append(key, value);
+      }
+
+      console.log("[proxy:xdigital:multipart:incoming]", [...incomingFormData.entries()]);
+      console.log("[proxy:xdigital:multipart:outgoing]", [...outgoingFormData.entries()]);
+      console.info("[proxy:xdigital:multipart:summary]", {
+        endpoint,
+        method: request.method,
+        target: backendUrl.pathname,
+        incoming: summarizeFormData(incomingFormData),
+        outgoing: summarizeFormData(outgoingFormData),
+      });
+
+      const multipartHeaders = new Headers();
+      multipartHeaders.set("Accept", "application/json");
+      const authHeader = headers.get("Authorization");
+      if (authHeader) {
+        multipartHeaders.set("Authorization", authHeader);
+      }
+      const forwardedXsrfToken = headers.get(XSRF_HEADER);
+      if (forwardedXsrfToken) {
+        multipartHeaders.set(XSRF_HEADER, forwardedXsrfToken);
+      }
+      const forwardedCookie = headers.get("Cookie");
+      if (forwardedCookie) {
+        multipartHeaders.set("Cookie", forwardedCookie);
+      }
+
+      init.headers = multipartHeaders;
+      init.body = outgoingFormData;
     } else {
       init.body = await request.text();
     }

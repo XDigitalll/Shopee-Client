@@ -30,6 +30,21 @@ type ApiOptions = RequestInit & {
   token?: string | null;
 };
 
+function isFormDataBody(body: BodyInit | null | undefined) {
+  if (!body || typeof FormData === "undefined") return false;
+  if (body instanceof FormData) return true;
+  const candidate = body as unknown as {
+    append?: unknown;
+    entries?: unknown;
+    get?: unknown;
+    [Symbol.toStringTag]?: string;
+  };
+  return candidate[Symbol.toStringTag] === "FormData"
+    || (typeof candidate.append === "function"
+      && typeof candidate.entries === "function"
+      && typeof candidate.get === "function");
+}
+
 function isMutation(method: string) {
   return !["GET", "HEAD", "OPTIONS"].includes(method);
 }
@@ -84,7 +99,7 @@ function statusFallbackMessage(status: number): string {
 
 async function performRequest(path: string, options: ApiOptions = {}) {
   const headers = new Headers(options.headers);
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const isFormData = isFormDataBody(options.body);
 
   if (!headers.has("Content-Type") && options.body && !isFormData) {
     headers.set("Content-Type", "application/json");

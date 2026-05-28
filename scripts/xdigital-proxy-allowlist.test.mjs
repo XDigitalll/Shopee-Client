@@ -29,6 +29,15 @@ test("path desconhecido retorna 403", () => {
   assert.equal(isAllowedXdigitalProxyPath(["unknown", "endpoint"], "GET"), false);
 });
 
+test("customer/orders/attention-summary passa para autenticados", () => {
+  assert.equal(isAllowedXdigitalProxyPath(["customer", "orders", "attention-summary"], "GET"), true);
+});
+
+test("admin/* continua bloqueado depois do allowlist fix", () => {
+  assert.equal(isAllowedXdigitalProxyPath(["admin", "orders"], "GET"), false);
+  assert.equal(isAllowedXdigitalProxyPath(["admin", "finance", "overview"], "GET"), false);
+});
+
 test("PATCH funciona apenas para paths permitidos", () => {
   assert.equal(isAllowedXdigitalProxyPath(["customer", "orders", "123", "mark-updates-seen"], "PATCH"), true);
   assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "status"], "PATCH"), false);

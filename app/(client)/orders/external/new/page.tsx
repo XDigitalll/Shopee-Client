@@ -70,6 +70,14 @@ function isValidDescription(value: string): boolean {
 }
 
 type InputState = "empty" | "url" | "valid-description" | "weak-description" | "spam";
+type FieldKey = "product" | "quantity" | "phone" | "whatsappChoice" | "communicationPhone" | "terms";
+
+type ValidationIssue = {
+  field: FieldKey;
+  message: string;
+};
+
+type FieldErrors = Partial<Record<FieldKey, string>>;
 
 function getInputState(value: string): InputState {
   const trimmed = value.trim();
@@ -108,6 +116,7 @@ export default function NewExternalOrderPage() {
   const [communicationPhone, setCommunicationPhone] = useState("+258");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<{
@@ -121,6 +130,12 @@ export default function NewExternalOrderPage() {
     temporaryPassword?: string;
     loginIdentifier?: string;
   } | null>(null);
+  const productInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const quantityInputRef = useRef<HTMLInputElement | null>(null);
+  const phoneInputRef = useRef<HTMLInputElement | null>(null);
+  const whatsappChoiceRef = useRef<HTMLDivElement | null>(null);
+  const communicationPhoneRef = useRef<HTMLInputElement | null>(null);
+  const termsRef = useRef<HTMLLabelElement | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -153,45 +168,84 @@ export default function NewExternalOrderPage() {
     return digits ? `+258${digits}` : "";
   }
 
-  function validateForm() {
+  function validateForm(): ValidationIssue | null {
     const inputState = getInputState(productLink);
     if (inputState === "empty" || inputState === "spam") {
-      return "Cola um link OU descreve claramente o produto. Ex: \"Calças cargo pretas da SHEIN tamanho M\".";
+      return {
+        field: "product",
+        message: "Cola o link da loja ou descreve o produto com nome, loja, cor, tamanho ou modelo.",
+      };
     }
     if (inputState === "weak-description") {
-      return "Descrição demasiado curta. Adiciona mais detalhes: produto, cor, tamanho e marca.";
+      return {
+        field: "product",
+        message: "Descreve melhor o produto: inclui nome, loja, cor, tamanho ou modelo.",
+      };
     }
 
     if (!Number.isFinite(quantity) || quantity < 1) {
-      return "A quantidade deve ser no minimo 1.";
+      return { field: "quantity", message: "Indica uma quantidade igual ou superior a 1." };
     }
 
     if (!phoneNumber.trim()) {
-      return "Indica o teu numero de telefone principal.";
+      return { field: "phone", message: "Preenche o telefone principal. Exemplo: +25884xxxxxxx." };
     }
 
     if (!PHONE_PATTERN.test(normalizePhone(phoneNumber))) {
-      return "Usa um telefone valido de Mocambique. Ex: +25884xxxxxxx.";
+      return { field: "phone", message: "Usa um telefone valido de Mocambique. Exemplo: +25884xxxxxxx." };
     }
 
     if (whatsappSameAsPrimary === null) {
-      return "Indica se recebes WhatsApp neste mesmo numero.";
+      return { field: "whatsappChoice", message: "Escolhe se recebes WhatsApp neste mesmo numero." };
     }
 
     if (whatsappSameAsPrimary === false) {
       if (!communicationPhone.trim() || communicationPhone.trim() === "+258") {
-        return "Indica o numero WhatsApp para receber mensagens.";
+        return { field: "communicationPhone", message: "Preenche o numero WhatsApp para receber mensagens." };
       }
       if (!PHONE_PATTERN.test(normalizePhone(communicationPhone))) {
-        return "Numero WhatsApp invalido. Ex: +25884xxxxxxx.";
+        return { field: "communicationPhone", message: "Usa um numero WhatsApp valido. Exemplo: +25884xxxxxxx." };
       }
     }
 
     if (!acceptedLegalTerms) {
-      return "Confirma que leste e concordas com os Termos de Uso e a Politica de Privacidade.";
+      return { field: "terms", message: "Marca esta caixa para confirmar os Termos de Uso e a Politica de Privacidade." };
     }
 
     return null;
+  }
+
+  function focusField(field: FieldKey) {
+    const targets: Record<FieldKey, HTMLElement | null> = {
+      product: productInputRef.current,
+      quantity: quantityInputRef.current,
+      phone: phoneInputRef.current,
+      whatsappChoice: whatsappChoiceRef.current,
+      communicationPhone: communicationPhoneRef.current,
+      terms: termsRef.current,
+    };
+    const target = targets[field];
+    requestAnimationFrame(() => {
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLButtonElement) {
+        target.focus();
+      }
+    });
+  }
+
+  function setSingleFieldError(issue: ValidationIssue) {
+    setFieldErrors({ [issue.field]: issue.message });
+    setFeedback({ type: "error", msg: issue.message });
+    focusField(issue.field);
+  }
+
+  function clearFieldError(field: FieldKey) {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   }
 
   function handleScreenshotChange(file: File | null) {
@@ -241,16 +295,12 @@ export default function NewExternalOrderPage() {
       return;
     }
 
-    const validationMessage = validateForm();
-    if (validationMessage) {
-      setFeedback({ type: "error", msg: validationMessage });
-      requestAnimationFrame(() => {
-        const target = document.querySelector<HTMLInputElement | HTMLTextAreaElement>("textarea:invalid, input:invalid, #productInput, #phoneInput");
-        target?.scrollIntoView({ behavior: "smooth", block: "center" });
-        target?.focus();
-      });
+    const validationIssue = validateForm();
+    if (validationIssue) {
+      setSingleFieldError(validationIssue);
       return;
     }
+    setFieldErrors({});
 
     const cleanLink = productLink.trim();
     const cleanVariant = variant.trim();
@@ -258,31 +308,41 @@ export default function NewExternalOrderPage() {
     const cleanCommPhone = whatsappSameAsPrimary ? cleanPhone : normalizePhone(communicationPhone);
 
     const body = new FormData();
-    body.set("externalCartUrl", cleanLink);
+    body.append("productLink", cleanLink);
+    body.append("externalCartUrl", cleanLink);
+    body.append("link", cleanLink);
+    body.append("description", cleanLink);
+    body.append("variant", cleanVariant);
+    body.append("quantity", String(quantity));
+    body.append("primaryPhoneNumber", cleanPhone);
+    body.append("phoneNumber", cleanPhone);
+    body.append("sourceStore", selectedStore);
+    body.append("source", selectedStore);
+    body.append("whatsappPhone", cleanCommPhone || cleanPhone);
+
     body.set("cartLink", cleanLink);
-    body.set("productLink", cleanLink);
-    body.set("link", cleanLink);
-    body.set("sourceStore", selectedStore);
+    body.set("store", selectedStore);
     body.set("requestInputType", getInputState(cleanLink) === "url" ? "LINK" : "DESCRIPTION");
-    body.set("quantity", String(quantity));
-    body.set("primaryPhoneNumber", cleanPhone);
-    body.set("phoneNumber", cleanPhone);
+    body.set("phone", cleanPhone);
     body.set("communicationChannel", "WHATSAPP");
     body.set("whatsappSameAsPrimary", String(Boolean(whatsappSameAsPrimary)));
     body.set("communicationPhone", cleanCommPhone);
     if (cleanVariant) {
-      body.set("variant", cleanVariant);
       body.set("variantDetails", cleanVariant);
       body.set("productDetails", cleanVariant);
     }
     if (screenshot) {
-      body.set("screenshot", screenshot);
+      body.append("screenshot", screenshot, screenshot.name);
     }
 
     setIsSubmitting(true);
     setFeedback({ type: "loading", msg: "A enviar pedido para analise." });
 
     try {
+      for (const [key, value] of body.entries()) {
+        console.log(key, value);
+      }
+
       const response = await apiFetch<SubmissionResponse>("orders/external", {
         method: "POST",
         body,
@@ -588,23 +648,34 @@ export default function NewExternalOrderPage() {
                   </label>
                   <textarea
                     id="productInput"
+                    ref={productInputRef}
                     value={productLink}
-                    onChange={(event) => setProductLink(event.target.value)}
+                    onChange={(event) => {
+                      setProductLink(event.target.value);
+                      clearFieldError("product");
+                    }}
                     disabled={isSubmitting}
                     rows={3}
+                    aria-invalid={Boolean(fieldErrors.product)}
+                    aria-describedby={fieldErrors.product ? "productInput-error" : undefined}
                     placeholder="Cole o link ou descreva: ex. Calças cargo pretas SHEIN tamanho M"
                     className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none transition-colors"
                     style={{
                       borderColor: (() => {
+                        if (fieldErrors.product) return "#dc2626";
                         const s = getInputState(productLink);
                         if (s === "url" || s === "valid-description") return "#16a34a";
-                        if (s === "weak-description") return "#d97706";
-                        if (s === "spam") return "#dc2626";
+                        if (s === "weak-description" || s === "spam") return "#d97706";
                         return BORDER;
                       })(),
-                      background: "#FFFDFC",
+                      background: fieldErrors.product ? "#FFF5F5" : "#FFFDFC",
                     }}
                   />
+                  {fieldErrors.product ? (
+                    <p id="productInput-error" className="mt-2 rounded-xl border px-3 py-2 text-sm font-bold leading-5" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
+                      {fieldErrors.product}
+                    </p>
+                  ) : null}
 
                   {/* Feedback line */}
                   {(() => {
@@ -621,16 +692,10 @@ export default function NewExternalOrderPage() {
                         Descrição reconhecida.
                       </p>
                     );
-                    if (s === "weak-description") return (
+                    if (s === "weak-description" || s === "spam") return (
                       <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold leading-5" style={{ color: "#92400E" }}>
                         <svg className="mt-px shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
-                        Descrição curta. Adiciona produto, cor, tamanho e marca.
-                      </p>
-                    );
-                    if (s === "spam") return (
-                      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#991B1B" }}>
-                        <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
-                        Demasiado genérico. Descreve melhor o produto.
+                        Descreve melhor o produto: nome, loja, cor, tamanho ou modelo.
                       </p>
                     );
                     return (
@@ -670,14 +735,25 @@ export default function NewExternalOrderPage() {
                     <label htmlFor="quantityInput" className="text-sm font-black">Quantidade</label>
                     <input
                       id="quantityInput"
+                      ref={quantityInputRef}
                       type="number"
                       min={1}
                       value={quantity}
-                      onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+                      onChange={(event) => {
+                        setQuantity(Math.max(1, Number(event.target.value) || 1));
+                        clearFieldError("quantity");
+                      }}
                       disabled={isSubmitting}
+                      aria-invalid={Boolean(fieldErrors.quantity)}
+                      aria-describedby={fieldErrors.quantity ? "quantityInput-error" : undefined}
                       className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-black outline-none"
-                      style={{ borderColor: BORDER, background: "#FFFDFC" }}
+                      style={{ borderColor: fieldErrors.quantity ? "#dc2626" : BORDER, background: fieldErrors.quantity ? "#FFF5F5" : "#FFFDFC" }}
                     />
+                    {fieldErrors.quantity ? (
+                      <p id="quantityInput-error" className="mt-2 text-xs font-bold leading-5" style={{ color: "#B42318" }}>
+                        {fieldErrors.quantity}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -688,17 +764,32 @@ export default function NewExternalOrderPage() {
                   </label>
                   <input
                     id="phoneInput"
+                    ref={phoneInputRef}
                     value={phoneNumber}
-                    onChange={(event) => setPhoneNumber(event.target.value)}
+                    onChange={(event) => {
+                      setPhoneNumber(event.target.value);
+                      clearFieldError("phone");
+                    }}
                     disabled={isSubmitting}
+                    aria-invalid={Boolean(fieldErrors.phone)}
+                    aria-describedby={fieldErrors.phone ? "phoneInput-error" : "phoneInput-help"}
                     placeholder="+25884xxxxxxx"
                     className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
-                    style={{ borderColor: BORDER, background: "#FFFDFC" }}
+                    style={{ borderColor: fieldErrors.phone ? "#dc2626" : BORDER, background: fieldErrors.phone ? "#FFF5F5" : "#FFFDFC" }}
                   />
+                  {fieldErrors.phone ? (
+                    <p id="phoneInput-error" className="mt-2 rounded-xl border px-3 py-2 text-sm font-bold leading-5" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
+                      {fieldErrors.phone}
+                    </p>
+                  ) : (
+                    <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
+                      Usa o formato +258 seguido de 82, 83, 84, 85, 86 ou 87 e mais 7 digitos.
+                    </p>
+                  )}
                 </div>
 
                 {/* WhatsApp same-as-primary question */}
-                <div className="pt-1">
+                <div ref={whatsappChoiceRef} className="pt-1 rounded-2xl border p-3" style={{ borderColor: fieldErrors.whatsappChoice ? "#dc2626" : "transparent", background: fieldErrors.whatsappChoice ? "#FFF5F5" : "transparent" }}>
                   <p className="text-sm font-black">Recebe WhatsApp neste mesmo número?</p>
                   <div className="mt-2 flex gap-3">
                     {[
@@ -711,7 +802,10 @@ export default function NewExternalOrderPage() {
                           key={label}
                           type="button"
                           disabled={isSubmitting}
-                          onClick={() => setWhatsappSameAsPrimary(value)}
+                          onClick={() => {
+                            setWhatsappSameAsPrimary(value);
+                            clearFieldError("whatsappChoice");
+                          }}
                           className="rounded-2xl border px-6 py-2.5 text-sm font-black transition"
                           style={{
                             borderColor: active ? RED : BORDER,
@@ -732,6 +826,12 @@ export default function NewExternalOrderPage() {
                 </div>
 
                 {/* Alternative WhatsApp number — shown only when Não */}
+                {fieldErrors.whatsappChoice ? (
+                  <p className="-mt-4 text-sm font-bold leading-5" style={{ color: "#B42318" }}>
+                    {fieldErrors.whatsappChoice}
+                  </p>
+                ) : null}
+
                 {whatsappSameAsPrimary === false && (
                   <div>
                     <label htmlFor="commPhoneInput" className="text-sm font-black">
@@ -739,13 +839,24 @@ export default function NewExternalOrderPage() {
                     </label>
                     <input
                       id="commPhoneInput"
+                      ref={communicationPhoneRef}
                       value={communicationPhone}
-                      onChange={(event) => setCommunicationPhone(event.target.value)}
+                      onChange={(event) => {
+                        setCommunicationPhone(event.target.value);
+                        clearFieldError("communicationPhone");
+                      }}
                       disabled={isSubmitting}
+                      aria-invalid={Boolean(fieldErrors.communicationPhone)}
+                      aria-describedby={fieldErrors.communicationPhone ? "commPhoneInput-error" : undefined}
                       placeholder="+25884xxxxxxx"
                       className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
-                      style={{ borderColor: BORDER, background: "#FFFDFC" }}
+                      style={{ borderColor: fieldErrors.communicationPhone ? "#dc2626" : BORDER, background: fieldErrors.communicationPhone ? "#FFF5F5" : "#FFFDFC" }}
                     />
+                    {fieldErrors.communicationPhone ? (
+                      <p id="commPhoneInput-error" className="mt-2 rounded-xl border px-3 py-2 text-sm font-bold leading-5" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
+                        {fieldErrors.communicationPhone}
+                      </p>
+                    ) : null}
                     <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                       Este número será usado para atualizações do pedido, códigos de confirmação e recuperação da conta.
                     </p>
@@ -782,12 +893,17 @@ export default function NewExternalOrderPage() {
                   </div>
                 </div>
 
-                <label className="flex items-start gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
+                <label ref={termsRef} className="flex items-start gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: fieldErrors.terms ? "#dc2626" : BORDER, background: fieldErrors.terms ? "#FFF5F5" : "#FFFDFC" }}>
                   <input
                     type="checkbox"
                     checked={acceptedLegalTerms}
-                    onChange={(event) => setAcceptedLegalTerms(event.target.checked)}
+                    onChange={(event) => {
+                      setAcceptedLegalTerms(event.target.checked);
+                      clearFieldError("terms");
+                    }}
                     disabled={isSubmitting}
+                    aria-invalid={Boolean(fieldErrors.terms)}
+                    aria-describedby={fieldErrors.terms ? "terms-error" : undefined}
                     className="mt-1 h-4 w-4 shrink-0 accent-[#E8431A]"
                   />
                   <span className="text-sm font-semibold leading-6" style={{ color: TEXT }}>
@@ -802,10 +918,15 @@ export default function NewExternalOrderPage() {
                     .
                   </span>
                 </label>
+                {fieldErrors.terms ? (
+                  <p id="terms-error" className="-mt-4 text-sm font-bold leading-5" style={{ color: "#B42318" }}>
+                    {fieldErrors.terms}
+                  </p>
+                ) : null}
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || !acceptedLegalTerms}
+                  disabled={isSubmitting}
                   className="w-full rounded-2xl px-5 py-4 text-base font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ background: RED }}
                 >
