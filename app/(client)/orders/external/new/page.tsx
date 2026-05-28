@@ -19,6 +19,9 @@ const MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
+const SPAM_WORDS = new Set(["oi", "olá", "ola", "ok", "sim", "nao", "não", "produto", "quero", "item", "123", "teste", "test", "ajuda", "help", "info", "hi", "hey", "bom", "obrigado"]);
+const MIN_DESC_CHARS = 10;
+const MIN_DESC_WORDS = 2;
 const STORE_OPTIONS = [
   { id: "SHEIN", label: "Shein" },
   { id: "AMAZON", label: "Amazon" },
@@ -48,6 +51,33 @@ function looksLikeUrl(value: string): boolean {
   if (KNOWN_DOMAINS.some((d) => trimmed.toLowerCase().includes(d))) return true;
   const spaceCount = (trimmed.match(/\s/g) ?? []).length;
   return spaceCount < 3 && trimmed.includes(".");
+}
+
+function isSpamInput(value: string): boolean {
+  const lower = value.trim().toLowerCase();
+  if (!lower) return false;
+  if (/^\d+$/.test(lower)) return true;
+  if (lower.length < 4) return true;
+  if (SPAM_WORDS.has(lower)) return true;
+  return false;
+}
+
+function isValidDescription(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || isSpamInput(trimmed)) return false;
+  if (trimmed.length < MIN_DESC_CHARS) return false;
+  return trimmed.split(/\s+/).filter(Boolean).length >= MIN_DESC_WORDS;
+}
+
+type InputState = "empty" | "url" | "valid-description" | "weak-description" | "spam";
+
+function getInputState(value: string): InputState {
+  const trimmed = value.trim();
+  if (!trimmed) return "empty";
+  if (looksLikeUrl(trimmed)) return "url";
+  if (isSpamInput(trimmed)) return "spam";
+  if (isValidDescription(trimmed)) return "valid-description";
+  return "weak-description";
 }
 
 type SubmissionResponse = Order & {
@@ -124,8 +154,12 @@ export default function NewExternalOrderPage() {
   }
 
   function validateForm() {
-    if (!productLink.trim()) {
-      return "Cola o link ou descreve o produto que queres comprar.";
+    const inputState = getInputState(productLink);
+    if (inputState === "empty" || inputState === "spam") {
+      return "Cola um link OU descreve claramente o produto. Ex: \"Calças cargo pretas da SHEIN tamanho M\".";
+    }
+    if (inputState === "weak-description") {
+      return "Descrição demasiado curta. Adiciona mais detalhes: produto, cor, tamanho e marca.";
     }
 
     if (!Number.isFinite(quantity) || quantity < 1) {
@@ -229,7 +263,7 @@ export default function NewExternalOrderPage() {
     body.set("productLink", cleanLink);
     body.set("link", cleanLink);
     body.set("sourceStore", selectedStore);
-    body.set("requestInputType", looksLikeUrl(cleanLink) ? "LINK" : "DESCRIPTION");
+    body.set("requestInputType", getInputState(cleanLink) === "url" ? "LINK" : "DESCRIPTION");
     body.set("quantity", String(quantity));
     body.set("primaryPhoneNumber", cleanPhone);
     body.set("phoneNumber", cleanPhone);
@@ -547,7 +581,7 @@ export default function NewExternalOrderPage() {
                   </div>
                 </div>
 
-                {/* Product input — text, not URL */}
+                {/* Product input — URL or description */}
                 <div>
                   <label htmlFor="productInput" className="text-sm font-black">
                     Link ou descrição do produto
@@ -558,26 +592,61 @@ export default function NewExternalOrderPage() {
                     onChange={(event) => setProductLink(event.target.value)}
                     disabled={isSubmitting}
                     rows={3}
-                    placeholder="Cole o link da loja ou descreva o produto que quer comprar"
-                    className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none"
-                    style={{ borderColor: BORDER, background: "#FFFDFC" }}
+                    placeholder="Cole o link ou descreva: ex. Calças cargo pretas SHEIN tamanho M"
+                    className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none transition-colors"
+                    style={{
+                      borderColor: (() => {
+                        const s = getInputState(productLink);
+                        if (s === "url" || s === "valid-description") return "#16a34a";
+                        if (s === "weak-description") return "#d97706";
+                        if (s === "spam") return "#dc2626";
+                        return BORDER;
+                      })(),
+                      background: "#FFFDFC",
+                    }}
                   />
-                  {productLink.trim() && looksLikeUrl(productLink) && (
-                    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
-                      <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                      </svg>
-                      Link reconhecido.
-                    </p>
-                  )}
-                  {productLink.trim() && !looksLikeUrl(productLink) && (
-                    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
-                      <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                      </svg>
-                      Descrição reconhecida.
-                    </p>
-                  )}
+
+                  {/* Feedback line */}
+                  {(() => {
+                    const s = getInputState(productLink);
+                    if (s === "url") return (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
+                        <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
+                        Link reconhecido.
+                      </p>
+                    );
+                    if (s === "valid-description") return (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
+                        <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
+                        Descrição reconhecida.
+                      </p>
+                    );
+                    if (s === "weak-description") return (
+                      <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold leading-5" style={{ color: "#92400E" }}>
+                        <svg className="mt-px shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                        Descrição curta. Adiciona produto, cor, tamanho e marca.
+                      </p>
+                    );
+                    if (s === "spam") return (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#991B1B" }}>
+                        <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" /></svg>
+                        Demasiado genérico. Descreve melhor o produto.
+                      </p>
+                    );
+                    return (
+                      <div className="mt-2 rounded-xl p-3" style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}>
+                        <p className="text-xs font-semibold" style={{ color: "#92400E" }}>Exemplos de descrições aceites:</p>
+                        <ul className="mt-1 space-y-0.5">
+                          {["Calças cargo pretas da SHEIN tamanho M", "Nike Air Force branco número 42", "iPhone 13 Pro Max azul 256GB"].map((ex) => (
+                            <li key={ex} className="flex items-start gap-1 text-xs" style={{ color: "#78350F" }}>
+                              <span className="mt-px shrink-0">·</span>
+                              <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setProductLink(ex)}>{ex}</button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Quantity + variant row */}
