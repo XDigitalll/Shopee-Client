@@ -560,25 +560,22 @@ export default function NewExternalOrderPage() {
                     rows={3}
                     placeholder="Cole o link da loja ou descreva o produto que quer comprar"
                     className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none"
-                    style={{
-                      borderColor: productLink.trim() && !looksLikeUrl(productLink) ? "#FCD34D" : BORDER,
-                      background: "#FFFDFC",
-                    }}
+                    style={{ borderColor: BORDER, background: "#FFFDFC" }}
                   />
-                  {productLink.trim() && !looksLikeUrl(productLink) && (
-                    <p className="mt-1.5 flex items-start gap-1.5 text-xs font-semibold leading-5" style={{ color: "#92400E" }}>
-                      <svg className="mt-px shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                      </svg>
-                      Se tiver link, cole o endereço completo. Se não tiver, descreva o produto.
-                    </p>
-                  )}
                   {productLink.trim() && looksLikeUrl(productLink) && (
                     <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
                       <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
                         <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                       </svg>
                       Link reconhecido.
+                    </p>
+                  )}
+                  {productLink.trim() && !looksLikeUrl(productLink) && (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
+                      <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                      </svg>
+                      Descrição reconhecida.
                     </p>
                   )}
                 </div>
