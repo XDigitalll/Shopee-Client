@@ -1,14 +1,20 @@
 import type { Order } from "@/lib/types";
 
-type MoneyOrder = Pick<Order, "type" | "totalAmount" | "quote" | "payment">;
+type MoneyOrder = Pick<Order, "type" | "totalAmount" | "totalAfterDiscount" | "quote" | "payment">;
+
+function positive(value: unknown) {
+  const amount = Number(value || 0);
+  return amount > 0 ? amount : undefined;
+}
 
 export function orderVisibleTotal(order?: MoneyOrder | null) {
   const isExternal = String(order?.type ?? "").toUpperCase() === "EXTERNAL";
   return Number(
-    order?.payment?.amount
-      || (isExternal ? order?.quote?.finalAmountWithDeliveryMzn : undefined)
-      || (isExternal ? order?.quote?.finalAmountMzn : undefined)
-      || order?.totalAmount
+    (isExternal ? positive(order?.quote?.finalAmountWithDeliveryMzn) : undefined)
+      || (isExternal ? positive(order?.quote?.finalAmountMzn) : undefined)
+      || positive(order?.totalAfterDiscount)
+      || positive(order?.totalAmount)
+      || positive(order?.payment?.amount)
       || 0
   );
 }
@@ -19,10 +25,11 @@ export function rawOrderVisibleTotal(order: Record<string, unknown>) {
   const isExternal = String(order.type ?? "").toUpperCase() === "EXTERNAL";
 
   return Number(
-    payment?.amount
-      || (isExternal ? quote?.finalAmountWithDeliveryMzn : undefined)
-      || (isExternal ? quote?.finalAmountMzn : undefined)
-      || order.totalAmount
+    (isExternal ? positive(quote?.finalAmountWithDeliveryMzn) : undefined)
+      || (isExternal ? positive(quote?.finalAmountMzn) : undefined)
+      || positive(order.totalAfterDiscount)
+      || positive(order.totalAmount)
+      || positive(payment?.amount)
       || 0
   );
 }

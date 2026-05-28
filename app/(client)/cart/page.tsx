@@ -7,14 +7,12 @@ import { useRouter } from "next/navigation";
 
 import { ClientActionFeedback, ClientConfirmDialog, ClientFeedbackDock, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { formatMoney } from "@/lib/format";
-import type { Cart, CartItem, CouponValidation } from "@/lib/types";
+import type { Cart, CartItem } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
-import { normalizeClientError } from "@/lib/client-errors";
 
 const RED = "#E8431A";
 const RED_PALE = "#FCEBEB";
-const GREEN = "#2E8B57";
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
 
 const passthroughImageLoader = ({ src }: ImageLoaderProps) => src;
@@ -54,14 +52,10 @@ export default function CartPage() {
   const [cart, setCart] = useState<Cart | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
-  const [couponFeedback, setCouponFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [checkoutFeedback, setCheckoutFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
-  const [couponCode, setCouponCode] = useState("");
-  const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [busyItemId, setBusyItemId] = useState<number | null>(null);
   const [isRemovingSelected, setIsRemovingSelected] = useState(false);
-  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
   const [confirmRemoveItem, setConfirmRemoveItem] = useState<CartItem | null>(null);
   const [confirmRemoveSelected, setConfirmRemoveSelected] = useState(false);
 
@@ -103,8 +97,6 @@ export default function CartPage() {
   const selectedLocalItems = selectedItems.filter((item) => item.itemType !== "EXTERNAL" && !item.madeToOrder);
   const selectedExternalItems = selectedItems.filter((item) => item.itemType === "EXTERNAL" || item.madeToOrder);
   const selectedLocalSubtotal = selectedLocalItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
-  const discountAmount = Number(coupon?.discountAmount || 0);
-  const finalTotal = Math.max(selectedLocalSubtotal - discountAmount, 0);
   const allSelected = cart?.items?.length ? cart.items.every((item) => selectedIds.includes(item.itemId)) : false;
 
   const patchLocalItem = (productId: number, quantity: number) => {
@@ -166,28 +158,6 @@ export default function CartPage() {
     }
   };
 
-  const applyCoupon = async () => {
-    if (!token || !couponCode.trim()) return;
-    setIsApplyingCoupon(true);
-    setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
-    try {
-      const payload = await fetchWithAuth<CouponValidation>("/api/coupons/validate", token, {
-        method: "POST",
-        body: JSON.stringify({
-          code: couponCode.trim(),
-          selectedItemIds: selectedLocalItems.map((item) => item.itemId),
-          appliesTo: "INTERNAL_PRODUCTS",
-        }),
-      });
-      setCoupon(payload);
-      setCouponFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
-    } catch (error: any) {
-      setCoupon(null);
-      setCouponFeedback({ type: "error", msg: normalizeClientError(error, "Cupão inválido ou expirado.").message });
-    } finally {
-      setIsApplyingCoupon(false);
-    }
-  };
 
   const proceedToCheckout = () => {
     if (!token) {
@@ -315,21 +285,10 @@ export default function CartPage() {
 
             <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
               <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal local</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
-              <div className="flex items-center justify-between text-sm"><span style={{ color: GREEN }}>Desconto aplicado</span><strong style={{ color: GREEN, fontFamily: "'Sora', sans-serif" }}>- {formatMoney(discountAmount)}</strong></div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>Cupão</label>
-              <div className="flex gap-2">
-                <input value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase())} placeholder="Ex.: BEMVINDO10" className="w-full rounded-2xl border px-4 py-3 text-sm outline-none" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }} />
-                <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim()} className="rounded-2xl px-4 py-3 text-sm font-bold text-white transition" style={{ background: isApplyingCoupon || !couponCode.trim() ? "#FDB8A7" : RED, cursor: isApplyingCoupon || !couponCode.trim() ? "not-allowed" : "pointer" }}>{isApplyingCoupon ? "..." : "Aplicar"}</button>
-              </div>
-              <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
-              {coupon?.valid && <p className="text-sm font-medium" style={{ color: GREEN }}>{coupon.message}</p>}
             </div>
 
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "#F2D4CC", background: "#FFF4EF" }}>
-              <div className="flex items-center justify-between"><span className="text-sm font-semibold" style={{ color: "#6B7280" }}>Total final</span><strong className="text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(finalTotal)}</strong></div>
+              <div className="flex items-center justify-between"><span className="text-sm font-semibold" style={{ color: "#6B7280" }}>Total local</span><strong className="text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
             </div>
 
             <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
