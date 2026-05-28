@@ -40,6 +40,7 @@ test("admin/* continua bloqueado depois do allowlist fix", () => {
 
 test("PATCH funciona apenas para paths permitidos", () => {
   assert.equal(isAllowedXdigitalProxyPath(["customer", "orders", "123", "mark-updates-seen"], "PATCH"), true);
+  assert.equal(isAllowedXdigitalProxyPath(["customer", "orders", "123", "confirm-delivery"], "PATCH"), true);
   assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "status"], "PATCH"), false);
 });
 

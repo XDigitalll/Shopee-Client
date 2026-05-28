@@ -425,7 +425,7 @@ export default function OrdersPage() {
     }));
   };
 
-  const useCurrentLocationForAddress = (order: Order) => {
+  const applyCurrentLocationForAddress = (order: Order) => {
     if (!navigator.geolocation) {
       setFeedback({ type: "error", msg: "Este navegador nao permite obter a localizacao actual." });
       return;
@@ -532,9 +532,10 @@ export default function OrdersPage() {
     const orderLabel = orderDisplayCode(orders.find((order) => order.id === orderId));
     setBusyOrderId(orderId);
     try {
-      await apiFetch(`orders/${orderId}/confirm-received`, { method: "PUT", token });
+      await apiFetch<Order>(`customer/orders/${orderId}/confirm-delivery`, { method: "PATCH", token });
       setFeedback({ type: "success", msg: `Pedido ${orderLabel} confirmado como recebido.` });
       await loadOrders();
+      setConfirmAction(null);
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel confirmar o recebimento." });
     } finally {
@@ -544,7 +545,7 @@ export default function OrdersPage() {
 
   const markOrderUpdatesSeen = async (orderId: number) => {
     if (!token) return;
-    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, unreadUpdatesCount: 0, requiresAction: false } : order));
+    setOrders((current) => current.map((order) => order.id === orderId ? { ...order, unreadUpdatesCount: 0 } : order));
     await apiFetch(`customer/orders/${orderId}/mark-updates-seen`, { method: "PATCH", token }).catch(() => null);
   };
 
@@ -645,7 +646,7 @@ export default function OrdersPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => useCurrentLocationForAddress(order)}
+                    onClick={() => applyCurrentLocationForAddress(order)}
                     disabled={busyOrderId === order.id}
                     className="rounded-2xl border px-4 py-3 text-sm font-black disabled:opacity-60"
                     style={{ borderColor: "#DDD6FE", color: "#5B21B6", background: "#F5F3FF" }}
@@ -1115,11 +1116,11 @@ export default function OrdersPage() {
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
           if (!confirmAction) return;
-          const action =
-            confirmAction.kind === "cancel" || confirmAction.kind === "cancel_order"
-              ? handleCancel(confirmAction.orderId)
-              : handleConfirmReceived(confirmAction.orderId);
-          void action.finally(() => setConfirmAction(null));
+          if (confirmAction.kind === "cancel" || confirmAction.kind === "cancel_order") {
+            void handleCancel(confirmAction.orderId).finally(() => setConfirmAction(null));
+            return;
+          }
+          void handleConfirmReceived(confirmAction.orderId);
         }}
       />
     </div>
