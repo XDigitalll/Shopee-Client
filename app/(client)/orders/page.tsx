@@ -943,7 +943,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {(order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.nextActionLabel || (order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora")}</Link>}
+            {(order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora"}</Link>}
             {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
             {canConfirmDelivery && (
               <button

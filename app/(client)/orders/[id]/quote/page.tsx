@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ApiRequestError, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -14,7 +14,6 @@ import { AuthExpiredError } from "@/lib/auth";
 
 const RED = "#E8431A";
 const GREEN = "#2E8B57";
-const paymentMethods = ["MPESA", "EMOLA", "VISA", "MASTERCARD", "BANK_TRANSFER"];
 
 async function fetchWithToken<T>(url: string, _token: string) {
   const response = await fetch(url, {
@@ -63,11 +62,6 @@ export default function OrderQuotePage() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [method, setMethod] = useState("MPESA");
-  const [payerName, setPayerName] = useState("");
-  const [payerPhone, setPayerPhone] = useState("+258");
-  const [transactionId, setTransactionId] = useState("");
-  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -93,7 +87,7 @@ export default function OrderQuotePage() {
   const inputClass = "w-full rounded-2xl border px-4 py-3 text-sm outline-none";
   const orderStatus = order?.status ?? "";
   const isPayOnDelivery = Boolean(order?.payOnDelivery) && order?.deliveryMethod === "DELIVERY";
-  const showPaymentSection = ["PENDING_PAYMENT", "PAYMENT_REJECTED", "PAYMENT_SUBMITTED", "PAYMENT_UNDER_REVIEW"].includes(orderStatus)
+  const showPaymentSection = ["PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(orderStatus)
     || (orderStatus === "PAID" && !isPayOnDelivery);
   const q = order?.quote;
   const finalAmount = orderVisibleTotal(order);
@@ -132,7 +126,7 @@ export default function OrderQuotePage() {
           msg:
             Boolean(updatedOrder.payOnDelivery) && updatedOrder.deliveryMethod === "DELIVERY"
               ? "Proposta aceite. Vamos seguir com entrega e cobranca no momento da rececao."
-              : "Proposta aceite. Agora so falta submeter o teu pagamento para seguirmos com a compra.",
+              : "Proposta aceite. Clica em Pagar agora para efetuar o pagamento via PaySuite.",
         });
         if (Boolean(updatedOrder.payOnDelivery) && updatedOrder.deliveryMethod === "DELIVERY") {
           router.push("/orders");
@@ -155,34 +149,6 @@ export default function OrderQuotePage() {
     }
   };
 
-  const handlePaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!order) return;
-    if (!requireActiveSession()) return;
-
-    setIsBusy(true);
-    setFeedback(null);
-    try {
-      void method;
-      void payerName;
-      void payerPhone;
-      void transactionId;
-      void notes;
-      router.push(`/orders/${order.id}/payment`);
-    } catch (error) {
-      const message =
-        error instanceof AuthExpiredError
-          ? "A tua sessao expirou. Entra novamente."
-          : error instanceof ApiRequestError && error.code === "VERIFICATION_REQUIRED"
-            ? error.message || "Antes de submeter o pagamento, verifica o teu telefone pelo WhatsApp."
-          : error instanceof Error
-            ? error.message
-            : "Nao foi possivel iniciar o pagamento. Tenta novamente.";
-      setFeedback({ type: "error", msg: message });
-    } finally {
-      setIsBusy(false);
-    }
-  };
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -262,7 +228,7 @@ export default function OrderQuotePage() {
                 <p className="mt-3 text-sm leading-7" style={{ color: "#6B7280" }}>
                   {isPayOnDelivery
                     ? "Aceita a proposta para reservarmos a compra. O pagamento sera feito na entrega ao domicilio."
-                    : "Aceita a proposta e submete o pagamento para seguirmos com a compra internacional em teu nome."}
+                    : "Aceita a proposta e paga via PaySuite para seguirmos com a compra internacional em teu nome."}
                 </p>
               </div>
             </div>
@@ -328,10 +294,10 @@ export default function OrderQuotePage() {
               <div>
                 <p className="text-sm font-semibold" style={{ color: RED }}>Pagamento</p>
                 <h2 className="mt-1 text-2xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
-                  Confirmar o teu pagamento
+                  Efetuar pagamento
                 </h2>
                 <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>
-                  Preenche os dados usados no pagamento para a nossa equipa validar e seguir com a compra.
+                  Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway PaySuite processa o pagamento.
                 </p>
               </div>
               <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF8F5" }}>
@@ -344,15 +310,11 @@ export default function OrderQuotePage() {
 
             {orderStatus === "PAID" ? (
               <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ background: "#F0FDF4", borderColor: "#86EFAC", color: "#166534" }}>
-                O teu pagamento ja foi submetido e confirmado para este pedido.
-              </div>
-            ) : orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW" ? (
-              <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ background: "#EFF6FF", borderColor: "#BFDBFE", color: "#1D4ED8" }}>
-                O pagamento ja foi submetido e esta a aguardar validacao financeira.
+                O teu pagamento foi confirmado pelo PaySuite e o pedido está a avançar.
               </div>
             ) : (
               <div className="mt-5 rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFF8F5", color: "#6B7280" }}>
-                <p>Paga via M-Pesa, eMola ou cartao. A confirmacao e automatica quando o gateway processa o pagamento.</p>
+                <p>Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway PaySuite processa o pagamento.</p>
                 <Link href={`/orders/${orderId}/payment`} className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: RED }}>
                   {orderStatus === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora"}
                 </Link>
