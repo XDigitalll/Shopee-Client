@@ -164,35 +164,44 @@ export default function OrderPaymentPage() {
     setFieldError(null);
     setFeedback(null);
 
+    // Capture the error synchronously inside the run callback — paysuiteAction.error
+    // is React state and will be stale (still "") when read immediately after await.
+    let capturedErrorMsg: string | null = null;
+
     const result = await paysuiteAction.run(async () => {
-      const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite`, {
-        method: "POST",
-        body: JSON.stringify({
-          method: paysuiteMethod,
-          returnUrl: typeof window !== "undefined"
-            ? `${window.location.origin}/orders/${order.id}/payment`
-            : undefined,
-        }),
-      });
-      setPaysuitePayment(response);
-      emitClientDataChanged();
-      setFeedback({
-        type: "success",
-        msg: "Pagamento iniciado. Serás redireccionado para o checkout PaySuite.",
-      });
-      if (response.checkoutUrl) {
-        window.location.assign(response.checkoutUrl);
+      try {
+        const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite`, {
+          method: "POST",
+          body: JSON.stringify({
+            method: paysuiteMethod,
+            returnUrl: typeof window !== "undefined"
+              ? `${window.location.origin}/orders/${order.id}/payment`
+              : undefined,
+          }),
+        });
+        setPaysuitePayment(response);
+        emitClientDataChanged();
+        setFeedback({
+          type: "success",
+          msg: "Pagamento iniciado. Serás redireccionado para o checkout PaySuite.",
+        });
+        if (response.checkoutUrl) {
+          window.location.assign(response.checkoutUrl);
+        }
+        return true;
+      } catch (err) {
+        capturedErrorMsg = normalizeClientError(
+          err,
+          "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
+        ).message;
+        throw err;
       }
-      return true;
     });
 
     if (!result) {
       setFeedback({
         type: "error",
-        msg: normalizeClientError(
-          paysuiteAction.error,
-          "Não foi possível iniciar o pagamento. Tenta novamente.",
-        ).message,
+        msg: capturedErrorMsg ?? "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
       });
     }
   }

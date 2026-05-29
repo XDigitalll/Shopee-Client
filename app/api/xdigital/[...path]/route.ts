@@ -150,17 +150,6 @@ async function forward(request: NextRequest, path: string[]) {
     );
   }
 
-  if (process.env.NODE_ENV !== "production" && !backendResponse.ok) {
-    console.warn("[proxy:xdigital]", {
-      status: backendResponse.status,
-      endpoint,
-      method: request.method,
-      hasAuthCookie: Boolean(cookieToken),
-      hasXsrfHeader: Boolean(xsrfToken),
-      hasXsrfCookie: Boolean(xsrfCookieValue),
-    });
-  }
-
   let text: string;
   try {
     text = await backendResponse.text();
@@ -170,6 +159,29 @@ async function forward(request: NextRequest, path: string[]) {
       { message: "Erro ao ler resposta do servidor backend." },
       { status: 502 }
     );
+  }
+
+  if (!backendResponse.ok) {
+    // Parse body so we can surface the backend reason clearly in the log.
+    let parsedBody: Record<string, unknown> | null = null;
+    try {
+      parsedBody = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      // body is not JSON — log raw preview
+    }
+    const bodyMessage = parsedBody
+      ? (parsedBody.message ?? parsedBody.error ?? parsedBody.messages ?? null)
+      : (text.length > 200 ? `${text.slice(0, 200)}…` : text || "(empty)");
+
+    const logLevel = backendResponse.status >= 500 ? "error" : "warn";
+    (logLevel === "error" ? console.error : console.warn)("[proxy:xdigital:error]", {
+      status: backendResponse.status,
+      method: request.method,
+      endpoint,
+      reason: bodyMessage,
+      hasAuthCookie: Boolean(cookieToken),
+      hasXsrfHeader: Boolean(xsrfToken),
+    });
   }
 
   const nextResponse = new NextResponse(text, {
