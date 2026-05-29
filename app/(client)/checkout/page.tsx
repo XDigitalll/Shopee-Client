@@ -600,6 +600,59 @@ export default function CheckoutPage() {
               </div>
             </div>
 
+            {/* ── Coupon ── */}
+            <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <p className="text-sm font-black" style={{ color: "#1A1410" }}>Tem cupão?</p>
+              <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Aplica o teu código antes de finalizar para garantir o desconto.</p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={couponCode}
+                  onChange={(event) => {
+                    setCouponCode(event.target.value.toUpperCase());
+                    if (coupon) setCoupon(null);
+                  }}
+                  placeholder="Código do cupão"
+                  className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "#F2D4CC", color: "#1A1410" }}
+                />
+                {coupon?.valid ? (
+                  <button type="button" onClick={removeCoupon} className="w-full rounded-2xl border px-4 py-3 text-sm font-bold sm:w-auto" style={{ borderColor: "#F2D4CC", color: RED }}>
+                    Remover
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim() || isLoading} className="w-full rounded-2xl px-4 py-3 text-sm font-bold text-white sm:w-auto" style={{ background: isApplyingCoupon || !couponCode.trim() || isLoading ? "#FDB8A7" : RED }}>
+                    {isApplyingCoupon ? "A aplicar..." : "Aplicar"}
+                  </button>
+                )}
+              </div>
+              <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
+              {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
+              {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
+            </div>
+
+            {/* ── Order total summary (before submit) ── */}
+            {localItems.length > 0 ? (
+              <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+                <p className="text-sm font-black" style={{ color: "#1A1410" }}>Resumo do pagamento</p>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span style={{ color: "#6B7280" }}>Subtotal</span>
+                    <strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(localSubtotal)}</strong>
+                  </div>
+                  {discountAmount > 0 ? (
+                    <div className="flex items-center justify-between">
+                      <span style={{ color: "#059669" }}>Desconto ({coupon?.code})</span>
+                      <strong style={{ color: "#059669", fontFamily: "'Sora', sans-serif" }}>-{formatMoney(discountAmount)}</strong>
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: "#F2D4CC" }}>
+                    <span className="font-semibold" style={{ color: RED }}>Total a pagar</span>
+                    <strong className="text-base" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAfterDiscount)}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white transition sm:w-auto" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
                 {isSubmitting ? "A preparar pagamento..." : localItems.length > 0 ? "Confirmar e pagar" : "Criar proposta"}
@@ -637,34 +690,6 @@ export default function CheckoutPage() {
                     </>
                   ) : null}
                   <div className="flex items-start justify-between gap-3 text-sm"><span style={{ color: RED }}>Total</span><strong className="text-right" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(totalAfterDiscount)}</strong></div>
-                </div>
-
-                <div className="rounded-2xl border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
-                  <label className="block text-sm font-semibold" style={{ color: "#1A1410" }}>Cupão</label>
-                  <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-                    <input
-                      value={couponCode}
-                      onChange={(event) => {
-                        setCouponCode(event.target.value.toUpperCase());
-                        if (coupon) setCoupon(null);
-                      }}
-                      placeholder="Ex.: BEMVINDO10"
-                      className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
-                      style={{ borderColor: "#F2D4CC", color: "#1A1410" }}
-                    />
-                    {coupon?.valid ? (
-                      <button type="button" onClick={removeCoupon} className="w-full rounded-2xl border px-4 py-3 text-sm font-bold sm:w-auto" style={{ borderColor: "#F2D4CC", color: RED }}>
-                        Remover
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => void applyCoupon()} disabled={isApplyingCoupon || !couponCode.trim() || isLoading} className="w-full rounded-2xl px-4 py-3 text-sm font-bold text-white sm:w-auto" style={{ background: isApplyingCoupon || !couponCode.trim() || isLoading ? "#FDB8A7" : RED }}>
-                        {isApplyingCoupon ? "A aplicar..." : "Aplicar"}
-                      </button>
-                    )}
-                  </div>
-                  <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
-                  {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
-                  {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
                 </div>
 
                 <div className="space-y-3">
