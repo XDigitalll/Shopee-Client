@@ -165,6 +165,11 @@ export type Payment = {
   submittedAt?: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  provider?: string;
+  providerReference?: string;
+  providerStatus?: string;
+  checkoutUrl?: string;
+  expectedAmount?: number;
 };
 
 export type OrderItem = {

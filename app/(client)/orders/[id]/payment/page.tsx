@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { emitClientDataChanged } from "@/lib/api-client";
+import { apiFetch, emitClientDataChanged } from "@/lib/api-client";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
@@ -24,6 +24,7 @@ const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pd
 const ACCEPTED_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".pdf"];
 
 type PaymentMethodType = "MPESA" | "EMOLA" | "BANK_TRANSFER" | "VISA_MANUAL";
+type PaySuiteMethod = "MPESA" | "EMOLA" | "CARD";
 type PublicPaymentSetting = {
   method: PaymentMethodType;
   accountNumber?: string | null;
@@ -40,12 +41,29 @@ type SubmissionResponse = {
   orderStatus?: string;
   reviewNote?: string;
 };
+type PaySuiteInitResponse = {
+  paymentId?: number;
+  orderId?: number;
+  expectedAmount?: number;
+  currency?: string;
+  provider?: string;
+  providerReference?: string;
+  paymentReference?: string;
+  checkoutUrl?: string;
+  status?: string;
+  providerStatus?: string;
+};
 
 const METHODS: Array<{ key: PaymentMethodType; label: string; icon: string; hint: string }> = [
   { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento movel" },
   { key: "EMOLA", label: "eMola", icon: "E", hint: "Carteira movel" },
   { key: "BANK_TRANSFER", label: "Transferencia", icon: "B", hint: "Banco" },
   { key: "VISA_MANUAL", label: "Visa / Cartao", icon: "V", hint: "Manual" },
+];
+const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
+  { key: "MPESA", label: "M-Pesa", icon: "M", hint: "PaySuite" },
+  { key: "EMOLA", label: "eMola", icon: "E", hint: "PaySuite" },
+  { key: "CARD", label: "Cartao", icon: "C", hint: "Visa/Mastercard" },
 ];
 
 async function fetchWithToken<T>(url: string, _token: string) {
@@ -189,8 +207,12 @@ export default function OrderPaymentPage() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const submitAction = useAsyncAction();
+  const paysuiteAction = useAsyncAction();
   const isBusy = submitAction.isRunning;
+  const isPaySuiteBusy = paysuiteAction.isRunning;
   const [submission, setSubmission] = useState<SubmissionResponse | null>(null);
+  const [paysuiteMethod, setPaysuiteMethod] = useState<PaySuiteMethod>("MPESA");
+  const [paysuitePayment, setPaysuitePayment] = useState<PaySuiteInitResponse | null>(null);
   const [paymentSettings, setPaymentSettings] = useState<PublicPaymentSetting[]>([]);
   const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(true);
   const [paymentSettingsError, setPaymentSettingsError] = useState("");
@@ -404,6 +426,45 @@ export default function OrderPaymentPage() {
     }
   }
 
+  async function handlePaySuitePayment() {
+    if (!isAuthenticated || !token) {
+      const message = "A tua sessão expirou. Entra novamente para pagar.";
+      setFeedback({ type: "error", msg: message });
+      await expireStoredSession();
+      router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
+      return;
+    }
+    if (!order) return;
+    if (!officialAmount || officialAmount <= 0) {
+      setFieldError("O valor oficial do pedido ainda nao esta disponivel. Actualiza a pagina e tenta novamente.");
+      return;
+    }
+
+    setFieldError(null);
+    setFeedback(null);
+    const result = await paysuiteAction.run(async () => {
+      const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite`, {
+        method: "POST",
+        body: JSON.stringify({
+          method: paysuiteMethod,
+          returnUrl: typeof window !== "undefined" ? `${window.location.origin}/orders/${order.id}/payment` : undefined,
+        }),
+      });
+      setPaysuitePayment(response);
+      setSubmission({ id: response.paymentId, status: response.status, orderStatus: "PAYMENT_SUBMITTED" });
+      setOrder((current) => current ? { ...current, status: "PAYMENT_SUBMITTED" } : current);
+      setFeedback({ type: "success", msg: "Pagamento PaySuite iniciado. Aguardamos confirmação automática do gateway." });
+      await loadOrder({ silent: true });
+      if (response.checkoutUrl) {
+        window.location.assign(response.checkoutUrl);
+      }
+      return true;
+    });
+    if (!result) {
+      setFeedback({ type: "error", msg: normalizeClientError(paysuiteAction.error, "Não foi possível iniciar o pagamento PaySuite. Usa o fallback manual ou tenta novamente.").message });
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 md:pb-0">
       <Link href="/orders" className="inline-flex rounded-full border px-4 py-2 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED }}>
@@ -451,13 +512,56 @@ export default function OrderPaymentPage() {
 
         {canSubmit ? (
           <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+            <section className="rounded-[24px] border p-5" style={{ borderColor: "#C7E7D3", background: "#F7FCF9" }}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>Pagamento automatico PaySuite</p>
+                  <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>Escolhe MPesa, eMola ou cartao. A confirmacao acontece automaticamente quando a PaySuite enviar o webhook validado.</p>
+                </div>
+                <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#DCFCE7", color: "#166534" }}>Recomendado</span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                {PAYSUITE_METHODS.map((item) => {
+                  const active = paysuiteMethod === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setPaysuiteMethod(item.key)}
+                      disabled={isPaySuiteBusy}
+                      className="rounded-[22px] border p-4 text-left transition"
+                      style={{ borderColor: active ? GREEN : "#C7E7D3", background: active ? "#ECFDF5" : "#FFFFFF" }}
+                    >
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-black text-white" style={{ background: active ? GREEN : "#9CA3AF" }}>{item.icon}</span>
+                      <span className="mt-3 block text-sm font-black" style={{ color: "#1A1410" }}>{item.label}</span>
+                      <span className="mt-1 block text-xs" style={{ color: "#6B7280" }}>{item.hint}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {paysuitePayment?.providerReference ? (
+                <div className="mt-4 rounded-2xl border px-4 py-3 text-sm" style={{ borderColor: "#BBF7D0", background: "#F0FDF4", color: "#166534" }}>
+                  Referencia PaySuite: <strong>{paysuitePayment.providerReference}</strong>. Estado: <strong>{paysuitePayment.providerStatus || paysuitePayment.status || "PENDING"}</strong>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void handlePaySuitePayment()}
+                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                className="mt-4 w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
+                style={{ background: isPaySuiteBusy || !officialAmount || officialAmount <= 0 ? "#9CA3AF" : GREEN }}
+              >
+                {isPaySuiteBusy ? "A iniciar PaySuite..." : "Pagar com PaySuite"}
+              </button>
+            </section>
+
             {paymentsUnavailable ? (
               <div className="rounded-[22px] border px-4 py-4 text-sm font-semibold" style={{ background: "#FFF5F5", borderColor: "#FECACA", color: "#B42318" }}>
                 {paymentSettingsError || "Pagamentos temporariamente indisponiveis. Contacte suporte."}
               </div>
             ) : null}
             <section>
-              <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Escolhe o método</p>
+              <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Fallback manual</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {(paymentSettingsLoading ? METHODS.slice(0, 3) : availableMethods).map((item) => {
                   const active = method === item.key;

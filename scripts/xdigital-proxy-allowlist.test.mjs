@@ -44,6 +44,11 @@ test("PATCH funciona apenas para paths permitidos", () => {
   assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "status"], "PATCH"), false);
 });
 
+test("PaySuite passa apenas no endpoint de criacao de pagamento do cliente", () => {
+  assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "payment", "paysuite"], "POST"), true);
+  assert.equal(isAllowedXdigitalProxyPath(["admin", "payments", "paysuite"], "POST"), false);
+});
+
 test("DELETE funciona apenas para paths permitidos", () => {
   assert.equal(isAllowedXdigitalProxyPath(["cart", "items", "123"], "DELETE"), true);
   assert.equal(isAllowedXdigitalProxyPath(["products", "123"], "DELETE"), false);
