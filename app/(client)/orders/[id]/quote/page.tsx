@@ -177,7 +177,7 @@ export default function OrderQuotePage() {
             ? error.message || "Antes de submeter o pagamento, verifica o teu telefone pelo WhatsApp."
           : error instanceof Error
             ? error.message
-            : "Nao foi possivel submeter o comprovativo.";
+            : "Nao foi possivel iniciar o pagamento. Tenta novamente.";
       setFeedback({ type: "error", msg: message });
     } finally {
       setIsBusy(false);
@@ -352,9 +352,9 @@ export default function OrderQuotePage() {
               </div>
             ) : (
               <div className="mt-5 rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFF8F5", color: "#6B7280" }}>
-                <p>Para submeter o pagamento com comprovativo e validacao por metodo, abre a pagina segura de pagamento.</p>
+                <p>Paga via M-Pesa, eMola ou cartao. A confirmacao e automatica quando o gateway processa o pagamento.</p>
                 <Link href={`/orders/${orderId}/payment`} className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: RED }}>
-                  {orderStatus === "PAYMENT_REJECTED" ? "Reenviar pagamento" : "Submeter pagamento"}
+                  {orderStatus === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora"}
                 </Link>
               </div>
             )}
