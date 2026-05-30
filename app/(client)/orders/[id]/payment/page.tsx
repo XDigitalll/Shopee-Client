@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { apiFetch, emitClientDataChanged } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
@@ -18,6 +18,7 @@ import { expireStoredSession } from "@/lib/auth";
 
 const RED = "#E8431A";
 const GREEN = "#2E8B57";
+const AMBER = "#D97706";
 
 type PaySuiteMethod = "MPESA" | "EMOLA" | "CARD";
 type Feedback = { type: "success" | "error"; msg: string } | null;
@@ -45,6 +46,11 @@ const PAID_STATUSES = new Set([
   "TO_PURCHASE", "ORDERED", "PURCHASED", "IN_TRANSIT", "ARRIVED", "OUT_FOR_DELIVERY", "DELIVERED",
 ]);
 
+// How long (ms) to keep polling aggressively after returning from PaySuite.
+const RETURNING_POLL_DURATION_MS = 90_000;
+const RETURNING_POLL_INTERVAL_MS = 3_000;
+const IDLE_POLL_INTERVAL_MS = 10_000;
+
 function statusCopy(status?: string, adminMessage?: string) {
   const map: Record<string, { title: string; body: string; color: string; bg: string; border: string }> = {
     PENDING_PAYMENT: {
@@ -52,7 +58,6 @@ function statusCopy(status?: string, adminMessage?: string) {
       body: "Escolhe o método e clica em Pagar agora. A confirmação é automática quando o gateway processa o pagamento.",
       color: "#9A3412", bg: "#FFF7ED", border: "#FED7AA",
     },
-    // backward compat — pedidos que passaram pelo fluxo manual anterior
     PAYMENT_SUBMITTED: {
       title: "Pagamento em processamento",
       body: "O teu pagamento está a ser processado. Esta página actualiza automaticamente quando receber confirmação.",
@@ -96,17 +101,28 @@ async function fetchWithToken<T>(url: string, _token: string) {
 
 export default function OrderPaymentPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { token, isAuthenticated } = useAuth();
   const orderId = Number(params.id);
+
   const [order, setOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const paysuiteAction = useAsyncAction();
+  const syncAction = useAsyncAction();
   const isPaySuiteBusy = paysuiteAction.isRunning;
+  const isSyncBusy = syncAction.isRunning;
   const [paysuiteMethod, setPaysuiteMethod] = useState<PaySuiteMethod>("MPESA");
   const [paysuitePayment, setPaysuitePayment] = useState<PaySuiteInitResponse | null>(null);
+
+  // "psr=1" in the URL means the customer just returned from the PaySuite checkout.
+  // We enter an aggressive-polling "confirming" window for up to 90 s.
+  const returningFromPaySuite = searchParams.get("psr") === "1";
+  const [isConfirming, setIsConfirming] = useState(returningFromPaySuite);
+  const confirmingStartRef = useRef<number>(returningFromPaySuite ? Date.now() : 0);
+  const [confirmingElapsed, setConfirmingElapsed] = useState(0);
 
   const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!token || !orderId) return;
@@ -115,6 +131,10 @@ export default function OrderPaymentPage() {
       setAllOrders(orders);
       const currentOrder = orders.find((item) => item.id === orderId) || null;
       setOrder(currentOrder);
+      // Stop the confirming window once the order is confirmed paid.
+      if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
+        setIsConfirming(false);
+      }
     } catch (error) {
       if (!silent) {
         setFeedback({
@@ -127,12 +147,22 @@ export default function OrderPaymentPage() {
 
   useEffect(() => { void loadOrder(); }, [loadOrder]);
 
-  // Poll every 10 s while waiting for the PaySuite webhook to fire.
+  // Adaptive polling: fast while in the confirming window, slow otherwise.
   useEffect(() => {
     if (!token || !orderId) return;
-    const interval = window.setInterval(() => { void loadOrder({ silent: true }); }, 10_000);
+    const intervalMs = isConfirming ? RETURNING_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
+    const interval = window.setInterval(() => {
+      void loadOrder({ silent: true });
+      if (isConfirming) {
+        const elapsed = Date.now() - confirmingStartRef.current;
+        setConfirmingElapsed(elapsed);
+        if (elapsed >= RETURNING_POLL_DURATION_MS) {
+          setIsConfirming(false);
+        }
+      }
+    }, intervalMs);
     return () => window.clearInterval(interval);
-  }, [loadOrder, orderId, token]);
+  }, [loadOrder, orderId, token, isConfirming]);
 
   const relatedOrders = useMemo(
     () => (order?.purchaseGroupKey
@@ -164,20 +194,16 @@ export default function OrderPaymentPage() {
     setFieldError(null);
     setFeedback(null);
 
-    // Capture the error synchronously inside the run callback — paysuiteAction.error
-    // is React state and will be stale (still "") when read immediately after await.
     let capturedErrorMsg: string | null = null;
 
     const result = await paysuiteAction.run(async () => {
       try {
+        const returnUrl = typeof window !== "undefined"
+          ? `${window.location.origin}/orders/${order.id}/payment?psr=1`
+          : undefined;
         const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite`, {
           method: "POST",
-          body: JSON.stringify({
-            method: paysuiteMethod,
-            returnUrl: typeof window !== "undefined"
-              ? `${window.location.origin}/orders/${order.id}/payment`
-              : undefined,
-          }),
+          body: JSON.stringify({ method: paysuiteMethod, returnUrl }),
         });
         setPaysuitePayment(response);
         emitClientDataChanged();
@@ -205,6 +231,44 @@ export default function OrderPaymentPage() {
       });
     }
   }
+
+  async function handleSyncPayment() {
+    if (!order) return;
+    setFeedback(null);
+
+    let capturedMsg: string | null = null;
+    const result = await syncAction.run(async () => {
+      try {
+        const syncResult = await apiFetch<PaySuiteInitResponse>(
+          `orders/${order.id}/payment/paysuite/sync`,
+          { method: "POST", body: "" },
+        );
+        if (syncResult.status === "SUCCESS") {
+          emitClientDataChanged();
+          void loadOrder();
+          setFeedback({ type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." });
+        } else {
+          setFeedback({
+            type: "error",
+            msg: "O pagamento ainda não foi confirmado pelo gateway. Aguarda alguns segundos e tenta novamente.",
+          });
+        }
+        return true;
+      } catch (err) {
+        capturedMsg = normalizeClientError(err, "Não foi possível verificar o estado do pagamento.").message;
+        throw err;
+      }
+    });
+
+    if (!result) {
+      setFeedback({ type: "error", msg: capturedMsg ?? "Não foi possível verificar o estado do pagamento." });
+    }
+  }
+
+  const confirmingSecondsLeft = Math.max(
+    0,
+    Math.ceil((RETURNING_POLL_DURATION_MS - confirmingElapsed) / 1000),
+  );
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-24 md:pb-0">
@@ -252,14 +316,53 @@ export default function OrderPaymentPage() {
           </div>
         </div>
 
-        {/* Status banner */}
-        <div
-          className="mt-5 rounded-[22px] border px-4 py-4"
-          style={{ background: visual.bg, borderColor: visual.border, color: visual.color }}
-        >
-          <p className="text-sm font-black">{visual.title}</p>
-          <p className="mt-1 text-sm leading-6">{visual.body}</p>
-        </div>
+        {/* ── Returning-from-PaySuite confirming banner ── */}
+        {isConfirming && !isPaid ? (
+          <div
+            className="mt-5 rounded-[22px] border px-4 py-4"
+            style={{ background: "#FFFBEB", borderColor: "#FDE68A", color: AMBER }}
+          >
+            <div className="flex items-center gap-2">
+              <svg
+                className="h-4 w-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+              </svg>
+              <p className="text-sm font-black">A confirmar pagamento com a PaySuite…</p>
+            </div>
+            <p className="mt-1 text-sm leading-6">
+              Estamos a verificar automaticamente o estado do pagamento a cada 3 segundos.
+              {confirmingSecondsLeft > 0 ? ` (${confirmingSecondsLeft}s restantes)` : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSyncPayment()}
+              disabled={isSyncBusy}
+              className="mt-3 rounded-xl px-4 py-2 text-sm font-semibold"
+              style={{
+                background: isSyncBusy ? "#E5E7EB" : "#FDE68A",
+                color: isSyncBusy ? "#9CA3AF" : "#92400E",
+              }}
+            >
+              {isSyncBusy ? "A verificar…" : "Verificar agora"}
+            </button>
+          </div>
+        ) : null}
+
+        {/* Status banner — only when not in the confirming window */}
+        {!isConfirming || isPaid ? (
+          <div
+            className="mt-5 rounded-[22px] border px-4 py-4"
+            style={{ background: visual.bg, borderColor: visual.border, color: visual.color }}
+          >
+            <p className="text-sm font-black">{visual.title}</p>
+            <p className="mt-1 text-sm leading-6">{visual.body}</p>
+          </div>
+        ) : null}
 
         {/* Feedback */}
         {feedback ? (
@@ -306,6 +409,31 @@ export default function OrderPaymentPage() {
             <p className="text-sm font-semibold" style={{ color: "#1D4ED8" }}>
               A aguardar confirmação automática do pagamento. Esta página actualiza a cada 10 segundos.
             </p>
+          </div>
+        ) : null}
+
+        {/* Manual sync — shown when PENDING_PAYMENT and NOT in the fresh confirming window */}
+        {canPay && !isConfirming ? (
+          <div
+            className="mt-4 rounded-2xl border px-4 py-3"
+            style={{ borderColor: "#E5E7EB", background: "#F9FAFB" }}
+          >
+            <p className="text-xs" style={{ color: "#6B7280" }}>
+              Já pagaste via PaySuite mas o pedido ainda aparece como pendente?
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleSyncPayment()}
+              disabled={isSyncBusy}
+              className="mt-2 rounded-xl px-4 py-2 text-sm font-semibold"
+              style={{
+                background: isSyncBusy ? "#E5E7EB" : "#F3F4F6",
+                color: isSyncBusy ? "#9CA3AF" : "#374151",
+                border: "1px solid #D1D5DB",
+              }}
+            >
+              {isSyncBusy ? "A verificar estado…" : "Verificar estado do pagamento"}
+            </button>
           </div>
         ) : null}
 
