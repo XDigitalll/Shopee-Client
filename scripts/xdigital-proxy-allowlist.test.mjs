@@ -49,6 +49,17 @@ test("PaySuite passa apenas no endpoint de criacao de pagamento do cliente", () 
   assert.equal(isAllowedXdigitalProxyPath(["admin", "payments", "paysuite"], "POST"), false);
 });
 
+test("PaySuite sync passa para cliente e nao confunde com rota basica", () => {
+  // /sync deve ser permitido (5 segmentos)
+  assert.equal(isAllowedXdigitalProxyPath(["orders", "43", "payment", "paysuite", "sync"], "POST"), true);
+  // rota base paysuite ainda funciona (4 segmentos)
+  assert.equal(isAllowedXdigitalProxyPath(["orders", "43", "payment", "paysuite"], "POST"), true);
+  // path extra alem de sync nao e permitido
+  assert.equal(isAllowedXdigitalProxyPath(["orders", "43", "payment", "paysuite", "sync", "extra"], "POST"), false);
+  // admin nao passa
+  assert.equal(isAllowedXdigitalProxyPath(["admin", "payments", "43", "sync"], "POST"), false);
+});
+
 test("DELETE funciona apenas para paths permitidos", () => {
   assert.equal(isAllowedXdigitalProxyPath(["cart", "items", "123"], "DELETE"), true);
   assert.equal(isAllowedXdigitalProxyPath(["products", "123"], "DELETE"), false);
