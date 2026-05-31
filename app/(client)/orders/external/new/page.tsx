@@ -70,7 +70,7 @@ function isValidDescription(value: string): boolean {
 }
 
 type InputState = "empty" | "url" | "valid-description" | "weak-description" | "spam";
-type FieldKey = "product" | "quantity" | "phone" | "whatsappChoice" | "communicationPhone" | "terms";
+type FieldKey = "product" | "quantity" | "phone" | "terms";
 
 type ValidationIssue = {
   field: FieldKey;
@@ -111,9 +111,6 @@ export default function NewExternalOrderPage() {
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState(() => userPhone || "+258");
-  // WhatsApp / communication channel
-  const [whatsappSameAsPrimary, setWhatsappSameAsPrimary] = useState<boolean | null>(null);
-  const [communicationPhone, setCommunicationPhone] = useState("+258");
   const [screenshot, setScreenshot] = useState<File | null>(null);
   const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -133,8 +130,6 @@ export default function NewExternalOrderPage() {
   const productInputRef = useRef<HTMLTextAreaElement | null>(null);
   const quantityInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
-  const whatsappChoiceRef = useRef<HTMLDivElement | null>(null);
-  const communicationPhoneRef = useRef<HTMLInputElement | null>(null);
   const termsRef = useRef<HTMLLabelElement | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -195,19 +190,6 @@ export default function NewExternalOrderPage() {
       return { field: "phone", message: "Usa um telefone valido de Mocambique. Exemplo: +25884xxxxxxx." };
     }
 
-    if (whatsappSameAsPrimary === null) {
-      return { field: "whatsappChoice", message: "Escolhe se recebes WhatsApp neste mesmo numero." };
-    }
-
-    if (whatsappSameAsPrimary === false) {
-      if (!communicationPhone.trim() || communicationPhone.trim() === "+258") {
-        return { field: "communicationPhone", message: "Preenche o numero WhatsApp para receber mensagens." };
-      }
-      if (!PHONE_PATTERN.test(normalizePhone(communicationPhone))) {
-        return { field: "communicationPhone", message: "Usa um numero WhatsApp valido. Exemplo: +25884xxxxxxx." };
-      }
-    }
-
     if (!acceptedLegalTerms) {
       return { field: "terms", message: "Marca esta caixa para confirmar os Termos de Uso e a Politica de Privacidade." };
     }
@@ -220,8 +202,6 @@ export default function NewExternalOrderPage() {
       product: productInputRef.current,
       quantity: quantityInputRef.current,
       phone: phoneInputRef.current,
-      whatsappChoice: whatsappChoiceRef.current,
-      communicationPhone: communicationPhoneRef.current,
       terms: termsRef.current,
     };
     const target = targets[field];
@@ -305,7 +285,7 @@ export default function NewExternalOrderPage() {
     const cleanLink = productLink.trim();
     const cleanVariant = variant.trim();
     const cleanPhone = normalizePhone(phoneNumber);
-    const cleanCommPhone = whatsappSameAsPrimary ? cleanPhone : normalizePhone(communicationPhone);
+    const cleanCommPhone = cleanPhone;
 
     const body = new FormData();
     body.append("productLink", cleanLink);
@@ -325,8 +305,8 @@ export default function NewExternalOrderPage() {
     body.set("requestInputType", getInputState(cleanLink) === "url" ? "LINK" : "DESCRIPTION");
     body.set("phone", cleanPhone);
     body.set("communicationChannel", "WHATSAPP");
-    body.set("whatsappSameAsPrimary", String(Boolean(whatsappSameAsPrimary)));
-    body.set("communicationPhone", cleanCommPhone);
+    body.set("whatsappSameAsPrimary", "true");
+    body.set("communicationPhone", cleanPhone);
     if (cleanVariant) {
       body.set("variantDetails", cleanVariant);
       body.set("productDetails", cleanVariant);
@@ -376,8 +356,6 @@ export default function NewExternalOrderPage() {
       setVariant("");
       setQuantity(1);
       setPhoneNumber(phoneToKeep);
-      setWhatsappSameAsPrimary(null);
-      setCommunicationPhone("+258");
       setAcceptedLegalTerms(false);
       setScreenshot(null);
       if (screenshotInputRef.current) {
@@ -760,7 +738,7 @@ export default function NewExternalOrderPage() {
                 {/* Primary phone */}
                 <div>
                   <label htmlFor="phoneInput" className="text-sm font-black">
-                    Telefone principal / pagamento
+                    Telefone para contacto
                   </label>
                   <input
                     id="phoneInput"
@@ -783,102 +761,47 @@ export default function NewExternalOrderPage() {
                     </p>
                   ) : (
                     <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      Usa o formato +258 seguido de 82, 83, 84, 85, 86 ou 87 e mais 7 digitos.
+                      Usaremos este número para contacto e atualizações da encomenda. Preferencialmente com WhatsApp ativo.
                     </p>
                   )}
                 </div>
 
-                {/* WhatsApp same-as-primary question */}
-                <div ref={whatsappChoiceRef} className="pt-1 rounded-2xl border p-3" style={{ borderColor: fieldErrors.whatsappChoice ? "#dc2626" : "transparent", background: fieldErrors.whatsappChoice ? "#FFF5F5" : "transparent" }}>
-                  <p className="text-sm font-black">Recebe WhatsApp neste mesmo número?</p>
-                  <div className="mt-2 flex gap-3">
-                    {[
-                      { value: true, label: "Sim" },
-                      { value: false, label: "Não" },
-                    ].map(({ value, label }) => {
-                      const active = whatsappSameAsPrimary === value;
-                      return (
-                        <button
-                          key={label}
-                          type="button"
-                          disabled={isSubmitting}
-                          onClick={() => {
-                            setWhatsappSameAsPrimary(value);
-                            clearFieldError("whatsappChoice");
-                          }}
-                          className="rounded-2xl border px-6 py-2.5 text-sm font-black transition"
-                          style={{
-                            borderColor: active ? RED : BORDER,
-                            background: active ? SOFT : "#FFFDFC",
-                            color: active ? RED : TEXT,
-                          }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {whatsappSameAsPrimary === true ? (
-                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                      O número principal será usado para atualizações do pedido, códigos de confirmação e recuperação da conta.
-                    </p>
-                  ) : null}
-                </div>
-
-                {/* Alternative WhatsApp number — shown only when Não */}
-                {fieldErrors.whatsappChoice ? (
-                  <p className="-mt-4 text-sm font-bold leading-5" style={{ color: "#B42318" }}>
-                    {fieldErrors.whatsappChoice}
-                  </p>
-                ) : null}
-
-                {whatsappSameAsPrimary === false && (
-                  <div>
-                    <label htmlFor="commPhoneInput" className="text-sm font-black">
-                      Número WhatsApp para receber mensagens
-                    </label>
-                    <input
-                      id="commPhoneInput"
-                      ref={communicationPhoneRef}
-                      value={communicationPhone}
-                      onChange={(event) => {
-                        setCommunicationPhone(event.target.value);
-                        clearFieldError("communicationPhone");
-                      }}
-                      disabled={isSubmitting}
-                      aria-invalid={Boolean(fieldErrors.communicationPhone)}
-                      aria-describedby={fieldErrors.communicationPhone ? "commPhoneInput-error" : undefined}
-                      placeholder="+25884xxxxxxx"
-                      className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base font-bold outline-none"
-                      style={{ borderColor: fieldErrors.communicationPhone ? "#dc2626" : BORDER, background: fieldErrors.communicationPhone ? "#FFF5F5" : "#FFFDFC" }}
-                    />
-                    {fieldErrors.communicationPhone ? (
-                      <p id="commPhoneInput-error" className="mt-2 rounded-xl border px-3 py-2 text-sm font-bold leading-5" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
-                        {fieldErrors.communicationPhone}
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                      Este número será usado para atualizações do pedido, códigos de confirmação e recuperação da conta.
-                    </p>
-                  </div>
-                )}
-
                 {/* Screenshot */}
                 <div>
                   <span className="text-sm font-black">Foto ou screenshot <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
-                  <div className="mt-2 rounded-2xl border px-4 py-4" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
+                  <div className="mt-2">
                     <input
                       ref={screenshotInputRef}
+                      id="screenshotInput"
                       type="file"
                       accept={ACCEPTED_SCREENSHOT_TYPES.join(",")}
                       onChange={(event) => handleScreenshotChange(event.target.files?.[0] ?? null)}
                       disabled={isSubmitting}
-                      className="w-full text-sm font-semibold"
-                      style={{ color: MUTED }}
+                      className="sr-only"
+                      aria-hidden="true"
+                      tabIndex={-1}
                     />
-                    {screenshot ? (
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ background: SOFT }}>
-                        <span className="text-sm font-bold truncate" style={{ color: TEXT }}>{screenshot.name}</span>
+                    {!screenshot ? (
+                      <button
+                        type="button"
+                        disabled={isSubmitting}
+                        onClick={() => screenshotInputRef.current?.click()}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3.5 text-sm font-black transition active:opacity-80"
+                        style={{ borderColor: BORDER, background: "#FFFDFC", color: TEXT }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                        </svg>
+                        Adicionar foto ou screenshot
+                      </button>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: SOFT }}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style={{ color: RED, flexShrink: 0 }}>
+                            <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                          </svg>
+                          <span className="truncate text-sm font-bold" style={{ color: TEXT }}>{screenshot.name}</span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleScreenshotChange(null)}
@@ -889,7 +812,10 @@ export default function NewExternalOrderPage() {
                           Remover
                         </button>
                       </div>
-                    ) : null}
+                    )}
+                    <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
+                      PNG, JPG ou WebP. Máximo 10MB.
+                    </p>
                   </div>
                 </div>
 
