@@ -135,9 +135,11 @@ function GoogleCallbackContent() {
 
     login();
 
-    const redirectTo =
-      window.sessionStorage.getItem("google_auth_redirect") || "/";
+    const raw = window.sessionStorage.getItem("google_auth_redirect") || "/";
     window.sessionStorage.removeItem("google_auth_redirect");
+    // Prevent open redirect: only allow relative paths (starts with "/" but not "//").
+    // "//evil.com" is a protocol-relative URL — reject it.
+    const redirectTo = typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
 
     devLog("redirect target", redirectTo);
     router.replace(redirectTo);

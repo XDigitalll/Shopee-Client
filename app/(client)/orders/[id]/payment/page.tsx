@@ -20,6 +20,13 @@ const RED = "#E8431A";
 const GREEN = "#2E8B57";
 const AMBER = "#D97706";
 
+function devLog(...args: unknown[]) {
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.debug("[payment]", ...args);
+  }
+}
+
 type PaySuiteMethod = "MPESA" | "EMOLA" | "CARD";
 type Feedback = { type: "success" | "error"; msg: string } | null;
 type PaySuiteInitResponse = {
@@ -170,7 +177,7 @@ export default function OrderPaymentPage() {
         setReturnPhase("confirmed");
         if (!confirmedLoggedRef.current) {
           confirmedLoggedRef.current = true;
-          console.log("[PAYMENT_RETURN_CONFIRMED]", { orderId, status: currentOrder.status });
+          devLog("[PAYMENT_RETURN_CONFIRMED]", { orderId, status: currentOrder.status });
         }
       }
     } catch (error) {
@@ -201,7 +208,7 @@ export default function OrderPaymentPage() {
       setConfirmingElapsed(elapsed);
       if (elapsed >= RETURNING_POLL_DURATION_MS) {
         setReturnPhase("timed_out");
-        console.log("[PAYMENT_RETURN_TIMEOUT]", { orderId });
+        devLog("[PAYMENT_RETURN_TIMEOUT]", { orderId });
       }
     }, 1000);
     return () => window.clearInterval(interval);
@@ -211,7 +218,7 @@ export default function OrderPaymentPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!returningFromPaySuite || !token || !orderId) return;
-    console.log("[PAYMENT_RETURN_STARTED]", { orderId });
+    devLog("[PAYMENT_RETURN_STARTED]", { orderId });
     const timeout = window.setTimeout(() => { void performSync({ auto: true }); }, 2000);
     return () => window.clearTimeout(timeout);
   // Intentionally runs once on mount.
@@ -260,9 +267,9 @@ export default function OrderPaymentPage() {
 
     const targetId = order?.id ?? orderId;
     if (auto) {
-      console.log("[PAYMENT_RETURN_SYNC_ATTEMPT]", { orderId: targetId });
+      devLog("[PAYMENT_RETURN_SYNC_ATTEMPT]", { orderId: targetId });
     } else {
-      console.log("[PAYMENT_SYNC_STARTED]", { orderId: targetId, manual: true });
+      devLog("[PAYMENT_SYNC_STARTED]", { orderId: targetId, manual: true });
     }
 
     try {
@@ -277,7 +284,7 @@ export default function OrderPaymentPage() {
         await loadOrder();
         setReturnPhase("confirmed");
         setFeedback({ type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." });
-        console.log("[PAYMENT_SYNC_CONFIRMED]", { orderId: targetId, status: syncResult.status });
+        devLog("[PAYMENT_SYNC_CONFIRMED]", { orderId: targetId, status: syncResult.status });
       } else if (outcome === "failed") {
         // Use functional updater — performSync may be a stale closure (empty-deps auto-sync effect).
         // Reading returnPhase directly here would see the value from mount, not current state.
@@ -285,7 +292,7 @@ export default function OrderPaymentPage() {
         if (!auto) {
           setFeedback({ type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." });
         }
-        console.log("[PAYMENT_SYNC_FAILED]", { orderId: targetId, status: syncResult.status });
+        devLog("[PAYMENT_SYNC_FAILED]", { orderId: targetId, status: syncResult.status });
       } else {
         if (!auto) {
           setFeedback({
@@ -293,7 +300,7 @@ export default function OrderPaymentPage() {
             msg: "Pagamento ainda em confirmação. A PaySuite ainda não reportou este pagamento. Se o dinheiro já saiu da tua conta, não efetues novo pagamento.",
           });
         }
-        console.log("[PAYMENT_SYNC_PENDING]", { orderId: targetId, status: syncResult.status });
+        devLog("[PAYMENT_SYNC_PENDING]", { orderId: targetId, status: syncResult.status });
       }
     } catch (err) {
       const msg = normalizeClientError(err, "Não foi possível verificar o estado do pagamento.").message;
@@ -318,7 +325,7 @@ export default function OrderPaymentPage() {
     }
     if (shouldBlockDuplicatePayment(paysuitePayment)) {
       setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
-      console.log("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
+      devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
       return;
     }
 

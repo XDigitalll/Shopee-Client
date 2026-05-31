@@ -319,10 +319,6 @@ export default function NewExternalOrderPage() {
     setFeedback({ type: "loading", msg: "A enviar pedido para analise." });
 
     try {
-      for (const [key, value] of body.entries()) {
-        console.log(key, value);
-      }
-
       const response = await apiFetch<SubmissionResponse>("orders/external", {
         method: "POST",
         body,
