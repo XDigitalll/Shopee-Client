@@ -7,6 +7,7 @@ import { ClientActionFeedback, ClientFeedbackDock } from "@/components/client-fe
 import { useAuth } from "@/components/auth-provider";
 import { apiFetch } from "@/lib/api-client";
 import { normalizeClientError } from "@/lib/client-errors";
+import { extractExternalOrderInput } from "@/lib/external-order-input-parser";
 import type { Order } from "@/lib/types";
 
 const RED = "#E8431A";
@@ -132,6 +133,7 @@ export default function NewExternalOrderPage() {
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const termsRef = useRef<HTMLLabelElement | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement | null>(null);
+  const parsedInput = extractExternalOrderInput(productLink);
 
   useEffect(() => {
     if (userPhone) {
@@ -146,6 +148,10 @@ export default function NewExternalOrderPage() {
     setSelectedStore(normalizeStore(params.get("store")));
     if (initialInput) {
       setProductLink(initialInput);
+      const parsed = extractExternalOrderInput(initialInput);
+      if (parsed.sourceStore) {
+        setSelectedStore(normalizeStore(parsed.sourceStore));
+      }
     }
   }, []);
 
@@ -164,14 +170,16 @@ export default function NewExternalOrderPage() {
   }
 
   function validateForm(): ValidationIssue | null {
-    const inputState = getInputState(productLink);
-    if (inputState === "empty" || inputState === "spam") {
+    const parsed = extractExternalOrderInput(productLink);
+    const effectiveInput = parsed.productLink || parsed.cleanDescription || "";
+    const inputState = getInputState(effectiveInput);
+    if ((inputState === "empty" || inputState === "spam") && !screenshot) {
       return {
         field: "product",
         message: "Cola o link da loja ou descreve o produto com nome, loja, cor, tamanho ou modelo.",
       };
     }
-    if (inputState === "weak-description") {
+    if (inputState === "weak-description" && !screenshot) {
       return {
         field: "product",
         message: "Descreve melhor o produto: inclui nome, loja, cor, tamanho ou modelo.",
@@ -282,7 +290,9 @@ export default function NewExternalOrderPage() {
     }
     setFieldErrors({});
 
-    const cleanLink = productLink.trim();
+    const parsed = extractExternalOrderInput(productLink);
+    const cleanLink = (parsed.productLink || productLink).trim();
+    const cleanDescription = (parsed.cleanDescription || productLink).trim();
     const cleanVariant = variant.trim();
     const cleanPhone = normalizePhone(phoneNumber);
     const cleanCommPhone = cleanPhone;
@@ -291,18 +301,24 @@ export default function NewExternalOrderPage() {
     body.append("productLink", cleanLink);
     body.append("externalCartUrl", cleanLink);
     body.append("link", cleanLink);
-    body.append("description", cleanLink);
+    body.append("description", cleanDescription);
+    body.append("originalRawMessage", parsed.originalRawMessage);
+    body.append("rawOriginalMessage", parsed.originalRawMessage);
+    body.append("cleanDescription", cleanDescription);
+    body.append("cleanedTitle", parsed.cleanedTitle || "");
+    body.append("detectedLinks", JSON.stringify(parsed.detectedLinks));
+    body.append("promotionalTextRemoved", String(parsed.promotionalTextRemoved));
     body.append("variant", cleanVariant);
     body.append("quantity", String(quantity));
     body.append("primaryPhoneNumber", cleanPhone);
     body.append("phoneNumber", cleanPhone);
-    body.append("sourceStore", selectedStore);
-    body.append("source", selectedStore);
+    body.append("sourceStore", parsed.sourceStore || selectedStore);
+    body.append("source", parsed.sourceStore || selectedStore);
     body.append("whatsappPhone", cleanCommPhone || cleanPhone);
 
     body.set("cartLink", cleanLink);
-    body.set("store", selectedStore);
-    body.set("requestInputType", getInputState(cleanLink) === "url" ? "LINK" : "DESCRIPTION");
+    body.set("store", parsed.sourceStore || selectedStore);
+    body.set("requestInputType", parsed.productLink ? "LINK" : "DESCRIPTION");
     body.set("phone", cleanPhone);
     body.set("communicationChannel", "WHATSAPP");
     body.set("whatsappSameAsPrimary", "true");
@@ -625,7 +641,12 @@ export default function NewExternalOrderPage() {
                     ref={productInputRef}
                     value={productLink}
                     onChange={(event) => {
-                      setProductLink(event.target.value);
+                      const nextValue = event.target.value;
+                      const parsed = extractExternalOrderInput(nextValue);
+                      setProductLink(nextValue);
+                      if (parsed.sourceStore) {
+                        setSelectedStore(normalizeStore(parsed.sourceStore));
+                      }
                       clearFieldError("product");
                     }}
                     disabled={isSubmitting}
@@ -649,6 +670,46 @@ export default function NewExternalOrderPage() {
                     <p id="productInput-error" className="mt-2 rounded-xl border px-3 py-2 text-sm font-bold leading-5" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
                       {fieldErrors.product}
                     </p>
+                  ) : null}
+
+                  {parsedInput.productLink || parsedInput.cleanDescription ? (
+                    <div className="mt-3 rounded-2xl border px-4 py-3" style={{ borderColor: "#BBF7D0", background: "#F0FDF4" }}>
+                      <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#166534" }}>
+                        Organizamos automaticamente os dados do produto para ti.
+                      </p>
+                      <div className="mt-3 grid gap-3">
+                        <div className="flex flex-wrap gap-2">
+                          {parsedInput.sourceStore ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#DCFCE7", color: "#166534" }}>
+                              Loja detectada: {parsedInput.sourceStore.replace("_", " ")}
+                            </span>
+                          ) : null}
+                          {parsedInput.productLink ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#DBEAFE", color: "#1D4ED8" }}>
+                              Link encontrado
+                            </span>
+                          ) : null}
+                          {parsedInput.promotionalTextRemoved ? (
+                            <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: "#FEF3C7", color: "#92400E" }}>
+                              Texto promocional removido
+                            </span>
+                          ) : null}
+                        </div>
+                        {parsedInput.cleanDescription ? (
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#15803D" }}>Descricao limpa</p>
+                            <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6" style={{ color: TEXT }}>
+                              {parsedInput.cleanDescription}
+                            </p>
+                          </div>
+                        ) : null}
+                        {parsedInput.productLink ? (
+                          <p className="truncate rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: "#FFFFFF", color: MUTED }}>
+                            {parsedInput.productLink}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
                   ) : null}
 
                   {/* Feedback line */}
