@@ -62,6 +62,9 @@ const PAID_STATUSES = new Set([
 // Active PaySuite statuses — block creating a second payment while one exists.
 const ACTIVE_PAYSUITE_STATUSES = new Set(["PENDING", "PROCESSING", "WAITING"]);
 
+// Terminal statuses where no money will arrive — unblocks a new payment attempt.
+const TERMINAL_PAYMENT_STATUSES = new Set(["FAILED", "CANCELLED", "AMOUNT_MISMATCH", "LATE_PAYMENT"]);
+
 const RETURNING_POLL_DURATION_MS = 90_000;
 const RETURNING_POLL_INTERVAL_MS = 3_000;
 const IDLE_POLL_INTERVAL_MS = 10_000;
@@ -71,7 +74,9 @@ const CONFIRMED_REDIRECT_DELAY_MS = 3_000;
 export function classifySyncResult(status?: string): "confirmed" | "pending" | "failed" {
   const s = (status ?? "").toLowerCase();
   if (["success", "completed", "paid", "confirmed"].includes(s)) return "confirmed";
-  if (["failed", "cancelled", "canceled", "expired", "rejected"].includes(s)) return "failed";
+  // amount_mismatch / late_payment: money may have arrived but payment cannot proceed —
+  // treated as failed so the customer is unblocked to try again or contact support.
+  if (["failed", "cancelled", "canceled", "expired", "rejected", "amount_mismatch", "late_payment"].includes(s)) return "failed";
   return "pending";
 }
 
@@ -173,6 +178,21 @@ export default function OrderPaymentPage() {
       setAllOrders(orders);
       const currentOrder = orders.find((item) => item.id === orderId) || null;
       setOrder(currentOrder);
+
+      // Keep paysuitePayment in sync with what the backend reports.
+      // This ensures hasActivePaySuitePayment and syncConfirmedFailure are accurate
+      // on fresh page load and after every background poll — not just after a
+      // manual "Pagar agora" click (which is the only other place setPaysuitePayment runs).
+      if (currentOrder?.payment?.provider?.toUpperCase() === "PAYSUITE") {
+        setPaysuitePayment({
+          status: currentOrder.payment.status,
+          providerReference: currentOrder.payment.providerReference,
+          checkoutUrl: currentOrder.payment.checkoutUrl,
+          providerStatus: currentOrder.payment.providerStatus,
+          expectedAmount: currentOrder.payment.expectedAmount,
+        });
+      }
+
       if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
         setReturnPhase("confirmed");
         if (!confirmedLoggedRef.current) {
@@ -256,9 +276,18 @@ export default function OrderPaymentPage() {
     && !hasActivePaySuitePayment
     && returnPhase === "idle";
 
-  // Only allow "Pagar novamente" in timed_out when backend reported an explicit failure.
+  // Allow retry in timed_out when:
+  // (a) backend reported PAYMENT_REJECTED — explicit server-side failure, OR
+  // (b) the last sync (or background poll) confirmed a terminal payment status
+  //     from the gateway: FAILED, CANCELLED, AMOUNT_MISMATCH, LATE_PAYMENT.
+  //     The order may still be PENDING_PAYMENT but no money is coming — retry is safe.
   const explicitFailure = orderStatus === "PAYMENT_REJECTED";
-  const canRetryAfterTimeout = returnPhase === "timed_out" && explicitFailure && !hasActivePaySuitePayment;
+  const syncConfirmedFailure = TERMINAL_PAYMENT_STATUSES.has(
+    (paysuitePayment?.status ?? "").toUpperCase(),
+  );
+  const canRetryAfterTimeout = returnPhase === "timed_out"
+    && (explicitFailure || syncConfirmedFailure)
+    && !hasActivePaySuitePayment;
 
   async function performSync({ auto = false }: { auto?: boolean } = {}) {
     if (syncInFlightRef.current) return; // mutex — blocks parallel calls
@@ -286,18 +315,23 @@ export default function OrderPaymentPage() {
         setFeedback({ type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." });
         devLog("[PAYMENT_SYNC_CONFIRMED]", { orderId: targetId, status: syncResult.status });
       } else if (outcome === "failed") {
+        // Persist the sync response so syncConfirmedFailure becomes true immediately,
+        // unblocking canRetryAfterTimeout without waiting for the next background poll.
+        setPaysuitePayment(syncResult);
         // Use functional updater — performSync may be a stale closure (empty-deps auto-sync effect).
-        // Reading returnPhase directly here would see the value from mount, not current state.
         setReturnPhase(prev => prev === "confirming" ? "timed_out" : prev);
         if (!auto) {
           setFeedback({ type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." });
         }
         devLog("[PAYMENT_SYNC_FAILED]", { orderId: targetId, status: syncResult.status });
       } else {
+        // Persist pending sync result so hasActivePaySuitePayment reflects the latest
+        // gateway state (e.g. keeps blocking a duplicate payment attempt).
+        setPaysuitePayment(syncResult);
         if (!auto) {
           setFeedback({
             type: "error",
-            msg: "Pagamento ainda em confirmação. A PaySuite ainda não reportou este pagamento. Se o dinheiro já saiu da tua conta, não efetues novo pagamento.",
+            msg: "Ainda estamos a confirmar o pagamento junto da PaySuite. Se o dinheiro já saiu da tua conta, não efetues novo pagamento.",
           });
         }
         devLog("[PAYMENT_SYNC_PENDING]", { orderId: targetId, status: syncResult.status });
@@ -440,7 +474,7 @@ export default function OrderPaymentPage() {
               A confirmar pagamento
             </p>
             <p className="mt-2 text-sm leading-6" style={{ color: "#78350F" }}>
-              Estamos a verificar o estado do teu pagamento junto da PaySuite.
+              Ainda estamos a confirmar o pagamento junto da PaySuite.
               <br />
               Não feches esta página.
             </p>
@@ -492,11 +526,11 @@ export default function OrderPaymentPage() {
             style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}
           >
             <p className="text-sm font-black" style={{ color: "#92400E" }}>
-              Pagamento ainda em confirmação
+              Ainda estamos a confirmar o pagamento junto da PaySuite
             </p>
             <p className="mt-2 text-sm leading-6" style={{ color: "#78350F" }}>
               Se o dinheiro já saiu da tua conta, não pagues novamente.
-              Vamos continuar a verificar automaticamente.
+              A confirmação é feita exclusivamente pelo gateway PaySuite — não pelo redirect.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button
