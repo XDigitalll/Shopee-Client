@@ -1,5 +1,7 @@
 export const SUPPORT_WHATSAPP_LABEL = "+258 86 469 8775";
 export const SUPPORT_WHATSAPP_URL = "https://wa.me/258864698775";
+export const SUPPORT_WHATSAPP_ORDER_HELP_URL =
+  "https://wa.me/258864698775?text=Ol%C3%A1%20ShopeeMz%2C%20preciso%20de%20ajuda%20com%20o%20meu%20pedido.";
 export const SUPPORT_EMAIL = "adminShopeemz@xdigitalmz.co.mz";
 
 export const PAYMENT_SUPPORT_MESSAGE =
