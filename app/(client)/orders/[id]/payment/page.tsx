@@ -490,6 +490,9 @@ export default function OrderPaymentPage() {
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
               Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway processa o pagamento.
             </p>
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6" style={{ color: "#15803D" }}>
+              Também poderás acompanhar este pedido pelo WhatsApp. Usa o mesmo número da tua conta para consultar pedidos no WhatsApp.
+            </p>
           </div>
           <div
             className="rounded-[24px] border px-5 py-4"

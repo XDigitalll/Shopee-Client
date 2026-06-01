@@ -983,6 +983,9 @@ export default function OrdersPage() {
             <p className="text-sm font-semibold" style={{ color: RED }}>Painel do cliente</p>
             <h1 className="mt-1 text-3xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Meus pedidos</h1>
             <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Ola, {userLabel}. Acompanha aqui o estado simples de cada compra.</p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: "#15803D" }}>
+              Em breve: acompanhamento automático pelo WhatsApp. Usa o mesmo número da tua conta para consultar pedidos no WhatsApp.
+            </p>
           </div>
           <div className="flex items-center gap-3 self-start rounded-full border px-3 py-2" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>
             <div className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-black text-white" style={{ background: RED, fontFamily: "'Sora', sans-serif" }}>{userInitials}</div>

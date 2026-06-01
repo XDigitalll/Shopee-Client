@@ -54,6 +54,17 @@ export default function ContactPage() {
             ))}
           </section>
 
+          <section className="mt-5 rounded-[24px] border border-[#BFE8C9] bg-[#F0FDF4] p-5 sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#15803D]">WhatsApp ShopeeMz</p>
+            <h2 className="mt-2 text-2xl font-black text-[#14532D]">+258 86 469 8775</h2>
+            <p className="mt-3 text-sm leading-7 text-[#166534]">
+              Em breve poderás consultar pedidos, receber cotações e acompanhar entregas diretamente pelo WhatsApp.
+            </p>
+            <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-2xl bg-[#16A34A] px-5 py-3 text-sm font-black text-white">
+              Falar pelo WhatsApp
+            </a>
+          </section>
+
           <section className="mt-5 rounded-[24px] border border-[#F8C7B8] bg-[#FFF0EC] p-5 sm:p-6">
             <h2 className="text-lg font-black">Antes de contactar</h2>
             <p className="mt-2 text-sm leading-7 text-[#6B7280]">

@@ -221,6 +221,9 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
             <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
               O mesmo número que usaste ao fazer o pedido.
             </p>
+            <p className="mt-2 text-xs font-semibold" style={{ color: "#15803D" }}>
+              Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.
+            </p>
           </div>
 
           {error && (

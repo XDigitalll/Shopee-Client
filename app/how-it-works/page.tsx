@@ -15,6 +15,7 @@ const steps = [
   { title: "Analise", text: "A equipa verifica produto, variantes, disponibilidade e riscos." },
   { title: "Cotacao", text: "Recebes preco final estimado, taxas, prazo e forma de pagamento." },
   { title: "Pagamento", text: `Depois de confirmares, validamos o pagamento com seguranca. ${PAYMENT_SUPPORT_MESSAGE}` },
+  { title: "Website + WhatsApp integrados", text: "Podes pedir pelo site e, em breve, acompanhar pelo WhatsApp. O mesmo numero identifica a tua conta e evita duplicacao de pedidos." },
   { title: "Compra internacional", text: "Compramos ao fornecedor e acompanhamos ate chegar." },
   { title: "Entrega", text: "Confirmamos morada e coordenamos entrega em Maputo ou provincias." },
 ];

@@ -818,7 +818,8 @@ export default function NewExternalOrderPage() {
                     </p>
                   ) : (
                     <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      Usaremos este número para contacto e atualizações da encomenda. Preferencialmente com WhatsApp ativo.
+                      Usaremos este número para contacto e atualizações da encomenda. Preferencialmente com WhatsApp ativo. Também poderás acompanhar este pedido pelo WhatsApp.
+                      Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.
                     </p>
                   )}
                 </div>

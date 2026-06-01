@@ -724,12 +724,16 @@ export default function CheckoutPage() {
                       <p className="mt-2">1. Criamos o teu pedido.</p>
                       <p className="mt-1">2. Vais direto para o pagamento.</p>
                       <p className="mt-1">3. Depois validamos e seguimos com a entrega.</p>
+                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Também poderás acompanhar este pedido pelo WhatsApp.</p>
+                      <p className="mt-1 text-xs">Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.</p>
                     </>
                   ) : (
                     <>
                       <p className="mt-2">1. Criamos a tua proposta de compra internacional.</p>
                       <p className="mt-1">2. A equipa analisa preço, frete e prazo.</p>
                       <p className="mt-1">3. Depois recebes a cotação para aprovar.</p>
+                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Também poderás acompanhar este pedido pelo WhatsApp.</p>
+                      <p className="mt-1 text-xs">Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.</p>
                     </>
                   )}
                 </div>
