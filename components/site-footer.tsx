@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SUPPORT_EMAIL, SUPPORT_WHATSAPP_LABEL, SUPPORT_WHATSAPP_URL } from "@/lib/support-contacts";
 
 const RED = "#E8431A";
 const DARK = "#1A1410";
@@ -64,8 +65,16 @@ export function SiteFooter() {
             <p className="mb-3 text-sm font-bold text-white">Contacto</p>
             <ul className="space-y-2 text-xs">
               <li>Maputo, Mocambique</li>
-              <li>WhatsApp disponivel</li>
-              <li>Suporte por email</li>
+              <li>
+                <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-white">
+                  WhatsApp: {SUPPORT_WHATSAPP_LABEL}
+                </a>
+              </li>
+              <li>
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="transition-colors hover:text-white">
+                  Email: {SUPPORT_EMAIL}
+                </a>
+              </li>
               <li>Seg-Sex, 8h-18h</li>
             </ul>
           </div>

@@ -46,6 +46,7 @@ test("PATCH funciona apenas para paths permitidos", () => {
 
 test("PaySuite passa apenas no endpoint de criacao de pagamento do cliente", () => {
   assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "payment", "paysuite"], "POST"), true);
+  assert.equal(isAllowedXdigitalProxyPath(["orders", "123", "payment", "paysuite", "retry"], "POST"), true);
   assert.equal(isAllowedXdigitalProxyPath(["admin", "payments", "paysuite"], "POST"), false);
 });
 

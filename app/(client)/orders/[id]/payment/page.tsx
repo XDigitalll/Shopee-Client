@@ -15,6 +15,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ClientActionFeedback } from "@/components/client-feedback-state";
 import { RelatedPurchasePanel } from "@/components/orders/related-purchase-panel";
 import { expireStoredSession } from "@/lib/auth";
+import { PAYMENT_SUPPORT_MESSAGE, SUPPORT_EMAIL, SUPPORT_WHATSAPP_URL } from "@/lib/support-contacts";
 
 const RED = "#E8431A";
 const GREEN = "#2E8B57";
@@ -40,6 +41,10 @@ type PaySuiteInitResponse = {
   checkoutUrl?: string;
   status?: string;
   providerStatus?: string;
+  syncStatus?: string;
+  financialEvidence?: boolean;
+  canRetry?: boolean;
+  retryReason?: string;
 };
 
 // idle       — normal page access (no ?psr=1)
@@ -83,6 +88,7 @@ export function classifySyncResult(status?: string): "confirmed" | "pending" | "
 // True when there is already an active PaySuite transaction for this order.
 export function isActivePaySuitePayment(p: PaySuiteInitResponse | null): boolean {
   if (!p) return false;
+  if (p.canRetry && !p.financialEvidence) return false;
   const s = (p.status ?? "").toUpperCase();
   return ACTIVE_PAYSUITE_STATUSES.has(s) && !!(p.providerReference || p.checkoutUrl);
 }
@@ -190,6 +196,7 @@ export default function OrderPaymentPage() {
           checkoutUrl: currentOrder.payment.checkoutUrl,
           providerStatus: currentOrder.payment.providerStatus,
           expectedAmount: currentOrder.payment.expectedAmount,
+          canRetry: false,
         });
       }
 
@@ -270,10 +277,18 @@ export default function OrderPaymentPage() {
   const isPaid = PAID_STATUSES.has(orderStatus);
   const isProcessing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
   const hasActivePaySuitePayment = isActivePaySuitePayment(paysuitePayment);
+  const lastSyncNoFinancialEvidence = !!paysuitePayment
+    && paysuitePayment.financialEvidence !== true
+    && (paysuitePayment.syncStatus === "NO_FINANCIAL_EVIDENCE" || paysuitePayment.syncStatus === "SYNC_NO_RESPONSE");
+  const canGenerateRetry = orderStatus === "PENDING_PAYMENT"
+    && !isPaid
+    && !!paysuitePayment?.canRetry
+    && lastSyncNoFinancialEvidence;
 
   // Payment form is shown only in idle phase with no active PaySuite transaction.
   const canPay = (orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED")
     && !hasActivePaySuitePayment
+    && !canGenerateRetry
     && returnPhase === "idle";
 
   // Allow retry in timed_out when:
@@ -400,6 +415,43 @@ export default function OrderPaymentPage() {
       setFeedback({
         type: "error",
         msg: capturedErrorMsg ?? "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
+      });
+    }
+  }
+
+  async function handlePaySuiteRetry() {
+    if (!isAuthenticated || !token) {
+      setFeedback({ type: "error", msg: "A tua sessao expirou. Entra novamente para pagar." });
+      await expireStoredSession();
+      router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
+      return;
+    }
+    if (!order || !canGenerateRetry) return;
+
+    const result = await paysuiteAction.run(async () => {
+      const returnUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/orders/${order.id}/payment?psr=1`
+        : undefined;
+      const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite/retry`, {
+        method: "POST",
+        body: JSON.stringify({ method: paysuiteMethod, returnUrl }),
+      });
+      setPaysuitePayment(response);
+      emitClientDataChanged();
+      setFeedback({
+        type: "success",
+        msg: "Nova tentativa criada. Vais ser redireccionado para um checkout PaySuite novo.",
+      });
+      if (response.checkoutUrl) {
+        window.location.assign(response.checkoutUrl);
+      }
+      return true;
+    });
+
+    if (!result) {
+      setFeedback({
+        type: "error",
+        msg: "Nao foi possivel gerar uma nova tentativa. Se o valor saiu da tua conta, nao pagues novamente; fala com o suporte.",
       });
     }
   }
@@ -567,6 +619,39 @@ export default function OrderPaymentPage() {
           </div>
         ) : null}
 
+        {!isPaid ? (
+          <div
+            className="mt-4 rounded-2xl border px-4 py-4"
+            style={{ background: "#FFF7ED", borderColor: "#FDBA74", color: "#7C2D12" }}
+          >
+            <p className="text-sm font-black">Pagamento com cuidado</p>
+            <p className="mt-2 text-sm leading-6">
+              Ainda nao recebemos confirmacao da PaySuite para este pagamento. Se o valor NAO saiu da tua conta, podes gerar uma nova tentativa de pagamento quando a verificacao indicar que nao ha evidencia financeira.
+            </p>
+            <p className="mt-2 text-sm leading-6 font-semibold">
+              {PAYMENT_SUPPORT_MESSAGE}
+            </p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <a
+                href={SUPPORT_WHATSAPP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-xl px-4 py-2 text-sm font-black text-white"
+                style={{ background: "#16A34A" }}
+              >
+                Falar com suporte no WhatsApp
+              </a>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                className="rounded-xl border px-4 py-2 text-sm font-black"
+                style={{ borderColor: "#FDBA74", color: "#9A3412", background: "#FFFFFF" }}
+              >
+                Enviar email
+              </a>
+            </div>
+          </div>
+        ) : null}
+
         {/* Feedback banner */}
         {feedback ? (
           <div
@@ -647,6 +732,29 @@ export default function OrderPaymentPage() {
         ) : null}
 
         {/* Manual sync — idle, PENDING_PAYMENT, no active PaySuite tx */}
+        {canGenerateRetry ? (
+          <div
+            className="mt-4 rounded-2xl border px-4 py-4"
+            style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}
+          >
+            <p className="text-sm font-black" style={{ color: "#9A3412" }}>
+              Podes gerar uma nova tentativa
+            </p>
+            <p className="mt-1 text-sm leading-6" style={{ color: "#7C2D12" }}>
+              Se o valor NÃO saiu da tua conta, podes gerar um novo checkout PaySuite. Se saiu, NÃO pagues novamente; fala com o suporte.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handlePaySuiteRetry()}
+              disabled={isPaySuiteBusy}
+              className="mt-3 rounded-xl px-4 py-2 text-sm font-black text-white"
+              style={{ background: isPaySuiteBusy ? "#9CA3AF" : RED }}
+            >
+              {isPaySuiteBusy ? "A gerar..." : "Gerar nova tentativa de pagamento"}
+            </button>
+          </div>
+        ) : null}
+
         {canPay && !hasActivePaySuitePayment ? (
           <div
             className="mt-4 rounded-2xl border px-4 py-3"

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { SiteFooter } from "@/components/site-footer";
+import { PAYMENT_SUPPORT_MESSAGE, SUPPORT_EMAIL, SUPPORT_WHATSAPP_LABEL, SUPPORT_WHATSAPP_URL } from "@/lib/support-contacts";
 
 export const metadata: Metadata = {
   title: "Contactos",
@@ -9,8 +10,8 @@ export const metadata: Metadata = {
 };
 
 const contacts = [
-  { title: "WhatsApp", value: "Atendimento disponivel pelos canais oficiais da ShopeeMz", detail: "Ideal para cotacoes, actualizacoes e suporte rapido." },
-  { title: "Email", value: "suporte@xdigital.co.mz", detail: "Para pedidos formais, privacidade, reembolsos e suporte de conta." },
+  { title: "WhatsApp", value: SUPPORT_WHATSAPP_LABEL, detail: "Ideal para cotacoes, actualizacoes e suporte rapido.", href: SUPPORT_WHATSAPP_URL },
+  { title: "Email", value: SUPPORT_EMAIL, detail: "Para pedidos formais, privacidade, reembolsos e suporte de conta.", href: `mailto:${SUPPORT_EMAIL}` },
   { title: "Horario", value: "Segunda a sexta, 08h-18h", detail: "Pedidos podem ser enviados online a qualquer momento." },
   { title: "ShopeeMz", value: "Maputo, Mocambique", detail: "Operacao digital focada em compra assistida internacional." },
 ];
@@ -41,7 +42,13 @@ export default function ContactPage() {
             {contacts.map((item) => (
               <article key={item.title} className="rounded-[24px] border border-[#F2D4CC] bg-white p-5 shadow-sm sm:p-6">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#E8431A]">{item.title}</p>
-                <h2 className="mt-2 text-xl font-black">{item.value}</h2>
+                {"href" in item ? (
+                  <a href={item.href} target={item.href?.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="mt-2 block text-xl font-black hover:text-[#E8431A]">
+                    {item.value}
+                  </a>
+                ) : (
+                  <h2 className="mt-2 text-xl font-black">{item.value}</h2>
+                )}
                 <p className="mt-3 text-sm leading-7 text-[#6B7280]">{item.detail}</p>
               </article>
             ))}
@@ -52,6 +59,7 @@ export default function ContactPage() {
             <p className="mt-2 text-sm leading-7 text-[#6B7280]">
               Se o assunto for sobre um pedido, envia a referencia, telefone da conta e uma descricao curta do que precisas. Nunca envies senhas completas.
             </p>
+            <p className="mt-2 text-sm font-bold leading-7 text-[#991B1B]">{PAYMENT_SUPPORT_MESSAGE}</p>
           </section>
         </div>
       </main>

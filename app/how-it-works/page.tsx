@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { SiteFooter } from "@/components/site-footer";
+import { PAYMENT_SUPPORT_MESSAGE, SUPPORT_EMAIL, SUPPORT_WHATSAPP_LABEL, SUPPORT_WHATSAPP_URL } from "@/lib/support-contacts";
 
 export const metadata: Metadata = {
   title: "Como Funciona",
@@ -13,7 +14,7 @@ const steps = [
   { title: "Recebemos o pedido", text: "A tua referencia e criada e podes acompanhar o estado." },
   { title: "Analise", text: "A equipa verifica produto, variantes, disponibilidade e riscos." },
   { title: "Cotacao", text: "Recebes preco final estimado, taxas, prazo e forma de pagamento." },
-  { title: "Pagamento", text: "Depois de confirmares, validamos o pagamento com seguranca." },
+  { title: "Pagamento", text: `Depois de confirmares, validamos o pagamento com seguranca. ${PAYMENT_SUPPORT_MESSAGE}` },
   { title: "Compra internacional", text: "Compramos ao fornecedor e acompanhamos ate chegar." },
   { title: "Entrega", text: "Confirmamos morada e coordenamos entrega em Maputo ou provincias." },
 ];
@@ -83,6 +84,19 @@ export default function HowItWorksPage() {
                 </div>
               </article>
             ))}
+          </section>
+
+          <section className="mt-5 rounded-[24px] border border-[#F8C7B8] bg-[#FFF0EC] p-5 sm:p-6">
+            <h2 className="text-lg font-black">Suporte de pagamento</h2>
+            <p className="mt-2 text-sm leading-7 text-[#6B7280]">{PAYMENT_SUPPORT_MESSAGE}</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noreferrer" className="rounded-2xl bg-[#16A34A] px-5 py-3 text-sm font-black text-white">
+                WhatsApp: {SUPPORT_WHATSAPP_LABEL}
+              </a>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="rounded-2xl border border-[#F2D4CC] bg-white px-5 py-3 text-sm font-black text-[#E8431A]">
+                Email: {SUPPORT_EMAIL}
+              </a>
+            </div>
           </section>
         </div>
       </main>

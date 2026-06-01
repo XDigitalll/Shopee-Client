@@ -18,8 +18,19 @@ function classifySyncResult(status) {
 
 function isActivePaySuitePayment(p) {
   if (!p) return false;
+  if (p.canRetry && !p.financialEvidence) return false;
   const s = (p.status ?? "").toUpperCase();
   return ["PENDING", "PROCESSING", "WAITING"].includes(s) && !!(p.providerReference || p.checkoutUrl);
+}
+
+function canGenerateRetry({ orderStatus, isPaid = false, paysuitePayment }) {
+  const lastSyncNoFinancialEvidence = !!paysuitePayment
+    && paysuitePayment.financialEvidence !== true
+    && ["NO_FINANCIAL_EVIDENCE", "SYNC_NO_RESPONSE"].includes(paysuitePayment.syncStatus);
+  return orderStatus === "PENDING_PAYMENT"
+    && !isPaid
+    && !!paysuitePayment?.canRetry
+    && lastSyncNoFinancialEvidence;
 }
 
 function shouldBlockDuplicatePayment(p) {
@@ -114,6 +125,53 @@ describe("isActivePaySuitePayment", () => {
 
   it("FAILED → not active (can retry)", () => {
     assert.ok(!isActivePaySuitePayment({ status: "FAILED", providerReference: "REF-789" }));
+  });
+
+  it("PENDING with retry permission and no financial evidence is not treated as active", () => {
+    assert.ok(!isActivePaySuitePayment({
+      status: "PENDING",
+      providerReference: "REF-NO-EVIDENCE",
+      canRetry: true,
+      financialEvidence: false,
+    }));
+  });
+});
+
+describe("canGenerateRetry", () => {
+  it("allows retry after NO_FINANCIAL_EVIDENCE on pending order", () => {
+    assert.ok(canGenerateRetry({
+      orderStatus: "PENDING_PAYMENT",
+      paysuitePayment: {
+        status: "PENDING",
+        syncStatus: "NO_FINANCIAL_EVIDENCE",
+        financialEvidence: false,
+        canRetry: true,
+      },
+    }));
+  });
+
+  it("blocks retry when financial evidence exists", () => {
+    assert.ok(!canGenerateRetry({
+      orderStatus: "PENDING_PAYMENT",
+      paysuitePayment: {
+        status: "PENDING",
+        syncStatus: "NO_FINANCIAL_EVIDENCE",
+        financialEvidence: true,
+        canRetry: true,
+      },
+    }));
+  });
+
+  it("blocks retry when order is no longer pending payment", () => {
+    assert.ok(!canGenerateRetry({
+      orderStatus: "PAID",
+      paysuitePayment: {
+        status: "PENDING",
+        syncStatus: "NO_FINANCIAL_EVIDENCE",
+        financialEvidence: false,
+        canRetry: true,
+      },
+    }));
   });
 });
 
