@@ -6,8 +6,10 @@ import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { ClientActionError, ClientProcessingOverlay } from "@/components/client-feedback-state";
 import { Logo } from "@/components/logo";
+import { apiFetch } from "@/lib/api-client";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { normalizeGoogleAuthMessage } from "@/lib/google-auth";
+import type { CustomerProfile, VerificationDispatchResponse } from "@/lib/types";
 
 type AuthTab = "login" | "register";
 
@@ -88,7 +90,7 @@ function getRegisterError(payload: RegisterResponse) {
 }
 
 function LoginPageContent() {
-  const { token, login } = useAuth();
+  const { token, login, refreshProfile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
@@ -109,6 +111,15 @@ function LoginPageContent() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
+  const [verificationPrompt, setVerificationPrompt] = useState<{
+    open: boolean;
+    channel: "EMAIL" | "PHONE";
+    destination: string;
+    canVerifyNow: boolean;
+  }>({ open: false, channel: "EMAIL", destination: "", canVerifyNow: false });
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationError, setVerificationError] = useState("");
+  const [verificationBusy, setVerificationBusy] = useState(false);
   const registerAction = useAsyncAction();
   const isLoginLoading = loginAction.isRunning;
   const isRegisterLoading = registerAction.isRunning;
@@ -196,7 +207,12 @@ function LoginPageContent() {
   const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!firstName.trim() || !lastName.trim() || !registerEmail.trim() || !phone.trim() || !registerPassword) {
+    const identifier = registerEmail.trim();
+    const identifierIsEmail = identifier.includes("@");
+    const phoneDigits = phone.replace(/\D/g, "");
+    const normalizedPhone = phoneDigits ? `+258${phoneDigits}` : "";
+
+    if (!firstName.trim() || !lastName.trim() || !identifier || !registerPassword) {
       setRegisterError("Preencha todos os campos obrigatorios.");
       setRegisterSuccess("");
       return;
@@ -212,7 +228,6 @@ function LoginPageContent() {
     setRegisterSuccess("");
 
     const result = await registerAction.run(async () => {
-      const normalizedPhone = `+258${phone.replace(/\D/g, "")}`;
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
@@ -221,8 +236,9 @@ function LoginPageContent() {
         body: JSON.stringify({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email: registerEmail.trim(),
-          phone: normalizedPhone,
+          identifier,
+          email: identifierIsEmail ? identifier : undefined,
+          phone: identifierIsEmail ? normalizedPhone || undefined : identifier,
           password: registerPassword,
         }),
       });
@@ -236,17 +252,68 @@ function LoginPageContent() {
         throw new Error(payload.message || "Nao foi possivel criar a conta.");
       }
 
-      setRegisterSuccess("Conta criada com sucesso. A redirecionar...");
+      setRegisterSuccess(identifierIsEmail
+        ? "Conta criada. Enviamos um codigo para verificares o teu email."
+        : "Conta criada com telefone. A verificacao por telefone/WhatsApp sera solicitada para acoes sensiveis.");
       login();
-      window.setTimeout(() => {
-        router.replace(redirectTo);
-        router.refresh();
-      }, 900);
+      setVerificationPrompt({
+        open: true,
+        channel: identifierIsEmail ? "EMAIL" : "PHONE",
+        destination: identifierIsEmail ? identifier : normalizedPhone || identifier,
+        canVerifyNow: identifierIsEmail,
+      });
       return true;
     });
 
     if (!result) {
       setRegisterError(registerAction.error);
+    }
+  };
+
+  const handleVerifyLater = async () => {
+    await refreshProfile().catch(() => {});
+    router.replace(redirectTo);
+    router.refresh();
+  };
+
+  const handleResendVerification = async () => {
+    setVerificationBusy(true);
+    setVerificationError("");
+    try {
+      const dispatch = await apiFetch<VerificationDispatchResponse>("users/me/email-verification/request", {
+        method: "POST",
+      });
+      setVerificationPrompt((current) => ({
+        ...current,
+        destination: dispatch.destinationMasked || current.destination,
+      }));
+      setRegisterSuccess(dispatch.message || "Codigo reenviado para o teu email.");
+    } catch (error) {
+      setVerificationError(error instanceof Error ? error.message : "Nao foi possivel reenviar o codigo.");
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const handleConfirmVerification = async () => {
+    if (verificationCode.trim().length < 6) {
+      setVerificationError("Introduz o codigo de 6 digitos.");
+      return;
+    }
+    setVerificationBusy(true);
+    setVerificationError("");
+    try {
+      await apiFetch<CustomerProfile>("users/me/email-verification/confirm", {
+        method: "POST",
+        body: JSON.stringify({ code: verificationCode.trim() }),
+      });
+      await refreshProfile();
+      router.replace(redirectTo);
+      router.refresh();
+    } catch (error) {
+      setVerificationError(error instanceof Error ? error.message : "Codigo incorreto ou expirado.");
+    } finally {
+      setVerificationBusy(false);
     }
   };
 
@@ -307,6 +374,69 @@ function LoginPageContent() {
         <section className="flex min-h-screen items-center justify-center px-5 py-8 sm:px-8 lg:px-10">
           <div className="relative w-full max-w-[560px] rounded-[32px] border border-[#F1D4CB] bg-white p-5 shadow-[0_30px_80px_rgba(232,67,26,0.08)] sm:p-8 lg:p-10">
             <ClientProcessingOverlay visible={isBusy} title={isLoginLoading ? "A entrar..." : "A criar conta..."} message="Nao feches esta janela." />
+            {verificationPrompt.open ? (
+              <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[32px] bg-white/96 p-5">
+                <div className="w-full rounded-[24px] border border-[#F1D4CB] bg-white p-5 shadow-xl">
+                  <p className="text-sm font-black text-[#E8431A]">
+                    {verificationPrompt.channel === "EMAIL" ? "Verifica o teu email" : "Conta criada por telefone"}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-black text-[#1A1410]">
+                    {verificationPrompt.channel === "EMAIL" ? "Enviamos um codigo para ti" : "Verificacao por telefone em breve"}
+                  </h2>
+                  <p className="mt-3 text-sm leading-7 text-[#6D625C]">
+                    {verificationPrompt.channel === "EMAIL"
+                      ? "Enviamos um codigo para teu email. Isso ajuda a proteger a tua conta e recuperar acesso."
+                      : "Podes usar a conta agora. A verificacao por telefone/WhatsApp sera solicitada para acoes sensiveis."}
+                  </p>
+                  <p className="mt-2 break-all text-xs font-bold text-[#8D817A]">{verificationPrompt.destination}</p>
+
+                  {verificationPrompt.canVerifyNow ? (
+                    <div className="mt-5 space-y-3">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={verificationCode}
+                        onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, ""))}
+                        placeholder="000000"
+                        className="w-full rounded-2xl border border-[#E8DAD4] bg-[#FFFBFA] px-4 py-3.5 text-center text-xl font-black tracking-[0.35em] outline-none transition focus:border-[#E8431A]"
+                      />
+                      {verificationError ? (
+                        <div className="rounded-2xl border border-[#F5D0D0] bg-[#FCEBEB] px-4 py-3 text-sm font-medium text-[#A53B32]">
+                          {verificationError}
+                        </div>
+                      ) : null}
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={handleConfirmVerification}
+                          disabled={verificationBusy}
+                          className="rounded-2xl bg-[#E8431A] px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+                        >
+                          {verificationBusy ? "A confirmar..." : "Confirmar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleResendVerification}
+                          disabled={verificationBusy}
+                          className="rounded-2xl border border-[#F1D4CB] px-4 py-3 text-sm font-black text-[#C93812] disabled:opacity-60"
+                        >
+                          Reenviar codigo
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => void handleVerifyLater()}
+                    className="mt-3 w-full rounded-2xl px-4 py-3 text-sm font-bold text-[#6D625C] hover:bg-[#FFF8F5]"
+                  >
+                    Verificar depois
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <div className="mb-8 flex items-center justify-between lg:hidden">
               <Logo />
               <span className="rounded-full bg-[#FFF1EA] px-3 py-1 text-xs font-semibold text-[#E8431A]">Cliente</span>
@@ -458,19 +588,20 @@ function LoginPageContent() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-[#2F2521]">Email</label>
+                    <label className="text-sm font-semibold text-[#2F2521]">Email ou telefone</label>
                     <input
-                      type="email"
+                      type="text"
                       value={registerEmail}
                       onChange={(event) => setRegisterEmail(event.target.value)}
-                      placeholder="teuemail@exemplo.com"
-                      autoComplete="email"
+                      placeholder="teuemail@exemplo.com ou 84xxxxxxx"
+                      autoComplete="username"
                       className="w-full rounded-2xl border border-[#E8DAD4] bg-[#FFFBFA] px-4 py-3.5 outline-none transition focus:border-[#E8431A]"
                     />
+                    <p className="text-xs text-[#8D817A]">Se usares email, enviamos um codigo de verificacao. Se usares telefone, a verificacao por WhatsApp fica para acoes sensiveis.</p>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-[#2F2521]">Telefone</label>
+                    <label className="text-sm font-semibold text-[#2F2521]">Telefone adicional</label>
                     <div className="overflow-hidden rounded-2xl border border-[#E8DAD4] bg-[#FFFBFA] transition focus-within:border-[#E8431A]">
                       <div className="flex items-center">
                         <span className="border-r border-[#E8DAD4] bg-[#FFF1EA] px-4 py-3.5 text-sm font-semibold text-[#5E4C45]">🇲🇿 +258</span>
@@ -484,7 +615,7 @@ function LoginPageContent() {
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-[#8D817A]">Usado para notificacoes e pagamentos</p>
+                    <p className="text-xs text-[#8D817A]">Opcional se o campo acima ja for telefone. Usado para notificacoes e pagamentos.</p>
                   </div>
 
                   <div className="space-y-2">

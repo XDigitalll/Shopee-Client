@@ -44,6 +44,7 @@ function ChangePasswordPageContent() {
   }, [token]);
 
   const requiresCurrentPassword = !profile?.canSetLocalPassword;
+  const verificationOk = profile?.authProvider === "GOOGLE" || profile?.emailVerified === true || profile?.phoneVerified === true;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -51,6 +52,11 @@ function ChangePasswordPageContent() {
 
     setFeedback("");
     setDanger("");
+
+    if (!verificationOk) {
+      setDanger("Verifica o teu email ou telefone antes de alterar a senha.");
+      return;
+    }
 
     if (requiresCurrentPassword && !currentPassword) {
       setDanger("Informe a senha atual para continuar.");
@@ -123,6 +129,13 @@ function ChangePasswordPageContent() {
         </div>
       ) : null}
 
+      {profile && !verificationOk ? (
+        <div className="mt-5 rounded-2xl border px-4 py-3 text-sm font-semibold leading-6" style={{ background: "#FFF7E8", color: "#7C2D12", borderColor: "#FED7AA" }}>
+          Esta e uma acao sensivel. Verifica o teu email no perfil antes de alterares a senha.
+          <Link href="/profile" className="ml-2 font-black" style={{ color: RED_DARK }}>Verificar agora</Link>
+        </div>
+      ) : null}
+
       <form className="mt-6 grid gap-4" onSubmit={(event) => void handleSubmit(event)}>
         {requiresCurrentPassword ? (
           <label className="grid gap-2">
@@ -165,7 +178,7 @@ function ChangePasswordPageContent() {
         <div className="mt-2 flex flex-wrap gap-3">
           <button
             type="submit"
-            disabled={loading || saving}
+            disabled={loading || saving || !verificationOk}
             className="rounded-2xl px-4 py-2.5 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-60"
             style={{ background: RED }}
           >

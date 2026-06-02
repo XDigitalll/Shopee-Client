@@ -39,6 +39,9 @@ type AuthContextValue = {
   mustChangePassword: boolean;
   profileIncomplete: boolean;
   accountCompletionPercentage: number;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  hasRealEmail: boolean;
   login: (_nextToken?: string | null, _nextRefreshToken?: string | null) => void;
   logout: () => void;
   refreshProfile: () => Promise<void>;
@@ -293,6 +296,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mustChangePassword,
     profileIncomplete,
     accountCompletionPercentage,
+    emailVerified,
+    phoneVerified,
+    hasRealEmail,
   } = useMemo(() => {
     const profileFullName = [sessionProfile?.firstName, sessionProfile?.lastName]
       .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
@@ -311,8 +317,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? sessionProfile.email.trim()
       : "";
     const emailValue = rawEmail.endsWith("@xdigital.local") ? "" : rawEmail;
-    const providerValue = typeof sessionProfile?.provider === "string" && sessionProfile.provider.trim()
-      ? sessionProfile.provider.trim().toUpperCase()
+    const providerRaw = typeof sessionProfile?.authProvider === "string" && sessionProfile.authProvider.trim()
+      ? sessionProfile.authProvider
+      : sessionProfile?.provider;
+    const providerValue = typeof providerRaw === "string" && providerRaw.trim()
+      ? providerRaw.trim().toUpperCase()
       : "LOCAL";
     const avatarUrlValue = typeof sessionProfile?.avatarUrl === "string" && sessionProfile.avatarUrl.trim()
       ? sessionProfile.avatarUrl.trim()
@@ -334,6 +343,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accountCompletionPercentage: typeof sessionProfile?.accountCompletionPercentage === "number"
         ? sessionProfile.accountCompletionPercentage
         : 0,
+      emailVerified: sessionProfile?.emailVerified === true,
+      phoneVerified: sessionProfile?.phoneVerified === true,
+      hasRealEmail: sessionProfile?.hasRealEmail === true || Boolean(emailValue),
     };
   }, [sessionProfile]);
 
@@ -351,6 +363,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     mustChangePassword,
     profileIncomplete,
     accountCompletionPercentage,
+    emailVerified,
+    phoneVerified,
+    hasRealEmail,
     login: () => {
       refreshFailureHandledRef.current = false;
       currentRefreshPromiseRef.current = null;

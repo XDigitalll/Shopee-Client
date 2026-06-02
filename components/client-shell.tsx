@@ -68,7 +68,7 @@ const REQUIRES_AUTH = ["/checkout", "/orders", "/profile", "/settings"];
 export function ClientShell({ children, fullWidth = false }: { children: ReactNode; fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, profileIncomplete, accountCompletionPercentage } = useAuth();
+  const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, profileIncomplete, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
   const { attentionCount } = useOrdersAttention();
   const needsAuth = useMemo(() => {
     const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
@@ -242,6 +242,16 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                     <span>{accountCompletionPercentage}%</span>
                   </Link>
                 )}
+                {hasRealEmail && !emailVerified ? (
+                  <Link
+                    href="/profile"
+                    className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:opacity-90"
+                    style={{ background: "#FFF7E8", color: "#7C2D12" }}
+                    title="Email nao verificado"
+                  >
+                    Email nao verificado
+                  </Link>
+                ) : null}
                 <div className="flex items-center gap-2 rounded-full bg-white/14 px-2 py-1 text-white">
                   <Link href="/profile" className="flex items-center gap-2 rounded-full transition hover:bg-white/10">
                     <span className="relative inline-flex">
