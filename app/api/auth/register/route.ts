@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       firstName?: string;
       lastName?: string;
+      identifier?: string;
       email?: string;
       phone?: string;
       password?: string;
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         firstName: body.firstName?.trim(),
         lastName: body.lastName?.trim(),
+        identifier: body.identifier?.trim(),
         email: body.email?.trim(),
         phone: body.phone?.trim(),
         password: body.password,

@@ -103,7 +103,7 @@ export default function OrderPaymentPage() {
   const params = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { token, isAuthenticated } = useAuth();
+  const { token, isAuthenticated, user } = useAuth();
   const orderId = Number(params.id);
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -177,6 +177,7 @@ export default function OrderPaymentPage() {
   const isPaid = PAID_STATUSES.has(orderStatus);
   const isProcessing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
   const canPay = orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED";
+  const verificationOk = user?.authProvider === "GOOGLE" || user?.provider === "GOOGLE" || user?.emailVerified === true || user?.phoneVerified === true;
 
   async function handlePaySuitePayment() {
     if (!isAuthenticated || !token) {
@@ -186,6 +187,11 @@ export default function OrderPaymentPage() {
       return;
     }
     if (!order) return;
+    if (!verificationOk) {
+      setFeedback({ type: "error", msg: "Verifica o teu email ou telefone antes de confirmar pagamentos." });
+      router.push("/profile");
+      return;
+    }
     if (!officialAmount || officialAmount <= 0) {
       setFieldError("O valor oficial do pedido ainda não está disponível. Actualiza a página e tenta novamente.");
       return;
@@ -361,6 +367,21 @@ export default function OrderPaymentPage() {
           >
             <p className="text-sm font-black">{visual.title}</p>
             <p className="mt-1 text-sm leading-6">{visual.body}</p>
+          </div>
+        ) : null}
+
+        {!verificationOk && canPay ? (
+          <div
+            className="mt-4 rounded-[22px] border px-4 py-4"
+            style={{ background: "#FFF7E8", borderColor: "#FED7AA", color: "#7C2D12" }}
+          >
+            <p className="text-sm font-black">Verificacao necessaria para pagamento</p>
+            <p className="mt-1 text-sm leading-6">
+              Confirma o teu email ou telefone antes de iniciar pagamentos. Isto protege a tua conta e ajuda na recuperacao de acesso.
+            </p>
+            <Link href="/profile" className="mt-3 inline-flex rounded-xl px-4 py-2 text-sm font-black text-white" style={{ background: RED }}>
+              Verificar agora
+            </Link>
           </div>
         ) : null}
 

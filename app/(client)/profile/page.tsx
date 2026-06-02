@@ -524,6 +524,15 @@ export default function ProfilePage() {
       const cleanPhone = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
       const cleanCityVal = personalForm.city ? cleanCity(personalForm.city) : "";
       const trimmedEmail = personalForm.email.trim() ? normalizeEmail(personalForm.email) : "";
+      const currentEmail = profile?.email && !profile.email.endsWith("@xdigital.local") ? normalizeEmail(profile.email) : "";
+      const currentPhone = profile?.phoneNumber ? normalizePhone(profile.phoneNumber) : "";
+      const emailWillChange = Boolean(trimmedEmail && trimmedEmail !== currentEmail);
+      const phoneWillChange = Boolean(cleanPhone && cleanPhone !== currentPhone);
+
+      if ((emailWillChange || phoneWillChange) && !verificationOk) {
+        setDangerFeedback("Verifica o teu email ou telefone antes de alterar dados sensiveis do perfil.");
+        return;
+      }
 
       const payload = await apiFetch<CustomerProfile>("users/me", {
         method: "PUT",
@@ -787,6 +796,7 @@ export default function ProfilePage() {
   const accountPct = profile?.accountCompletionPercentage ?? 0;
   const isAccountActive = accountPct === 100;
   const isVerified = profile?.securityVerificationLevel === "VERIFIED";
+  const verificationOk = profile?.authProvider === "GOOGLE" || profile?.emailVerified === true || profile?.phoneVerified === true;
   const verifiedBadge = isAccountActive
     ? (isVerified ? "Conta verificada" : "Conta ativa")
     : `Perfil ${accountPct}% completo`;
@@ -1418,7 +1428,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>Canal verificado para pagamentos</span>
-                    <strong style={{ color: isVerified ? GREEN : RED }}>{isVerified ? "OK" : "Verificar telefone"}</strong>
+                    <strong style={{ color: isVerified ? GREEN : RED }}>{isVerified ? "OK" : "Verificar email/telefone"}</strong>
                   </div>
                 </div>
               </div>
@@ -1453,12 +1463,11 @@ export default function ProfilePage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleSendVerifyCode("PHONE")}
-                      disabled={verifySending || verifyCooldown > 0 || (verifySent && verifyChannel === "PHONE") || !profile?.phoneNumber}
+                      disabled
                       className="rounded-2xl border px-4 py-2.5 text-sm font-bold transition hover:opacity-80 disabled:opacity-50"
                       style={{ borderColor: "#F2D4CC", color: RED_DARK }}
                     >
-                      {verifyCooldown > 0 && verifyChannel === "PHONE" ? `Reenviar em ${verifyCooldown}s` : verifySending && verifyChannel === "PHONE" ? "A enviar..." : verifySent && verifyChannel === "PHONE" ? "Codigo enviado" : "Verificar por WhatsApp"}
+                      WhatsApp em breve
                     </button>
                   )}
                 </div>
@@ -1545,7 +1554,7 @@ export default function ProfilePage() {
                       )}
                     </div>
 
-                    {false && verifySent && verifyChannel === "EMAIL" && !(profile?.emailVerified) && (
+                    {verifySent && verifyChannel === "EMAIL" && !(profile?.emailVerified) && (
                       <div className="mt-4 rounded-[20px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
                         <p className="text-sm font-semibold" style={{ color: TEXT }}>
                           Enviamos um codigo de 6 digitos para <span style={{ color: RED_DARK }}>{verifyDestination || profile?.verificationDestinationMasked || profile?.email || ""}</span>.

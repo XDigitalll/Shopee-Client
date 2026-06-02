@@ -17,10 +17,14 @@ export type ClientSessionProfile = {
   avatarUrl?: string;
   phoneNumber?: string;
   provider?: string;
+  authProvider?: string;
   roles?: unknown[];
   mustChangePassword?: boolean;
   profileIncomplete?: boolean;
   accountCompletionPercentage?: number;
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  hasRealEmail?: boolean;
   expiresAt?: number | null;
 };
 
