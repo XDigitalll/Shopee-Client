@@ -1,5 +1,5 @@
 export function getBackendUrl() {
-  const backendUrl = process.env.BACKEND_URL?.trim();
+  const backendUrl = process.env.API_BASE_URL?.trim() || process.env.BACKEND_URL?.trim();
   if (backendUrl) {
     return backendUrl.replace(/\/$/, "");
   }
@@ -8,5 +8,5 @@ export function getBackendUrl() {
     return "http://localhost:8080";
   }
 
-  throw new Error("BACKEND_URL is required in production.");
+  throw new Error("API_BASE_URL or BACKEND_URL is required in production.");
 }
