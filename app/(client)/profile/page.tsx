@@ -994,7 +994,7 @@ export default function ProfilePage() {
                 <p className="text-sm font-semibold" style={{ color: RED }}>Dados pessoais</p>
                 <h2 className="mt-1 text-2xl font-black" style={{ color: TEXT, fontFamily: "'Sora', sans-serif" }}>Informacoes da conta</h2>
               </div>
-              <div className="flex gap-2">
+              <div className="hidden gap-2 md:flex">
                 {isEditingPersonal && (
                   <button
                     type="button"
@@ -1177,6 +1177,28 @@ export default function ProfilePage() {
                   <p id="personal-city-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.city}</p>
                 )}
               </Field>
+            </div>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end md:hidden">
+              {isEditingPersonal && (
+                <button
+                  type="button"
+                  onClick={handleCancelPersonal}
+                  disabled={isSavingPersonal}
+                  className="rounded-2xl border px-4 py-3 text-sm font-bold transition hover:bg-gray-50 disabled:opacity-50"
+                  style={{ borderColor: "#D1D5DB", color: MUTED }}
+                >
+                  Cancelar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => (isEditingPersonal ? void handleSavePersonal() : setIsEditingPersonal(true))}
+                disabled={isSavingPersonal}
+                className="rounded-2xl px-4 py-3 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-60"
+                style={{ background: RED }}
+              >
+                {isSavingPersonal ? "A guardar..." : isEditingPersonal ? "Guardar" : "Editar"}
+              </button>
             </div>
           </section>
 

@@ -456,9 +456,9 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             <button
               type="button"
               onClick={() => scrollTo("pedido-externo")}
-              className="pointer-events-auto flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/40 px-3 py-3 text-sm font-bold text-white transition-all hover:bg-white/10 hover:border-white/70 sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5"
+              className="pointer-events-auto flex min-h-12 min-w-0 items-center justify-center gap-1.5 rounded-2xl border-2 border-white/40 px-3 py-3 text-[13px] font-bold text-white transition-all hover:bg-white/10 hover:border-white/70 sm:w-auto sm:gap-2 sm:px-6 sm:py-3.5 sm:text-sm"
             >
-              <span className="sm:hidden">Encomenda</span>
+              <span className="sm:hidden">Encomendar do estrangeiro</span>
               <span className="hidden sm:inline">Comprar do estrangeiro</span>
               <ArrowRight />
             </button>

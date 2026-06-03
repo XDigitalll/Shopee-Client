@@ -56,7 +56,7 @@ type ReturnPhase = "idle" | "confirming" | "confirmed" | "timed_out";
 const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
   { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento instantâneo" },
   { key: "EMOLA", label: "eMola", icon: "E", hint: "Carteira digital" },
-  { key: "CARD", label: "Cartão", icon: "C", hint: "Visa / Mastercard" },
+  { key: "CARD", label: "Visa", icon: "V", hint: "Cartão Visa" },
 ];
 
 const PAID_STATUSES = new Set([
@@ -510,7 +510,7 @@ export default function OrderPaymentPage() {
               Pedido {orderDisplayCode(order ?? { id: orderId })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
-              Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway processa o pagamento.
+              Paga via M-Pesa, eMola ou Visa. A confirmação é automática quando o gateway processa o pagamento.
             </p>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6" style={{ color: "#15803D" }}>
               Também poderás acompanhar este pedido pelo WhatsApp. Usa o mesmo número da tua conta para consultar pedidos no WhatsApp.

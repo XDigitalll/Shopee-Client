@@ -297,7 +297,7 @@ export default function OrderQuotePage() {
                   Efetuar pagamento
                 </h2>
                 <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>
-                  Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway PaySuite processa o pagamento.
+                  Paga via M-Pesa, eMola ou Visa. A confirmação é automática quando o gateway PaySuite processa o pagamento.
                 </p>
               </div>
               <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF8F5" }}>
@@ -314,7 +314,7 @@ export default function OrderQuotePage() {
               </div>
             ) : (
               <div className="mt-5 rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFF8F5", color: "#6B7280" }}>
-                <p>Paga via M-Pesa, eMola ou cartão. A confirmação é automática quando o gateway PaySuite processa o pagamento.</p>
+                <p>Paga via M-Pesa, eMola ou Visa. A confirmação é automática quando o gateway PaySuite processa o pagamento.</p>
                 <Link href={`/orders/${orderId}/payment`} className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: RED }}>
                   {orderStatus === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora"}
                 </Link>

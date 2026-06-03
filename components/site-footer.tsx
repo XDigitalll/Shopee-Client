@@ -85,7 +85,7 @@ export function SiteFooter() {
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-xs">© 2026 ShopeeMz. Todos os direitos reservados.</p>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {["M-Pesa", "e-Mola", "Visa", "Mastercard"].map((method) => (
+            {["M-Pesa", "e-Mola", "Visa"].map((method) => (
               <span
                 key={method}
                 className="rounded-lg px-3 py-1.5 text-xs font-bold"

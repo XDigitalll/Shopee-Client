@@ -311,7 +311,7 @@ export default function CartPage() {
 
             <div className="space-y-3 border-t pt-4" style={{ borderColor: "#F5D7CE" }}>
               <p className="text-xs font-bold uppercase tracking-[0.24em]" style={{ color: "#9CA3AF", fontFamily: "'Sora', sans-serif" }}>Pagamentos</p>
-              <div className="flex flex-wrap gap-2"><PaymentBadge label="M-Pesa" /><PaymentBadge label="e-Mola" /><PaymentBadge label="Visa" /><PaymentBadge label="Mastercard" /></div>
+              <div className="flex flex-wrap gap-2"><PaymentBadge label="M-Pesa" /><PaymentBadge label="e-Mola" /><PaymentBadge label="Visa" /></div>
             </div>
           </div>
         </aside>
