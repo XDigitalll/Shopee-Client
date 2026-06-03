@@ -299,8 +299,9 @@ export default function OrdersPage() {
   const [stats, setStats] = useState<OrderStats>({ totalOrders: 0, inProgress: 0, delivered: 0, totalSpent: 0 });
   const [filter, setFilter] = useState<FilterKey>("ALL");
   const [isLoading, setIsLoading] = useState(true);
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
+  const [locatingOrderId, setLocatingOrderId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
   const [selectedAddressByOrder, setSelectedAddressByOrder] = useState<Record<number, number>>({});
   const [addressDrafts, setAddressDrafts] = useState<Record<number, AddressDraftState>>({});
@@ -427,44 +428,38 @@ export default function OrdersPage() {
 
   const applyCurrentLocationForAddress = (order: Order) => {
     if (!navigator.geolocation) {
-      setFeedback({ type: "error", msg: "Este navegador nao permite obter a localizacao actual." });
+      setFeedback({ type: "info", msg: "N\u00E3o foi poss\u00EDvel obter localiza\u00E7\u00E3o. Pode continuar preenchendo manualmente." });
       return;
     }
 
-    setBusyOrderId(order.id);
+    setLocatingOrderId(order.id);
 
     const applyPosition = (position: GeolocationPosition) => {
       const { latitude, longitude } = position.coords;
       const mapsLink = `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
       updateAddressDraft(order, { googleMapsLink: mapsLink });
       setFeedback({ type: "success", msg: "Localizacao actual adicionada ao Google Maps." });
-      setBusyOrderId(null);
+      setLocatingOrderId(null);
     };
 
-    const errorMessage = (error: GeolocationPositionError) => {
-      if (error.code === error.PERMISSION_DENIED) {
-        return "Permite o acesso a localizacao/GPS no navegador e tenta novamente.";
-      }
-      if (error.code === error.POSITION_UNAVAILABLE) {
-        return "Nao conseguimos ler o GPS. Liga a localizacao do telemovel e tenta novamente.";
-      }
-      return "A localizacao demorou a responder. Tenta novamente ou cola o link do Google Maps.";
+    const errorMessage = () => {
+      return "N\u00E3o foi poss\u00EDvel obter localiza\u00E7\u00E3o. Pode continuar preenchendo manualmente.";
     };
 
     navigator.geolocation.getCurrentPosition(
       applyPosition,
       (firstError) => {
         if (firstError.code === firstError.PERMISSION_DENIED) {
-          setFeedback({ type: "error", msg: errorMessage(firstError) });
-          setBusyOrderId(null);
+          setFeedback({ type: "info", msg: errorMessage() });
+          setLocatingOrderId(null);
           return;
         }
 
         navigator.geolocation.getCurrentPosition(
           applyPosition,
           (secondError) => {
-            setFeedback({ type: "error", msg: errorMessage(secondError) });
-            setBusyOrderId(null);
+            setFeedback({ type: "info", msg: errorMessage() });
+            setLocatingOrderId(null);
           },
           { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 },
         );
@@ -642,16 +637,16 @@ export default function OrdersPage() {
                     onChange={(event) => updateAddressDraft(order, { googleMapsLink: event.target.value })}
                     className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
                     style={{ borderColor: "#DDD6FE", background: "#FFFDFC" }}
-                    placeholder="Cola o link ou usa a tua localização actual"
+                    placeholder="Cola o link do Google Maps, se tiveres"
                   />
                   <button
                     type="button"
                     onClick={() => applyCurrentLocationForAddress(order)}
-                    disabled={busyOrderId === order.id}
+                    disabled={locatingOrderId === order.id}
                     className="rounded-2xl border px-4 py-3 text-sm font-black disabled:opacity-60"
                     style={{ borderColor: "#DDD6FE", color: "#5B21B6", background: "#F5F3FF" }}
                   >
-                    {busyOrderId === order.id ? "A obter..." : "Usar localização actual"}
+                    {locatingOrderId === order.id ? "A obter..." : "\uD83D\uDCCD Usar localização atual (opcional)"}
                   </button>
                 </div>
               </label>

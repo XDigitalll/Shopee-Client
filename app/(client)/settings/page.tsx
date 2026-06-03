@@ -175,7 +175,7 @@ export default function SettingsPage() {
             onChange={(value) => updateField("googleMapsLink", value)}
             inputClassName="w-full rounded-2xl border bg-[#FFFBFA] px-4 py-3 text-sm outline-none"
             inputStyle={{ borderColor: "#F2D4CC", color: "#4B5563" }}
-            hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+            hint="Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega."
           />
         </div>
       );

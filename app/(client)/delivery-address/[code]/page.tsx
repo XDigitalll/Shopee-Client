@@ -105,7 +105,7 @@ function DeliveryAddressForm() {
         <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#EF3B18]">Dados de entrega</p>
         <h1 className="mt-3 text-3xl font-black text-[#14110F]">Confirmar morada do pedido</h1>
         <p className="mt-3 text-sm leading-7 text-[#5F6A7A]">
-          Pedido {orderCode}. Preenche uma morada simples ou partilha a tua localizacao. A equipa pode ligar para confirmar antes de sair.
+          Pedido {orderCode}. Preenche uma morada simples. Se quiseres, podes tambem adicionar um link do Google Maps para ajudar a equipa.
         </p>
 
         <form onSubmit={submit} className="mt-8 space-y-5">
@@ -152,7 +152,7 @@ function DeliveryAddressForm() {
               value={form.googleMapsLink}
               onChange={(value) => updateField("googleMapsLink", value)}
               inputClassName={fieldClass}
-              hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+              hint="Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega."
             />
           </div>
 

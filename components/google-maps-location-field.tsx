@@ -20,14 +20,8 @@ function locationLink(latitude: number, longitude: number) {
   return `https://www.google.com/maps/search/?api=1&query=${latitude.toFixed(6)},${longitude.toFixed(6)}`;
 }
 
-function getLocationErrorMessage(error: GeolocationPositionError) {
-  if (error.code === error.PERMISSION_DENIED) {
-    return "Permite o acesso a localizacao/GPS no navegador e tenta novamente.";
-  }
-  if (error.code === error.POSITION_UNAVAILABLE) {
-    return "Nao conseguimos ler o GPS. Liga a localizacao do telemovel e tenta novamente.";
-  }
-  return "A localizacao demorou a responder. Tenta novamente ou cola o link do Google Maps.";
+function getLocationErrorMessage() {
+  return "N\u00E3o foi poss\u00EDvel obter localiza\u00E7\u00E3o. Pode continuar preenchendo manualmente.";
 }
 
 export function GoogleMapsLocationField({
@@ -35,7 +29,7 @@ export function GoogleMapsLocationField({
   label = "Google Maps",
   value,
   error,
-  hint = "Opcional. Cola o link do Google Maps ou usa a localizacao atual.",
+  hint = "Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega.",
   inputClassName = "w-full rounded-2xl border px-4 py-3 text-sm outline-none",
   inputStyle,
   buttonClassName = "rounded-full border px-4 py-2 text-sm font-bold",
@@ -48,7 +42,7 @@ export function GoogleMapsLocationField({
   function useCurrentLocation() {
     setLocationMessage("");
     if (!navigator.geolocation) {
-      setLocationMessage("O teu navegador nao permite obter a localizacao automaticamente.");
+      setLocationMessage(getLocationErrorMessage());
       return;
     }
 
@@ -64,7 +58,7 @@ export function GoogleMapsLocationField({
 
     const retryWithNormalAccuracy = (firstError: GeolocationPositionError) => {
       if (firstError.code === firstError.PERMISSION_DENIED) {
-        setLocationMessage(getLocationErrorMessage(firstError));
+        setLocationMessage(getLocationErrorMessage());
         setLocating(false);
         return;
       }
@@ -72,7 +66,7 @@ export function GoogleMapsLocationField({
       navigator.geolocation.getCurrentPosition(
         applyPosition,
         (secondError) => {
-          setLocationMessage(getLocationErrorMessage(secondError));
+          setLocationMessage(getLocationErrorMessage());
           setLocating(false);
         },
         { enableHighAccuracy: false, timeout: 30000, maximumAge: 300000 }
@@ -101,7 +95,7 @@ export function GoogleMapsLocationField({
           className={`${buttonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
           style={{ borderColor: "#EF3B18", color: "#EF3B18" }}
         >
-          {locating ? "A obter..." : "Usar localizacao atual"}
+          {locating ? "A obter..." : "\uD83D\uDCCD Usar localiza\u00E7\u00E3o atual (opcional)"}
         </button>
       </div>
       <input
@@ -116,7 +110,7 @@ export function GoogleMapsLocationField({
         placeholder="https://maps.google.com/..."
       />
       {hint ? <p className="text-xs" style={{ color: "#8B7B74" }}>{hint}</p> : null}
-      {locationMessage ? <p className="text-xs font-medium" style={{ color: locationMessage.startsWith("Nao") ? "#B42318" : "#137A3D" }}>{locationMessage}</p> : null}
+      {locationMessage ? <p className="text-xs font-medium" style={{ color: locationMessage.startsWith("Localizacao") ? "#137A3D" : "#0C4A6E" }}>{locationMessage}</p> : null}
       {error ? <p className="text-xs font-medium" style={{ color: "#B42318" }}>{error}</p> : null}
     </div>
   );

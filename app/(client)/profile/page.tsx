@@ -1330,7 +1330,7 @@ export default function ProfilePage() {
                       inputClassName="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
                       inputStyle={{ ...inputStyle, borderColor: addressErrors.googleMapsLink && addressTouched.googleMapsLink ? RED : "#F2D4CC" }}
                       error={addressErrors.googleMapsLink && addressTouched.googleMapsLink ? addressErrors.googleMapsLink : null}
-                      hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+                      hint="Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega."
                     />
                   </Field>
                   <Field label="Referencia" full>

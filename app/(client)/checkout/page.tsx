@@ -559,7 +559,7 @@ export default function CheckoutPage() {
                     inputClassName={fieldClass}
                     inputStyle={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
                     error={fv.errors.googleMapsLink}
-                    hint="Opcional. Cola o link ou usa a tua localizacao atual para facilitar a entrega."
+                    hint="Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega."
                   />
                 </div>
                 <div>
