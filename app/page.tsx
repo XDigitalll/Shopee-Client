@@ -1129,7 +1129,7 @@ function ProductsSection({
               Nao foi possivel carregar produtos.
             </p>
             <p className="mt-1 text-xs" style={{ color: "#9CA3AF" }}>
-              Confirma se o backend esta activo na porta 8080.
+              Estamos com dificuldade em ligar ao serviço. Tenta novamente dentro de instantes.
             </p>
           </div>
         ) : products.length === 0 ? (

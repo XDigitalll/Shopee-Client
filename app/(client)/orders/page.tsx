@@ -765,7 +765,7 @@ export default function OrdersPage() {
         {isExternal && status === "QUOTED" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 shrink-0 text-base">✅</span>
+              <span className="mt-0.5 shrink-0 text-base">?</span>
               <div>
                 <h3 className="text-base font-black" style={{ color: "#9A3412", fontFamily: "'Sora', sans-serif" }}>Cotacao pronta!</h3>
                 <p className="mt-1 text-sm" style={{ color: "#9A3412" }}>Ja temos o preco final da tua compra. Revê a proposta e decide se queres continuar.</p>
@@ -909,7 +909,7 @@ export default function OrdersPage() {
                           color: step.failed ? "#B42318" : step.current ? "white" : step.done ? "#166534" : "#D1D5DB",
                         }}
                       >
-                        {step.failed ? "✕" : step.done ? "✓" : step.current ? "●" : "○"}
+                        {step.failed ? "?" : step.done ? "?" : step.current ? "?" : "?"}
                       </div>
                       {!isLast && <div className="w-px grow" style={{ background: lineColor, minHeight: "20px" }} />}
                     </div>
@@ -979,7 +979,7 @@ export default function OrdersPage() {
             <h1 className="mt-1 text-3xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Meus pedidos</h1>
             <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Ola, {userLabel}. Acompanha aqui o estado simples de cada compra.</p>
             <p className="mt-2 text-sm font-semibold" style={{ color: "#15803D" }}>
-              Em breve: acompanhamento automático pelo WhatsApp. Usa o mesmo número da tua conta para consultar pedidos no WhatsApp.
+              Em breve também poderás acompanhar os teus pedidos pelo WhatsApp. Por agora, acompanha o estado na área Meus pedidos.
             </p>
           </div>
           <div className="flex items-center gap-3 self-start rounded-full border px-3 py-2" style={{ borderColor: "#F2D4CC", background: "#FFF8F5" }}>

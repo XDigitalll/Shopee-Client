@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { normalizeClientError } from "@/lib/client-errors";
 
 function friendlyActionError(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
+  if (process.env.NODE_ENV !== "production") {
+    console.error("[async-action]", error);
   }
-  return "Nao foi possivel concluir a operacao.";
+  return normalizeClientError(error, "Algo nao correu bem. Tenta novamente.").message;
 }
 
 export function useAsyncAction() {

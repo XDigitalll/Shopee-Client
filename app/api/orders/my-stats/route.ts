@@ -45,10 +45,13 @@ export async function GET(request: NextRequest) {
       delivered,
       totalSpent,
     });
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[orders/my-stats] service unavailable", error);
+    }
     return NextResponse.json(
       {
-        message: "Nao foi possivel carregar as estatisticas dos pedidos. Confirma se o backend esta a correr na porta 8080.",
+        message: "Estamos com dificuldade em carregar os teus dados. Tenta novamente dentro de instantes.",
       },
       { status: 502 }
     );

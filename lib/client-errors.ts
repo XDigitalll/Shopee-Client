@@ -13,6 +13,7 @@ function isUnsafeMessage(message: string) {
   return (
     message.length > 180 ||
     /exception|stacktrace|traceback|authorization|bearer|token|csrf token/i.test(message) ||
+    /backend|porta\s*8080|:8080|localhost|127\.0\.0\.1|0\.0\.0\.0|econnrefused|fetch failed|failed to fetch/i.test(message) ||
     message.includes("{") ||
     message.includes("<!DOCTYPE")
   );
@@ -70,8 +71,8 @@ export function normalizeClientError(
     return { kind: "validation", message: "Cupão inválido ou expirado." };
   }
 
-  if (/network|failed to fetch|backend inacess/i.test(message)) {
-    return { kind: "network", message: "Não conseguimos contactar o servidor agora. Tenta novamente." };
+  if (/network|failed to fetch|fetch failed|econnrefused|backend inacess|service unavailable/i.test(message)) {
+    return { kind: "network", message: "Estamos com dificuldade em ligar ao servico. Tenta novamente dentro de instantes." };
   }
 
   if (!message || isUnsafeMessage(message)) {

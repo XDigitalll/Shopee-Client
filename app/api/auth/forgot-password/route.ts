@@ -60,11 +60,14 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(payload, { status: response.status });
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[auth/forgot-password] service unavailable", error);
+    }
     return NextResponse.json(
       {
         message:
-          "Nao foi possivel comunicar com o backend Xdigital. Confirma se ele esta a correr na porta 8080.",
+          "Estamos com dificuldade em ligar ao serviço. Tenta novamente dentro de instantes.",
       },
       { status: 502 }
     );

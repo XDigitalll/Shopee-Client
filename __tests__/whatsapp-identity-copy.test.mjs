@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
@@ -9,17 +9,20 @@ function read(relativePath) {
   return readFileSync(join(root, relativePath), "utf8");
 }
 
-test("customer pages expose Website + WhatsApp identity copy", () => {
+test("customer pages describe WhatsApp order tracking as upcoming", () => {
   const externalOrder = read("app/(client)/orders/external/new/page.tsx");
   const checkout = read("app/(client)/checkout/page.tsx");
   const orders = read("app/(client)/orders/page.tsx");
   const tracking = read("app/track/[reference]/page.tsx");
 
   for (const source of [externalOrder, checkout, orders, tracking]) {
-    assert.match(source, /Usa o mesmo n[úu]mero da tua conta para consultar pedidos no WhatsApp/);
+    assert.match(source, /Em breve/);
+    assert.match(source, /Por agora/);
+    assert.doesNotMatch(source, /Usa o mesmo n[úu]mero da tua conta para consultar pedidos no WhatsApp/);
   }
-  assert.match(externalOrder + checkout, /Tamb[ée]m poder[áa]s acompanhar este pedido pelo WhatsApp/);
-  assert.match(orders + tracking, /Em breve: acompanhamento autom[áa]tico pelo WhatsApp/);
+
+  assert.match(externalOrder + checkout, /Em breve poder[áa]s acompanhar este pedido pelo WhatsApp/);
+  assert.match(orders + tracking, /Em breve também poder[áa]s acompanhar os teus pedidos pelo WhatsApp/);
 });
 
 test("contact and how-it-works explain upcoming WhatsApp integration", () => {

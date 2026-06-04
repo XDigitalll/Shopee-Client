@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     if (!response.ok) {
       return NextResponse.json(
         {
-          message: getErrorMessage(payload) || "Falha ao autenticar no backend.",
+          message: getErrorMessage(payload) || "Não foi possível entrar agora. Verifica a tua internet e tenta novamente.",
           code: getErrorCode(payload) || undefined,
         },
         { status: response.status }
@@ -97,11 +97,14 @@ export async function POST(request: Request) {
     forwardNamedSetCookies(nextResponse, response.headers, [XSRF_COOKIE]);
 
     return nextResponse;
-  } catch {
+  } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[auth/login] service unavailable", error);
+    }
     return NextResponse.json(
       {
         message:
-          "Nao foi possivel comunicar com o backend Xdigital. Confirma se ele esta a correr na porta 8080.",
+          "Estamos com dificuldade em ligar ao serviço. Tenta novamente dentro de instantes.",
       },
       { status: 502 }
     );

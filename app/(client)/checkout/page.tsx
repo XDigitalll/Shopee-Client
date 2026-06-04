@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -135,7 +135,7 @@ export default function CheckoutPage() {
           }
         }
       } catch (error) {
-        setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível carregar o checkout." });
+        setFeedback({ type: "error", msg: error instanceof Error ? error.message : "NÃ£o foi possÃ­vel carregar o checkout." });
       } finally {
         setIsLoading(false);
       }
@@ -178,7 +178,7 @@ export default function CheckoutPage() {
 
     const isValid = fv.validateAll();
     if (!isValid) {
-      setSubmitFeedback({ type: "error", msg: "Revê os campos destacados antes de continuar." });
+      setSubmitFeedback({ type: "error", msg: "RevÃª os campos destacados antes de continuar." });
       setTimeout(() => fv.scrollToFirstError(), 0);
       return;
     }
@@ -233,7 +233,7 @@ export default function CheckoutPage() {
             }),
           });
         } catch {
-          // não bloqueia a compra se falhar ao guardar a morada
+          // nÃ£o bloqueia a compra se falhar ao guardar a morada
         }
       }
       if (typeof window !== "undefined") {
@@ -257,7 +257,7 @@ export default function CheckoutPage() {
         setFeedback({
           type: "success",
           msg: result.mixedCheckout && externalOrder
-            ? `Pedido local ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento; a compra internacional ${orderDisplayCode(externalOrder)} fica em análise separada.`
+            ? `Pedido local ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento; a compra internacional ${orderDisplayCode(externalOrder)} fica em anÃ¡lise separada.`
             : `Pedido ${orderDisplayCode(internalOrderForPayment)} criado. A abrir pagamento...`,
         });
         router.push(`/orders/${internalOrderForPayment.id}/payment`);
@@ -266,11 +266,11 @@ export default function CheckoutPage() {
 
       setFeedback({
         type: "success",
-        msg: `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso. A proposta será analisada pela equipa.`,
+        msg: `Pedido ${orderDisplayCode(primaryOrder)} criado com sucesso. A proposta serÃ¡ analisada pela equipa.`,
       });
       router.push("/orders");
     } catch (error: any) {
-      setSubmitFeedback({ type: "error", msg: normalizeClientError(error, "Não conseguimos criar o pedido agora. Tenta novamente.").message });
+      setSubmitFeedback({ type: "error", msg: normalizeClientError(error, "NÃ£o conseguimos criar o pedido agora. Tenta novamente.").message });
     } finally {
       setIsSubmitting(false);
     }
@@ -286,11 +286,11 @@ export default function CheckoutPage() {
     if (!token || !couponCode.trim()) return;
     if (localItems.length === 0 || total <= 0) {
       setCoupon(null);
-      setCouponFeedback({ type: "info", msg: "Cupões para pedidos externos são validados quando a cotação tiver total final." });
+      setCouponFeedback({ type: "info", msg: "CupÃµes para pedidos externos sÃ£o validados quando a cotaÃ§Ã£o tiver total final." });
       return;
     }
     setIsApplyingCoupon(true);
-    setCouponFeedback({ type: "loading", msg: "A validar o cupão." });
+    setCouponFeedback({ type: "loading", msg: "A validar o cupÃ£o." });
     setFeedback(null);
     try {
       const payload = await apiFetch<CouponValidation>("coupons/validate", {
@@ -303,10 +303,10 @@ export default function CheckoutPage() {
       });
       setCoupon(payload);
       setCouponCode(payload.code || couponCode.trim().toUpperCase());
-      setCouponFeedback({ type: "success", msg: payload.message || "Cupão aplicado com sucesso." });
+      setCouponFeedback({ type: "success", msg: payload.message || "CupÃ£o aplicado com sucesso." });
     } catch (error: any) {
       setCoupon(null);
-      setCouponFeedback({ type: "error", msg: normalizeClientError(error, "Cupão inválido ou expirado.").message });
+      setCouponFeedback({ type: "error", msg: normalizeClientError(error, "CupÃ£o invÃ¡lido ou expirado.").message });
     } finally {
       setIsApplyingCoupon(false);
     }
@@ -315,7 +315,7 @@ export default function CheckoutPage() {
   const removeCoupon = () => {
     setCoupon(null);
     setCouponCode("");
-    setCouponFeedback({ type: "info", msg: "Cupão removido." });
+    setCouponFeedback({ type: "info", msg: "CupÃ£o removido." });
   };
 
   return (
@@ -326,7 +326,7 @@ export default function CheckoutPage() {
         <section className="space-y-4">
           <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
             <h1 className="text-xl font-black sm:text-2xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Finalizar compra</h1>
-            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Confirma os teus dados e revê claramente o que fecha agora e o que segue como proposta internacional.</p>
+            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Confirma os teus dados e revÃª claramente o que fecha agora e o que segue como proposta internacional.</p>
           </div>
 
           {feedback ? <ClientFeedbackBanner message={feedback.msg} tone={feedback.type} /> : null}
@@ -350,7 +350,7 @@ export default function CheckoutPage() {
                       <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
                         {savedAddresses.length
                           ? "Escolhe uma morada guardada ou usa preenchimento manual."
-                          : "Ainda não tens moradas guardadas. A primeira que preencheres pode ser salva no teu perfil."}
+                          : "Ainda nÃ£o tens moradas guardadas. A primeira que preencheres pode ser salva no teu perfil."}
                       </p>
                     </div>
                     {savedAddresses.length ? (
@@ -455,7 +455,7 @@ export default function CheckoutPage() {
                     inputMode="tel"
                   />
                   <p id="co-phone2-hint" className="mt-1.5 text-xs" style={{ color: alternativePhoneError ? "#B42318" : "#6B7280" }}>
-                    {alternativePhoneError ?? "Opcional — usa +2588xxxxxxxx"}
+                    {alternativePhoneError ?? "Opcional â€” usa +2588xxxxxxxx"}
                   </p>
                 </div>
 
@@ -468,18 +468,18 @@ export default function CheckoutPage() {
                     style={{ borderColor: "#F2D4CC", background: "#F9FAFB", color: userEmail ? "#374151" : "#9CA3AF" }}
                     aria-readonly="true"
                   >
-                    {userEmail || "Email não adicionado"}
+                    {userEmail || "Email nÃ£o adicionado"}
                   </div>
                   <p className="mt-1.5 text-xs" style={{ color: "#6B7280" }}>
-                    O email da conta não é alterado no checkout. Podes adicionar ou verificar email no perfil.
+                    O email da conta nÃ£o Ã© alterado no checkout. Podes adicionar ou verificar email no perfil.
                   </p>
                 </div>
 
-                {/* Método de entrega */}
+                {/* MÃ©todo de entrega */}
                 <div>
                   <label className="mb-2 block text-sm font-semibold" htmlFor="co-delivery">Receber como</label>
                   <select id="co-delivery" value={form.deliveryMethod} onChange={(e) => setForm((c) => ({ ...c, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}>
-                    <option value="DELIVERY">Entrega ao domicílio</option>
+                    <option value="DELIVERY">Entrega ao domicÃ­lio</option>
                     <option value="STORE_PICKUP">Levantar na loja</option>
                   </select>
                 </div>
@@ -538,15 +538,15 @@ export default function CheckoutPage() {
                   {fv.errors.street ? <p id="co-street-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.street}</p> : null}
                 </div>
 
-                {/* Casa / Número */}
+                {/* Casa / NÃºmero */}
                 <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-house">Casa / Número</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-house">Casa / NÃºmero</label>
                   <input id="co-house" value={form.houseNumber} onChange={(e) => setForm((c) => ({ ...c, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} />
                 </div>
               </div>
               <div className="mt-4 grid gap-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-ref">Referência</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-ref">ReferÃªncia</label>
                   <textarea id="co-ref" value={form.deliveryReference} onChange={(e) => setForm((c) => ({ ...c, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={isDelivery} />
                 </div>
                 <div>
@@ -571,7 +571,7 @@ export default function CheckoutPage() {
                     onBlur={() => fv.touch("customerNotes")}
                     className={fieldClass}
                     style={{ ...getFieldStyle(Boolean(fv.errors.customerNotes)), minHeight: 110 }}
-                    placeholder="Instruções para a entrega, horários ou observações."
+                    placeholder="InstruÃ§Ãµes para a entrega, horÃ¡rios ou observaÃ§Ãµes."
                     ref={fv.registerRef("customerNotes")}
                   />
                   {fv.errors.customerNotes ? <p className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.customerNotes}</p> : null}
@@ -580,7 +580,7 @@ export default function CheckoutPage() {
                   <label className="inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }}>
                     <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
                     {savedAddresses.length === 0
-                      ? "Guardar esta primeira morada no meu perfil para usar nas próximas compras"
+                      ? "Guardar esta primeira morada no meu perfil para usar nas prÃ³ximas compras"
                       : "Guardar esta morada no meu perfil"}
                   </label>
                 ) : null}
@@ -590,7 +590,7 @@ export default function CheckoutPage() {
                       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z" /><circle cx="12" cy="10" r="3" />
                     </svg>
                     <p className="text-sm" style={{ color: "#0C4A6E" }}>
-                      Guarda a morada agora e nas próximas compras o checkout fica pré-preenchido automaticamente.{" "}
+                      Guarda a morada agora e nas prÃ³ximas compras o checkout fica prÃ©-preenchido automaticamente.{" "}
                       <Link href="/profile#addresses" className="font-bold underline" style={{ color: "#0284C7" }}>
                         Gerir moradas no perfil
                       </Link>
@@ -600,10 +600,10 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            {/* ── Coupon ── */}
+            {/* â”€â”€ Coupon â”€â”€ */}
             <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
-              <p className="text-sm font-black" style={{ color: "#1A1410" }}>Tem cupão?</p>
-              <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Aplica o teu código antes de finalizar para garantir o desconto.</p>
+              <p className="text-sm font-black" style={{ color: "#1A1410" }}>Tem cupÃ£o?</p>
+              <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Aplica o teu cÃ³digo antes de finalizar para garantir o desconto.</p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <input
                   value={couponCode}
@@ -611,7 +611,7 @@ export default function CheckoutPage() {
                     setCouponCode(event.target.value.toUpperCase());
                     if (coupon) setCoupon(null);
                   }}
-                  placeholder="Código do cupão"
+                  placeholder="CÃ³digo do cupÃ£o"
                   className="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm outline-none"
                   style={{ borderColor: "#F2D4CC", color: "#1A1410" }}
                 />
@@ -626,11 +626,11 @@ export default function CheckoutPage() {
                 )}
               </div>
               <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
-              {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
-              {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
+              {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "CupÃ£o aplicado."}</p> : null}
+              {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>CupÃµes para pedidos externos sÃ£o aplicados na cotaÃ§Ã£o quando houver total final.</p> : null}
             </div>
 
-            {/* ── Order total summary (before submit) ── */}
+            {/* â”€â”€ Order total summary (before submit) â”€â”€ */}
             {localItems.length > 0 ? (
               <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
                 <p className="text-sm font-black" style={{ color: "#1A1410" }}>Resumo do pagamento</p>
@@ -662,8 +662,8 @@ export default function CheckoutPage() {
             <ClientActionFeedback
               feedback={submitFeedback}
               onClose={() => setSubmitFeedback(null)}
-              actionLabel={submitFeedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(submitFeedback.msg) ? "Entrar novamente" : undefined}
-              actionHref={submitFeedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(submitFeedback.msg) ? "/login?redirect=%2Fcheckout" : undefined}
+              actionLabel={submitFeedback?.type === "error" && /sessÃ£o expirada|Inicia sessÃ£o/i.test(submitFeedback.msg) ? "Entrar novamente" : undefined}
+              actionHref={submitFeedback?.type === "error" && /sessÃ£o expirada|Inicia sessÃ£o/i.test(submitFeedback.msg) ? "/login?redirect=%2Fcheckout" : undefined}
             />
           </form>
         </section>
@@ -675,7 +675,7 @@ export default function CheckoutPage() {
             {isLoading ? (
               <ClientSectionSkeleton
                 title="A montar o resumo"
-                message="O total, os itens e a separação da compra composta aparecem já a seguir."
+                message="O total, os itens e a separaÃ§Ã£o da compra composta aparecem jÃ¡ a seguir."
                 rows={2}
               />
             ) : (
@@ -693,7 +693,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-sm font-semibold" style={{ color: "#1A1410" }}>Produtos incluídos</p>
+                  <p className="text-sm font-semibold" style={{ color: "#1A1410" }}>Produtos incluÃ­dos</p>
                   <div className="space-y-2">
                     {localItems.map((item: CartItem) => (
                       <div key={item.itemId} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFFDFC" }}>
@@ -702,7 +702,7 @@ export default function CheckoutPage() {
                           {item.variantLabel && (
                             <span className="block text-xs mt-0.5" style={{ color: "#9A3412" }}>{item.variantLabel}</span>
                           )}
-                          <span className="block text-xs mt-0.5" style={{ color: "#6B7280" }}>x{item.quantity} · {formatMoney(item.price)} /un</span>
+                          <span className="block text-xs mt-0.5" style={{ color: "#6B7280" }}>x{item.quantity} Â· {formatMoney(item.price)} /un</span>
                         </span>
                         <strong className="shrink-0 text-right" style={{ fontFamily: "'Sora', sans-serif" }}>{formatMoney(item.subTotal)}</strong>
                       </div>
@@ -713,7 +713,7 @@ export default function CheckoutPage() {
                 {externalItems.length > 0 ? (
                   <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
                     <p className="font-semibold">Compra internacional em paralelo</p>
-                    <p>{externalItems.length} item(ns) serão tratados numa proposta separada com preço final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
+                    <p>{externalItems.length} item(ns) serÃ£o tratados numa proposta separada com preÃ§o final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
                   </div>
                 ) : null}
 
@@ -724,16 +724,16 @@ export default function CheckoutPage() {
                       <p className="mt-2">1. Criamos o teu pedido.</p>
                       <p className="mt-1">2. Vais direto para o pagamento.</p>
                       <p className="mt-1">3. Depois validamos e seguimos com a entrega.</p>
-                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Também poderás acompanhar este pedido pelo WhatsApp.</p>
-                      <p className="mt-1 text-xs">Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.</p>
+                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Em breve poderÃ¡s acompanhar este pedido pelo WhatsApp.</p>
+                      <p className="mt-1 text-xs">Por agora, acompanha o estado na Ã¡rea Meus pedidos.</p>
                     </>
                   ) : (
                     <>
                       <p className="mt-2">1. Criamos a tua proposta de compra internacional.</p>
-                      <p className="mt-1">2. A equipa analisa preço, frete e prazo.</p>
-                      <p className="mt-1">3. Depois recebes a cotação para aprovar.</p>
-                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Também poderás acompanhar este pedido pelo WhatsApp.</p>
-                      <p className="mt-1 text-xs">Usa o mesmo número da tua conta para consultar pedidos no WhatsApp. Em breve: acompanhamento automático pelo WhatsApp.</p>
+                      <p className="mt-1">2. A equipa analisa preÃ§o, frete e prazo.</p>
+                      <p className="mt-1">3. Depois recebes a cotaÃ§Ã£o para aprovar.</p>
+                      <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Em breve poderÃ¡s acompanhar este pedido pelo WhatsApp.</p>
+                      <p className="mt-1 text-xs">Por agora, acompanha o estado na Ã¡rea Meus pedidos.</p>
                     </>
                   )}
                 </div>
