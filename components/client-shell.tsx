@@ -68,7 +68,7 @@ const REQUIRES_AUTH = ["/checkout", "/orders", "/profile", "/settings"];
 export function ClientShell({ children, fullWidth = false }: { children: ReactNode; fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, profileIncomplete, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
+  const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, hasProfileWarning, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
   const { attentionCount } = useOrdersAttention();
   const needsAuth = useMemo(() => {
     const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
@@ -231,7 +231,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                     <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-white px-1.5 text-center text-[10px] font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{cartCount}</span>
                   ) : null}
                 </Link>
-                {profileIncomplete && (
+                {hasProfileWarning && (
                   <Link
                     href="/profile"
                     className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:opacity-90"

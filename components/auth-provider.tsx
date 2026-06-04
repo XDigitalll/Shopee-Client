@@ -38,6 +38,7 @@ type AuthContextValue = {
   authSource: string;
   mustChangePassword: boolean;
   profileIncomplete: boolean;
+  hasProfileWarning: boolean;
   accountCompletionPercentage: number;
   emailVerified: boolean;
   phoneVerified: boolean;
@@ -295,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authSource,
     mustChangePassword,
     profileIncomplete,
+    hasProfileWarning,
     accountCompletionPercentage,
     emailVerified,
     phoneVerified,
@@ -331,6 +333,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ? sessionProfile.phoneNumber.trim()
       : "";
 
+    const accountCompletionValue = typeof sessionProfile?.accountCompletionPercentage === "number"
+      ? sessionProfile.accountCompletionPercentage
+      : 0;
+    const profileIncompleteValue = sessionProfile?.profileIncomplete === true;
+
     return {
       userLabel: userLabelValue,
       userInitials: toInitials(userLabelValue),
@@ -339,10 +346,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       userPhone: phoneValue,
       authSource: providerValue,
       mustChangePassword: sessionProfile?.mustChangePassword === true,
-      profileIncomplete: sessionProfile?.profileIncomplete === true,
-      accountCompletionPercentage: typeof sessionProfile?.accountCompletionPercentage === "number"
-        ? sessionProfile.accountCompletionPercentage
-        : 0,
+      profileIncomplete: profileIncompleteValue,
+      hasProfileWarning: accountCompletionValue < 100 || profileIncompleteValue,
+      accountCompletionPercentage: accountCompletionValue,
       emailVerified: sessionProfile?.emailVerified === true,
       phoneVerified: sessionProfile?.phoneVerified === true,
       hasRealEmail: sessionProfile?.hasRealEmail === true || Boolean(emailValue),
@@ -362,6 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authSource,
     mustChangePassword,
     profileIncomplete,
+    hasProfileWarning,
     accountCompletionPercentage,
     emailVerified,
     phoneVerified,

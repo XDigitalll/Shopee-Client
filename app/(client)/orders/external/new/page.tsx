@@ -103,8 +103,68 @@ type SubmissionResponse = Order & {
   loginIdentifier?: string;
 };
 
+type SuccessOrderState = {
+  id: number;
+  number: string;
+  message: string;
+  firstOrder: boolean;
+  firstGuestOrder: boolean;
+  authenticatedOrder: boolean;
+  accountAlreadyExists: boolean;
+  temporaryPassword?: string;
+  loginIdentifier?: string;
+};
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function buildTemporaryAccessDocument(order: SuccessOrderState) {
+  const reference = escapeHtml(order.number || "-");
+  const loginIdentifier = escapeHtml(order.loginIdentifier || "-");
+  const temporaryPassword = escapeHtml(order.temporaryPassword || "-");
+
+  return `<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <title>Acesso temporario ShopeeMz</title>
+  <style>
+    body { margin: 0; padding: 32px; font-family: Arial, sans-serif; color: #1A1410; background: #fff; }
+    .sheet { max-width: 680px; margin: 0 auto; border: 2px solid #E8431A; border-radius: 20px; padding: 28px; }
+    .eyebrow { color: #E8431A; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; }
+    h1 { margin: 10px 0 18px; font-size: 28px; }
+    .box { background: #FFF0EC; border-radius: 16px; padding: 18px; margin: 18px 0; }
+    .row { margin: 12px 0; font-size: 16px; }
+    .label { color: #6B7280; font-weight: 700; margin-right: 8px; }
+    code { background: #fff; border-radius: 8px; color: #E8431A; font-size: 18px; font-weight: 800; padding: 5px 8px; }
+    p { color: #6B7280; line-height: 1.6; }
+    @media print { body { padding: 0; } .sheet { border-color: #E8431A; } }
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <div class="eyebrow">ShopeeMz</div>
+    <h1>Acesso temporario criado</h1>
+    <p>Guarda estes dados. Por seguranca, vais trocar a senha no primeiro acesso.</p>
+    <section class="box">
+      <div class="row"><span class="label">Referencia do pedido:</span><code>${reference}</code></div>
+      <div class="row"><span class="label">Telefone:</span><code>${loginIdentifier}</code></div>
+      <div class="row"><span class="label">Senha temporaria:</span><code>${temporaryPassword}</code></div>
+    </section>
+    <p>Depois de entrares, cria uma senha nova e acompanha o pedido em Meus pedidos.</p>
+  </main>
+</body>
+</html>`;
+}
+
 export default function NewExternalOrderPage() {
-  const { token, userLabel, userEmail, userPhone, accountCompletionPercentage, profileIncomplete } = useAuth();
+  const { token, userLabel, userEmail, userPhone, accountCompletionPercentage, hasProfileWarning } = useAuth();
   const isLoggedIn = Boolean(token);
 
   const [productLink, setProductLink] = useState("");
@@ -117,17 +177,7 @@ export default function NewExternalOrderPage() {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successOrder, setSuccessOrder] = useState<{
-    id: number;
-    number: string;
-    message: string;
-    firstOrder: boolean;
-    firstGuestOrder: boolean;
-    authenticatedOrder: boolean;
-    accountAlreadyExists: boolean;
-    temporaryPassword?: string;
-    loginIdentifier?: string;
-  } | null>(null);
+  const [successOrder, setSuccessOrder] = useState<SuccessOrderState | null>(null);
   const productInputRef = useRef<HTMLTextAreaElement | null>(null);
   const quantityInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
@@ -269,11 +319,52 @@ export default function NewExternalOrderPage() {
 
   async function saveOrderReference(reference: string) {
     try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard unavailable");
+      }
       await navigator.clipboard.writeText(reference);
       setFeedback({ type: "success", msg: "Referencia guardada." });
     } catch {
       setFeedback({ type: "info", msg: `Guarda esta referencia: ${reference}` });
     }
+  }
+
+  function saveTemporaryAccessPdf(order: SuccessOrderState) {
+    if (!order.temporaryPassword) {
+      setFeedback({ type: "info", msg: "Nao ha senha temporaria para guardar neste pedido." });
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "width=720,height=900");
+    if (!printWindow) {
+      setFeedback({ type: "info", msg: "Permite abrir a janela de impressao para guardar o acesso em PDF." });
+      return;
+    }
+
+    printWindow.document.write(buildTemporaryAccessDocument(order));
+    printWindow.document.close();
+    setFeedback({ type: "success", msg: "Folha de acesso aberta. Escolhe Guardar como PDF." });
+
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 250);
+  }
+
+  function startAnotherOrder() {
+    setSuccessOrder(null);
+    setProductLink("");
+    setSelectedStore("SHEIN");
+    setVariant("");
+    setQuantity(1);
+    setScreenshot(null);
+    setAcceptedLegalTerms(false);
+    setFieldErrors({});
+    setFeedback(null);
+    if (screenshotInputRef.current) {
+      screenshotInputRef.current.value = "";
+    }
+    requestAnimationFrame(() => productInputRef.current?.focus());
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -460,7 +551,7 @@ export default function NewExternalOrderPage() {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                 </svg>
                 <span className="text-xs font-black" style={{ color: "#166534" }}>
-                  Respondemos normalmente em menos de 10 minutos
+                  Respondemos normalmente em até 24 horas
                 </span>
               </div>
             </div>
@@ -514,6 +605,16 @@ export default function NewExternalOrderPage() {
                   Guardar referencia
                 </button>
               ) : null}
+              {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
+                <button
+                  type="button"
+                  onClick={() => saveTemporaryAccessPdf(successOrder)}
+                  className="rounded-2xl border px-5 py-3 text-sm font-black"
+                  style={{ borderColor: BORDER, color: RED, background: "white" }}
+                >
+                  Guardar acesso em PDF
+                </button>
+              ) : null}
               <Link
                 href="/store"
                 className="rounded-2xl border px-5 py-3 text-center text-sm font-black"
@@ -531,7 +632,7 @@ export default function NewExternalOrderPage() {
             </div>
             <button
               type="button"
-              onClick={() => setSuccessOrder(null)}
+              onClick={startAnotherOrder}
               className="mt-4 text-sm font-black"
               style={{ color: RED }}
             >
@@ -562,7 +663,7 @@ export default function NewExternalOrderPage() {
                     >
                       {accountCompletionPercentage === 100 ? "Perfil completo" : `Perfil ${accountCompletionPercentage}% completo`}
                     </span>
-                    {profileIncomplete && (
+                    {hasProfileWarning && (
                       <p className="mt-1 text-xs" style={{ color: MUTED }}>
                         Completa o perfil para melhor acompanhamento.
                       </p>

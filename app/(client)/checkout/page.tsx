@@ -53,11 +53,86 @@ function getInternalOrderForPayment(result: CheckoutResponse) {
   return result.orders?.find((order) => order.type === "INTERNAL" && order.id) ?? null;
 }
 
+function normalizeNameForCheck(value?: string) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function digitsOnly(value?: string) {
+  return (value || "").replace(/\D/g, "");
+}
+
+function isPlaceholderName(name?: string, phone?: string) {
+  const normalized = normalizeNameForCheck(name);
+  if (!normalized) return false;
+
+  const digits = digitsOnly(normalized);
+  const phoneDigits = digitsOnly(phone);
+  if (normalized === "cliente") return true;
+  if (/^cliente\s*\+?258\d{8,}$/.test(normalized)) return true;
+  if (/^cliente\s*\d{8,}$/.test(normalized)) return true;
+  if (digits.length >= 8) return true;
+  return Boolean(phoneDigits && phoneDigits.length >= 8 && normalized.includes(phoneDigits.slice(-8)));
+}
+
+function isPaymentNameReady(name?: string, phone?: string) {
+  const cleaned = cleanName(name || "");
+  return Boolean(cleaned && !validateName(cleaned) && !isPlaceholderName(cleaned, phone));
+}
+
+function splitFullName(fullName: string) {
+  const parts = cleanName(fullName).split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+function profileDisplayName(profile: CustomerProfile | null) {
+  return [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim()
+    || profile?.displayName
+    || profile?.name
+    || "";
+}
+
+function buildProfileNameUpdatePayload(profile: CustomerProfile, fullName: string) {
+  const names = splitFullName(fullName);
+  const name = [names.firstName, names.lastName].filter(Boolean).join(" ");
+
+  return {
+    name,
+    firstName: names.firstName,
+    lastName: names.lastName,
+    email: profile.email || "",
+    phoneNumber: profile.phoneNumber || "",
+    alternativePhoneNumber: profile.alternativePhoneNumber || "",
+    birthDate: profile.birthDate || null,
+    gender: profile.gender || "",
+    city: profile.city || "",
+    deliveryCity: profile.deliveryCity || "",
+    deliveryNeighborhood: profile.deliveryNeighborhood || "",
+    deliveryStreet: profile.deliveryStreet || "",
+    houseNumber: profile.houseNumber || "",
+    deliveryReference: profile.deliveryReference || "",
+    googleMapsLink: profile.googleMapsLink || "",
+    preferredDeliveryMethod: profile.preferredDeliveryMethod || null,
+    notifyOrderUpdates: profile.notifyOrderUpdates,
+    notifyQuoteReady: profile.notifyQuoteReady,
+    notifyPromotions: profile.notifyPromotions,
+    notifySms: profile.notifySms,
+  };
+}
+
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { token, userEmail } = useAuth();
+  const { token, userEmail, refreshProfile } = useAuth();
   const [cart, setCart] = useState<Cart | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | "manual" | null>(null);
   const [saveAddress, setSaveAddress] = useState(false);
@@ -68,6 +143,7 @@ export default function CheckoutPage() {
   const [couponFeedback, setCouponFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingProfileName, setIsSavingProfileName] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
@@ -102,9 +178,11 @@ export default function CheckoutPage() {
           apiFetch<UserAddress[]>("users/me/addresses"),
         ]);
         setCart(payload);
+        setCustomerProfile(me);
         setSavedAddresses(addresses);
 
         const contact = createPrefilledContact(me);
+        const safeContactName = isPlaceholderName(contact.fullName, contact.primaryPhoneNumber) ? "" : contact.fullName;
         const defaultAddress = addresses.find((addr: UserAddress) => addr.defaultAddress);
         const address = defaultAddress
           ? applySavedAddress(createPrefilledAddress(me), defaultAddress)
@@ -113,6 +191,7 @@ export default function CheckoutPage() {
         setForm((current) => ({
           ...current,
           ...contact,
+          fullName: safeContactName,
           ...address,
         }));
         setSelectedAddressId(defaultAddress?.id ?? (addresses.length ? addresses[0].id : "manual"));
@@ -171,10 +250,70 @@ export default function CheckoutPage() {
   const totalAfterDiscount = Math.max(total - discountAmount, 0);
   const primaryPhoneError = fv.errors.primaryPhoneNumber ?? null;
   const alternativePhoneError = fv.errors.alternativePhoneNumber ?? null;
+  const profileNameWasPlaceholder = customerProfile
+    ? isPlaceholderName(profileDisplayName(customerProfile), customerProfile.phoneNumber)
+    : false;
+  const paymentNameNeedsAttention = !isPaymentNameReady(form.fullName, form.primaryPhoneNumber);
+  const phoneVerificationPending = customerProfile?.phoneVerified === false;
+  const emailVerificationPending = customerProfile?.hasRealEmail === true && customerProfile?.emailVerified === false;
+
+  const saveProfileNameForPayment = async (fullName: string) => {
+    if (!token || !customerProfile) {
+      return null;
+    }
+
+    const cleanedFullName = cleanName(fullName);
+    if (!isPaymentNameReady(cleanedFullName, form.primaryPhoneNumber)) {
+      setSubmitFeedback({
+        type: "error",
+        msg: "Completa o teu nome real para continuar. Nao uses telefone ou nome temporario.",
+      });
+      requestAnimationFrame(() => document.getElementById("co-fullName")?.focus());
+      return null;
+    }
+
+    const updatedProfile = await apiFetch<CustomerProfile>("users/me", {
+      method: "PUT",
+      token,
+      body: JSON.stringify(buildProfileNameUpdatePayload(customerProfile, cleanedFullName)),
+    });
+    setCustomerProfile(updatedProfile);
+    setForm((current) => ({ ...current, fullName: profileDisplayName(updatedProfile) || cleanedFullName }));
+    await refreshProfile();
+    return updatedProfile;
+  };
+
+  const handleSaveProfileName = async () => {
+    if (isSavingProfileName) return;
+    setIsSavingProfileName(true);
+    setSubmitFeedback({ type: "loading", msg: "A guardar o teu nome no perfil." });
+    try {
+      const result = await saveProfileNameForPayment(form.fullName);
+      if (result) {
+        setSubmitFeedback({ type: "success", msg: "Nome guardado. Ja podes continuar para o pagamento." });
+      }
+    } catch (error: any) {
+      setSubmitFeedback({
+        type: "error",
+        msg: normalizeClientError(error, "Nao foi possivel guardar o nome agora. Tenta novamente.").message,
+      });
+    } finally {
+      setIsSavingProfileName(false);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
+
+    if (isPlaceholderName(form.fullName, form.primaryPhoneNumber)) {
+      setSubmitFeedback({
+        type: "error",
+        msg: "Completa o teu nome real para continuar. Precisamos dele para processar o pedido e o pagamento.",
+      });
+      requestAnimationFrame(() => document.getElementById("co-fullName")?.focus());
+      return;
+    }
 
     const isValid = fv.validateAll();
     if (!isValid) {
@@ -184,9 +323,20 @@ export default function CheckoutPage() {
     }
 
     // Sanitize all text fields before sending
+    const cleanedFullName = cleanName(form.fullName);
+    if (!isPaymentNameReady(cleanedFullName, form.primaryPhoneNumber)) {
+      setForm((current) => ({ ...current, fullName: cleanedFullName }));
+      setSubmitFeedback({
+        type: "error",
+        msg: "Completa o teu nome real para continuar. Precisamos dele para processar o pedido e o pagamento.",
+      });
+      setTimeout(() => fv.scrollToFirstError(), 0);
+      return;
+    }
+
     const sanitized = {
       ...form,
-      fullName: sanitizeTextField(form.fullName).value || form.fullName,
+      fullName: sanitizeTextField(cleanedFullName).value || cleanedFullName,
       email: userEmail ? normalizeEmail(userEmail) : "",
       primaryPhoneNumber: normalizePhone(form.primaryPhoneNumber),
       alternativePhoneNumber: form.alternativePhoneNumber.trim()
@@ -205,6 +355,14 @@ export default function CheckoutPage() {
     setSubmitFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     setFeedback(null);
     try {
+      if (customerProfile && profileNameWasPlaceholder) {
+        const updatedProfile = await saveProfileNameForPayment(sanitized.fullName);
+        if (!updatedProfile) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const checkoutResult = await apiFetch<CheckoutResponse | Order>("orders/from-cart", {
         method: "POST",
         body: JSON.stringify({
@@ -392,6 +550,76 @@ export default function CheckoutPage() {
                           </button>
                         );
                       })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!isLoading && (profileNameWasPlaceholder || paymentNameNeedsAttention) ? (
+                <div className="mb-5 rounded-[20px] border p-4 sm:rounded-[24px]" style={{ borderColor: "#F2D4CC", background: "#FFF9F7" }}>
+                  <p className="text-sm font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+                    Completa o teu nome para continuar
+                  </p>
+                  <p className="mt-1 text-sm leading-6" style={{ color: "#6B7280" }}>
+                    Precisamos do teu nome real para processar o pedido e o pagamento. Nao uses telefone nem o nome temporario da conta.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveProfileName()}
+                      disabled={isSavingProfileName || paymentNameNeedsAttention}
+                      className="rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                      style={{ background: isSavingProfileName || paymentNameNeedsAttention ? "#FDB8A7" : RED }}
+                    >
+                      {isSavingProfileName ? "A guardar..." : "Guardar nome e continuar"}
+                    </button>
+                    <Link
+                      href="/complete-account/profile"
+                      className="rounded-2xl border px-4 py-2.5 text-center text-sm font-black"
+                      style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}
+                    >
+                      Completar perfil
+                    </Link>
+                  </div>
+                  {paymentNameNeedsAttention ? (
+                    <p className="mt-3 text-xs font-semibold" style={{ color: "#6B7280" }}>
+                      Preenche o campo Nome completo abaixo com nome e apelido para liberar o pagamento.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {!isLoading && (phoneVerificationPending || emailVerificationPending) ? (
+                <div className="mb-5 grid gap-3 md:grid-cols-2">
+                  {phoneVerificationPending ? (
+                    <div className="rounded-[20px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFFFF" }}>
+                      <p className="text-sm font-black" style={{ color: "#1A1410" }}>Verifica o teu numero</p>
+                      <p className="mt-1 text-sm leading-6" style={{ color: "#6B7280" }}>
+                        A verificacao por WhatsApp estara disponivel em breve. Por agora, completa os dados principais da conta.
+                      </p>
+                      <button
+                        type="button"
+                        disabled
+                        className="mt-3 rounded-2xl px-4 py-2 text-sm font-black text-white"
+                        style={{ background: "#FDB8A7" }}
+                      >
+                        Disponivel em breve
+                      </button>
+                    </div>
+                  ) : null}
+                  {emailVerificationPending ? (
+                    <div className="rounded-[20px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFFFF" }}>
+                      <p className="text-sm font-black" style={{ color: "#1A1410" }}>Verifica o teu email</p>
+                      <p className="mt-1 text-sm leading-6" style={{ color: "#6B7280" }}>
+                        A verificacao de email ficara disponivel em breve. Enquanto isso, confirma que o email no perfil esta correcto.
+                      </p>
+                      <Link
+                        href="/profile"
+                        className="mt-3 inline-flex rounded-2xl border px-4 py-2 text-sm font-black"
+                        style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}
+                      >
+                        Ver perfil
+                      </Link>
                     </div>
                   ) : null}
                 </div>
@@ -654,7 +882,7 @@ export default function CheckoutPage() {
             ) : null}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white transition sm:w-auto" style={{ background: isSubmitting || isLoading || !checkoutItems.length ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
+              <button type="submit" disabled={isSubmitting || isLoading || !checkoutItems.length || paymentNameNeedsAttention} className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white transition sm:w-auto" style={{ background: isSubmitting || isLoading || !checkoutItems.length || paymentNameNeedsAttention ? "#FDB8A7" : RED, fontFamily: "'Sora', sans-serif" }}>
                 {isSubmitting ? "A preparar pagamento..." : localItems.length > 0 ? "Confirmar e pagar" : "Criar proposta"}
               </button>
               <Link href="/cart" className="w-full rounded-2xl border px-5 py-3.5 text-center text-sm font-bold transition sm:w-auto" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Voltar ao carrinho</Link>
