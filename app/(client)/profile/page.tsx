@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
+import { refreshStoredSession } from "@/lib/auth";
 import { useAuth } from "@/components/auth-provider";
 import { ClientConfirmDialog, ClientFeedbackDock } from "@/components/client-feedback-state";
 import { GoogleMapsLocationField } from "@/components/google-maps-location-field";
@@ -568,6 +569,17 @@ export default function ProfilePage() {
         email: nowXdigital ? "" : (payload.email || current.email),
       }));
       setVerifyDestination(payload.verificationDestinationMasked || payload.verificationDestination || payload.email || "");
+      if (emailWillChange) {
+        // After an email update the current JWT still has the old email as its
+        // subject.  The backend looks up the user by that subject on every request
+        // (/api/auth/me included), so the next loadSessionProfile() call would
+        // receive a 401 — which auth-provider misinterprets as session expired and
+        // calls clearExpiredSessionAndRedirect(), causing a spurious logout.
+        // refreshStoredSession() uses the refresh-token cookie (email-independent)
+        // to issue a new access token whose subject is the updated email, making
+        // the subsequent refreshProfile() call safe.
+        await refreshStoredSession().catch(() => null);
+      }
       await refreshProfile();
       setIsEditingPersonal(false);
       setPersonalErrors({});
