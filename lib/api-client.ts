@@ -164,7 +164,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
     const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
     const apiMessage = getApiErrorMessage(payload);
     const shouldUseBackendMessage =
-      Boolean(apiMessage) && (response.status === 400 || response.status === 422);
+      Boolean(apiMessage) && (response.status === 400 || response.status === 409 || response.status === 422);
     const fallback = statusFallbackMessage(response.status);
     const message = normalizeClientError(
       shouldUseBackendMessage ? apiMessage! : fallback,

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { Logo } from "@/components/logo";
 import { apiFetch } from "@/lib/api-client";
+import { notifyAuthChanged, refreshStoredSession } from "@/lib/auth";
 import type { CustomerProfile } from "@/lib/types";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 
@@ -73,8 +74,15 @@ export default function CompleteAccountProfilePage() {
           ...(isXdigitalEmail && trimmedEmail ? { email: trimmedEmail } : {}),
         }),
       });
+      if (isXdigitalEmail && trimmedEmail) {
+        const refreshed = await refreshStoredSession();
+        if (!refreshed) {
+          throw new Error("Guardamos o perfil, mas nao conseguimos atualizar a sessao. Entra novamente.");
+        }
+        notifyAuthChanged();
+      }
       await refreshProfile();
-      router.push("/");
+      router.replace("/profile");
     });
     if (!result) {
       setDanger(saveAction.error || "Não foi possível guardar o perfil.");
@@ -118,6 +126,7 @@ export default function CompleteAccountProfilePage() {
               <label className="grid gap-2">
                 <span className="text-sm font-bold" style={{ color: TEXT }}>Nome</span>
                 <input
+                  name="givenName"
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
@@ -131,6 +140,7 @@ export default function CompleteAccountProfilePage() {
               <label className="grid gap-2">
                 <span className="text-sm font-bold" style={{ color: TEXT }}>Apelido</span>
                 <input
+                  name="familyName"
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -147,6 +157,7 @@ export default function CompleteAccountProfilePage() {
               <label className="grid gap-2">
                 <span className="text-sm font-bold" style={{ color: TEXT }}>Email</span>
                 <input
+                  name="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

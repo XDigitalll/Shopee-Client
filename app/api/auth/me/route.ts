@@ -2,7 +2,6 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   BACKEND_ACCESS_COOKIE,
-  clearClientAuthCookies,
   SESSION_COOKIE,
 } from "@/lib/session";
 import { XSRF_COOKIE } from "@/lib/csrf";
@@ -32,7 +31,6 @@ export async function GET() {
       { status: 401 }
     );
     nextResponse.headers.set("X-Shopee-Session-Cookie", "present-invalid");
-    clearClientAuthCookies(nextResponse);
     return nextResponse;
   }
 

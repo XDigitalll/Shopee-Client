@@ -76,6 +76,8 @@ export default function CompleteAccountPasswordPage() {
       if (!apiResponse.ok) {
         throw new Error(response?.message || "Nao foi possivel atualizar a senha.");
       }
+      setNewPassword("");
+      setConfirmPassword("");
       await refreshProfile();
       router.replace(response?.profileIncomplete ? "/complete-account/profile" : "/profile");
       return true;
@@ -122,6 +124,7 @@ export default function CompleteAccountPasswordPage() {
               <span className="text-sm font-bold" style={{ color: TEXT }}>Nova senha</span>
               <div className="relative">
                 <input
+                  name="newPassword"
                   type={showNew ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -147,6 +150,7 @@ export default function CompleteAccountPasswordPage() {
               <span className="text-sm font-bold" style={{ color: TEXT }}>Confirmar nova senha</span>
               <div className="relative">
                 <input
+                  name="confirmNewPassword"
                   type={showConfirm ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
