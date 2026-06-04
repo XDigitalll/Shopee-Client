@@ -78,8 +78,9 @@ export default function CompleteAccountPasswordPage() {
       }
       await refreshProfile();
       router.replace(response?.profileIncomplete ? "/complete-account/profile" : "/profile");
+      return true;
     });
-    if (!result) {
+    if (result === null) {
       setDanger(saveAction.error || "Não foi possível atualizar a senha.");
     }
   };
