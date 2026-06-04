@@ -1,4 +1,4 @@
-﻿"use client";
+?"use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -47,17 +47,17 @@ type PaySuiteInitResponse = {
   retryReason?: string;
 };
 
-// idle       â€” normal page access (no ?psr=1)
-// confirming â€” 0â€“90 s autonomous window after returning from PaySuite (zero buttons)
-// confirmed  â€” payment detected as paid; show success + auto-redirect
-// timed_out  â€” 90 s elapsed without confirmation; show calm message + manual verify only
+// idle       — normal page access (no ?psr=1)
+// confirming — 0–90 s autonomous window after returning from PaySuite (zero buttons)
+// confirmed  — payment detected as paid; show success + auto-redirect
+// timed_out  — 90 s elapsed without confirmation; show calm message + manual verify only
 type ReturnPhase = "idle" | "confirming" | "confirmed" | "timed_out";
 type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
 
 const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
-  { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento instantÃ¢neo" },
+  { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento instantâneo" },
   { key: "EMOLA", label: "eMola", icon: "E", hint: "Carteira digital" },
-  { key: "CARD", label: "Visa", icon: "V", hint: "CartÃ£o Visa" },
+  { key: "CARD", label: "Visa", icon: "V", hint: "Cartão Visa" },
 ];
 
 const PAID_STATUSES = new Set([
@@ -65,10 +65,10 @@ const PAID_STATUSES = new Set([
   "TO_PURCHASE", "ORDERED", "PURCHASED", "IN_TRANSIT", "ARRIVED", "OUT_FOR_DELIVERY", "DELIVERED",
 ]);
 
-// Active PaySuite statuses â€” block creating a second payment while one exists.
+// Active PaySuite statuses — block creating a second payment while one exists.
 const ACTIVE_PAYSUITE_STATUSES = new Set(["PENDING", "PROCESSING", "WAITING"]);
 
-// Terminal statuses where no money will arrive â€” unblocks a new payment attempt.
+// Terminal statuses where no money will arrive — unblocks a new payment attempt.
 const TERMINAL_PAYMENT_STATUSES = new Set(["FAILED", "CANCELLED", "AMOUNT_MISMATCH", "LATE_PAYMENT"]);
 
 const RETURNING_POLL_DURATION_MS = 90_000;
@@ -87,7 +87,7 @@ const PAYMENT_STATE_STYLES: Record<PaymentStateTone, { bg: string; border: strin
 export function classifySyncResult(status?: string): "confirmed" | "pending" | "failed" {
   const s = (status ?? "").toLowerCase();
   if (["success", "completed", "paid", "confirmed"].includes(s)) return "confirmed";
-  // amount_mismatch / late_payment: money may have arrived but payment cannot proceed â€”
+  // amount_mismatch / late_payment: money may have arrived but payment cannot proceed —
   // treated as failed so the customer is unblocked to try again or contact support.
   if (["failed", "cancelled", "canceled", "expired", "rejected", "amount_mismatch", "late_payment"].includes(s)) return "failed";
   return "pending";
@@ -110,27 +110,27 @@ function statusCopy(status?: string, adminMessage?: string) {
   const map: Record<string, { title: string; body: string; color: string; bg: string; border: string }> = {
     PENDING_PAYMENT: {
       title: "Pagamento pendente",
-      body: "Escolhe o mÃ©todo e clica em Pagar agora. A confirmaÃ§Ã£o Ã© automÃ¡tica quando o gateway processa o pagamento.",
+      body: "Escolhe o método e clica em Pagar agora. A confirmação é automática quando o gateway processa o pagamento.",
       color: "#9A3412", bg: "#FFF7ED", border: "#FED7AA",
     },
     PAYMENT_SUBMITTED: {
       title: "Pagamento em processamento",
-      body: "O teu pagamento estÃ¡ a ser processado. Esta pÃ¡gina actualiza automaticamente quando receber confirmaÃ§Ã£o.",
+      body: "O teu pagamento está a ser processado. Esta página actualiza automaticamente quando receber confirmação.",
       color: "#1D4ED8", bg: "#EFF6FF", border: "#BFDBFE",
     },
     PAYMENT_UNDER_REVIEW: {
-      title: "Pagamento em verificaÃ§Ã£o",
-      body: "O pagamento estÃ¡ a ser verificado. ReceberÃ¡s uma notificaÃ§Ã£o assim que estiver confirmado.",
+      title: "Pagamento em verificação",
+      body: "O pagamento está a ser verificado. Receberás uma notificação assim que estiver confirmado.",
       color: "#5B21B6", bg: "#F5F3FF", border: "#DDD6FE",
     },
     PAYMENT_REJECTED: {
-      title: "Pagamento nÃ£o confirmado",
-      body: cleanDisplayText(adminMessage) || "O pagamento nÃ£o foi processado. Escolhe o mÃ©todo e tenta novamente.",
+      title: "Pagamento não confirmado",
+      body: cleanDisplayText(adminMessage) || "O pagamento não foi processado. Escolhe o método e tenta novamente.",
       color: "#991B1B", bg: "#FFF5F5", border: "#FECACA",
     },
     PAID: {
       title: "Pagamento confirmado",
-      body: "O pagamento foi confirmado pelo gateway e o pedido estÃ¡ a avanÃ§ar para a prÃ³xima etapa.",
+      body: "O pagamento foi confirmado pelo gateway e o pedido está a avançar para a próxima etapa.",
       color: "#166534", bg: "#F0FDF4", border: "#86EFAC",
     },
   };
@@ -148,7 +148,7 @@ async function fetchWithToken<T>(url: string, _token: string) {
     throw new Error(
       (payload as Record<string, string> | null)?.message ||
       (payload as Record<string, string> | null)?.error ||
-      "NÃ£o foi possÃ­vel carregar o pedido.",
+      "Não foi possível carregar o pedido.",
     );
   }
   return payload as T;
@@ -201,7 +201,7 @@ export default function OrderPaymentPage() {
 
       // Keep paysuitePayment in sync with what the backend reports.
       // This ensures hasActivePaySuitePayment and syncConfirmedFailure are accurate
-      // on fresh page load and after every background poll â€” not just after a
+      // on fresh page load and after every background poll — not just after a
       // manual "Pagar agora" click (which is the only other place setPaysuitePayment runs).
       if (currentOrder?.payment?.provider?.toUpperCase() === "PAYSUITE") {
         setPaysuitePayment({
@@ -225,7 +225,7 @@ export default function OrderPaymentPage() {
       if (!silent) {
         setFeedback({
           type: "error",
-          msg: error instanceof Error ? error.message : "NÃ£o foi possÃ­vel carregar o pedido.",
+          msg: error instanceof Error ? error.message : "Não foi possível carregar o pedido.",
         });
       }
     } finally {
@@ -235,7 +235,7 @@ export default function OrderPaymentPage() {
 
   useEffect(() => { void loadOrder(); }, [loadOrder]);
 
-  // Adaptive polling â€” fast during confirming, slow otherwise.
+  // Adaptive polling — fast during confirming, slow otherwise.
   useEffect(() => {
     if (!token || !orderId || returnPhase === "confirmed") return;
     const intervalMs = returnPhase === "confirming" ? RETURNING_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
@@ -326,10 +326,10 @@ export default function OrderPaymentPage() {
     && returnPhase === "idle";
 
   // Allow retry in timed_out when:
-  // (a) backend reported PAYMENT_REJECTED â€” explicit server-side failure, OR
+  // (a) backend reported PAYMENT_REJECTED — explicit server-side failure, OR
   // (b) the last sync (or background poll) confirmed a terminal payment status
   //     from the gateway: FAILED, CANCELLED, AMOUNT_MISMATCH, LATE_PAYMENT.
-  //     The order may still be PENDING_PAYMENT but no money is coming â€” retry is safe.
+  //     The order may still be PENDING_PAYMENT but no money is coming — retry is safe.
   const explicitFailure = orderStatus === "PAYMENT_REJECTED";
   const syncConfirmedFailure = TERMINAL_PAYMENT_STATUSES.has(
     (paysuitePayment?.status ?? "").toUpperCase(),
@@ -353,7 +353,7 @@ export default function OrderPaymentPage() {
     if (returnPhase === "confirmed" || isPaid) {
       return {
         tone: "success" as PaymentStateTone,
-        icon: "âœ…",
+        icon: "✅",
         title: "Pagamento confirmado",
         body: "O teu pagamento foi recebido com sucesso. O pedido ja esta em processamento.",
         detail: returnPhase === "confirmed"
@@ -365,7 +365,7 @@ export default function OrderPaymentPage() {
     if (paysuiteStatus === "LATE_PAYMENT") {
       return {
         tone: "warning" as PaymentStateTone,
-        icon: "âš ï¸",
+        icon: "⚠️",
         title: "Recebemos um pagamento fora do tempo esperado",
         body: "A nossa equipa ira analisar este pagamento. Se o valor saiu da tua conta, nao pagues novamente.",
         detail: "Podes acompanhar o pedido por aqui ou falar com o suporte.",
@@ -375,7 +375,7 @@ export default function OrderPaymentPage() {
     if (orderStatus === "PAYMENT_REJECTED" || ["FAILED", "CANCELLED", "AMOUNT_MISMATCH"].includes(paysuiteStatus)) {
       return {
         tone: "danger" as PaymentStateTone,
-        icon: "âŒ",
+        icon: "❌",
         title: "O pagamento nao foi confirmado",
         body: cleanDisplayText(order?.adminMessageForClient)
           || "Este pagamento nao foi concluido. Gera uma nova tentativa apenas se o valor nao saiu da tua conta.",
@@ -386,7 +386,7 @@ export default function OrderPaymentPage() {
     if (returnPhase === "timed_out") {
       return {
         tone: canShowSafeRetry ? "warning" as PaymentStateTone : "info" as PaymentStateTone,
-        icon: "â³",
+        icon: "⏳",
         title: "Estamos a confirmar o teu pagamento",
         body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
         detail: canShowSafeRetry
@@ -398,7 +398,7 @@ export default function OrderPaymentPage() {
     if (returnPhase === "confirming" || hasActivePaySuitePayment || isProcessing) {
       return {
         tone: "info" as PaymentStateTone,
-        icon: "â³",
+        icon: "⏳",
         title: "Estamos a confirmar o pagamento",
         body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
         detail: returnPhase === "confirming" && confirmingSecondsLeft > 0
@@ -410,7 +410,7 @@ export default function OrderPaymentPage() {
     if (canGenerateRetry) {
       return {
         tone: "neutral" as PaymentStateTone,
-        icon: "â†»",
+        icon: "↻",
         title: "Nova tentativa disponivel",
         body: "A verificacao nao encontrou evidencia financeira para a tentativa anterior. Se o valor nao saiu da tua conta, podes gerar um novo checkout.",
         detail: "Se o valor saiu, nao pagues novamente e fala com o suporte.",
@@ -419,7 +419,7 @@ export default function OrderPaymentPage() {
 
     return {
       tone: "info" as PaymentStateTone,
-      icon: "â³",
+      icon: "⏳",
       title: visual.title === "Pagamento pendente" ? "Pronto para iniciar o pagamento" : visual.title,
       body: visual.body,
       detail: null,
@@ -432,7 +432,7 @@ export default function OrderPaymentPage() {
     if (syncInFlightRef.current) {
       if (initial) setIsInitialSyncLoading(false);
       return;
-    } // mutex â€” blocks parallel calls
+    } // mutex — blocks parallel calls
     syncInFlightRef.current = true;
     setIsSyncBusy(true);
 
@@ -460,10 +460,10 @@ export default function OrderPaymentPage() {
         // Persist the sync response so syncConfirmedFailure becomes true immediately,
         // unblocking canRetryAfterTimeout without waiting for the next background poll.
         setPaysuitePayment(syncResult);
-        // Use functional updater â€” performSync may be a stale closure (empty-deps auto-sync effect).
+        // Use functional updater — performSync may be a stale closure (empty-deps auto-sync effect).
         setReturnPhase(prev => prev === "confirming" ? "timed_out" : prev);
         if (!auto) {
-          setFeedback({ type: "error", msg: "Este pagamento nÃ£o foi concluÃ­do. Podes tentar novamente." });
+          setFeedback({ type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." });
         }
         devLog("[PAYMENT_SYNC_FAILED]", { orderId: targetId, status: syncResult.status });
       } else {
@@ -473,13 +473,13 @@ export default function OrderPaymentPage() {
         if (!auto) {
           setFeedback({
             type: "error",
-            msg: "Ainda estamos a confirmar o pagamento junto da PaySuite. Se o dinheiro jÃ¡ saiu da tua conta, nÃ£o efetues novo pagamento.",
+            msg: "Ainda estamos a confirmar o pagamento junto da PaySuite. Se o dinheiro já saiu da tua conta, não efetues novo pagamento.",
           });
         }
         devLog("[PAYMENT_SYNC_PENDING]", { orderId: targetId, status: syncResult.status });
       }
     } catch (err) {
-      const msg = normalizeClientError(err, "NÃ£o foi possÃ­vel verificar o estado do pagamento.").message;
+      const msg = normalizeClientError(err, "Não foi possível verificar o estado do pagamento.").message;
       if (!auto) setFeedback({ type: "error", msg });
     } finally {
       syncInFlightRef.current = false;
@@ -491,7 +491,7 @@ export default function OrderPaymentPage() {
   async function handlePaySuitePayment() {
     if (isInitialPaymentLoading) return;
     if (!isAuthenticated || !token) {
-      setFeedback({ type: "error", msg: "A tua sessÃ£o expirou. Entra novamente para pagar." });
+      setFeedback({ type: "error", msg: "A tua sessão expirou. Entra novamente para pagar." });
       await expireStoredSession();
       router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
       return;
@@ -503,11 +503,11 @@ export default function OrderPaymentPage() {
       return;
     }
     if (!officialAmount || officialAmount <= 0) {
-      setFieldError("O valor oficial do pedido ainda nÃ£o estÃ¡ disponÃ­vel. Actualiza a pÃ¡gina e tenta novamente.");
+      setFieldError("O valor oficial do pedido ainda não está disponível. Actualiza a página e tenta novamente.");
       return;
     }
     if (shouldBlockDuplicatePayment(paysuitePayment)) {
-      setFeedback({ type: "error", msg: "JÃ¡ existe uma tentativa de pagamento em curso. Aguarda a confirmaÃ§Ã£o." });
+      setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
       devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
       return;
     }
@@ -530,7 +530,7 @@ export default function OrderPaymentPage() {
         emitClientDataChanged();
         setFeedback({
           type: "success",
-          msg: "Pagamento iniciado. SerÃ¡s redireccionado para o checkout PaySuite.",
+          msg: "Pagamento iniciado. Serás redireccionado para o checkout PaySuite.",
         });
         if (response.checkoutUrl) {
           window.location.assign(response.checkoutUrl);
@@ -539,7 +539,7 @@ export default function OrderPaymentPage() {
       } catch (err) {
         capturedErrorMsg = normalizeClientError(
           err,
-          "NÃ£o foi possÃ­vel iniciar o pagamento. Tenta novamente em alguns minutos.",
+          "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
         ).message;
         throw err;
       }
@@ -548,7 +548,7 @@ export default function OrderPaymentPage() {
     if (!result) {
       setFeedback({
         type: "error",
-        msg: capturedErrorMsg ?? "NÃ£o foi possÃ­vel iniciar o pagamento. Tenta novamente em alguns minutos.",
+        msg: capturedErrorMsg ?? "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
       });
     }
   }
@@ -657,10 +657,10 @@ export default function OrderPaymentPage() {
               Pedido {orderDisplayCode(order ?? { id: orderId })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
-              Paga via M-Pesa, eMola ou Visa. A confirmaÃ§Ã£o Ã© automÃ¡tica quando o gateway processa o pagamento.
+              Paga via M-Pesa, eMola ou Visa. A confirmação é automática quando o gateway processa o pagamento.
             </p>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6" style={{ color: "#15803D" }}>
-              Em breve poderÃ¡s consultar este pedido pelo WhatsApp. Por agora, acompanha o estado nesta pÃ¡gina ou em Meus pedidos.
+              Em breve poderás consultar este pedido pelo WhatsApp. Por agora, acompanha o estado nesta página ou em Meus pedidos.
             </p>
           </div>
           <div
@@ -844,7 +844,7 @@ export default function OrderPaymentPage() {
         ) : null}
 
 
-        {/* CAN PAY â€” PaySuite method selector + pay button */}
+        {/* CAN PAY — PaySuite method selector + pay button */}
         {(canPay || canRetryAfterTimeout) ? (
           <div className="mt-6 space-y-5">
             <div
@@ -857,10 +857,10 @@ export default function OrderPaymentPage() {
                     className="text-sm font-black"
                     style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}
                   >
-                    Escolhe o mÃ©todo de pagamento
+                    Escolhe o método de pagamento
                   </p>
                   <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>
-                    A confirmaÃ§Ã£o Ã© automÃ¡tica apÃ³s o gateway processar o pagamento.
+                    A confirmação é automática após o gateway processar o pagamento.
                   </p>
                 </div>
                 <span
@@ -908,7 +908,7 @@ export default function OrderPaymentPage() {
                   className="mt-4 rounded-2xl border px-4 py-3 text-sm"
                   style={{ borderColor: "#BBF7D0", background: "#F0FDF4", color: "#166534" }}
                 >
-                  ReferÃªncia PaySuite: <strong>{paysuitePayment.providerReference}</strong>
+                  Referência PaySuite: <strong>{paysuitePayment.providerReference}</strong>
                 </div>
               ) : null}
 
@@ -922,7 +922,7 @@ export default function OrderPaymentPage() {
               ) : null}
             </div>
 
-            {/* Pay button â€” desktop */}
+            {/* Pay button — desktop */}
             <div className="hidden md:block">
               <button
                 type="button"
@@ -946,19 +946,19 @@ export default function OrderPaymentPage() {
                 feedback={feedback}
                 onClose={() => setFeedback(null)}
                 actionLabel={
-                  feedback?.type === "error" && /sessÃ£o expirada/i.test(feedback.msg)
+                  feedback?.type === "error" && /sessão expirada/i.test(feedback.msg)
                     ? "Entrar novamente"
                     : undefined
                 }
                 actionHref={
-                  feedback?.type === "error" && /sessÃ£o expirada/i.test(feedback.msg)
+                  feedback?.type === "error" && /sessão expirada/i.test(feedback.msg)
                     ? `/login?redirect=%2Forders%2F${orderId}%2Fpayment`
                     : undefined
                 }
               />
             </div>
 
-            {/* Pay button â€” mobile sticky */}
+            {/* Pay button — mobile sticky */}
             <div
               className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden"
               style={{ borderColor: "#F2D4CC" }}

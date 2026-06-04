@@ -1,4 +1,4 @@
-﻿"use client";
+?"use client";
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
@@ -92,7 +92,7 @@ function Timeline({ steps }: { steps: TrackingStep[] }) {
                   color: step.current ? "white" : step.completed ? GREEN : "#D1D5DB",
                 }}
               >
-                {step.completed ? "âœ“" : step.current ? "â—" : "â—‹"}
+                {step.completed ? "✓" : step.current ? "●" : "○"}
               </div>
               {!isLast && (
                 <div className="w-0.5 grow" style={{ background: lineColor, minHeight: "24px" }} />
@@ -144,12 +144,12 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
 
     const ref = referenceInput.trim().toUpperCase();
     if (!ref) {
-      setError("Introduz a referÃªncia do pedido.");
+      setError("Introduz a referência do pedido.");
       return;
     }
     const phone = normalizePhone(phoneInput);
     if (!PHONE_PATTERN.test(phone)) {
-      setError("NÃºmero de telefone invÃ¡lido. Ex: +25884xxxxxxx");
+      setError("Número de telefone inválido. Ex: +25884xxxxxxx");
       return;
     }
 
@@ -164,7 +164,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
       const data: TrackingResult = await res.json();
       setResult(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "NÃ£o foi possÃ­vel rastrear o pedido.");
+      setError(err instanceof Error ? err.message : "Não foi possível rastrear o pedido.");
     } finally {
       setIsLoading(false);
     }
@@ -177,10 +177,10 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
           Rastrear pedido
         </p>
         <h1 className="mt-2 font-[family-name:var(--font-sora)] text-3xl font-black leading-tight">
-          Onde estÃ¡ o teu pedido?
+          Onde está o teu pedido?
         </h1>
         <p className="mt-2 text-sm leading-6" style={{ color: MUTED }}>
-          Introduz a referÃªncia e o telefone usado no pedido.
+          Introduz a referência e o telefone usado no pedido.
         </p>
       </div>
 
@@ -192,7 +192,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
         <div className="grid gap-4">
           <div>
             <label htmlFor="ref-input" className="text-sm font-black">
-              ReferÃªncia do pedido
+              Referência do pedido
             </label>
             <input
               id="ref-input"
@@ -207,7 +207,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
 
           <div>
             <label htmlFor="phone-input" className="text-sm font-black">
-              NÃºmero de telefone
+              Número de telefone
             </label>
             <input
               id="phone-input"
@@ -219,10 +219,10 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
               style={{ borderColor: BORDER, background: "#FFFDFC" }}
             />
             <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
-              O mesmo nÃºmero que usaste ao fazer o pedido.
+              O mesmo número que usaste ao fazer o pedido.
             </p>
             <p className="mt-2 text-xs font-semibold" style={{ color: "#15803D" }}>
-              Em breve tambÃ©m poderÃ¡s acompanhar os teus pedidos pelo WhatsApp. Por agora, acompanha o estado na Ã¡rea Meus pedidos.
+              Em breve também poderás acompanhar os teus pedidos pelo WhatsApp. Por agora, acompanha o estado na área Meus pedidos.
             </p>
           </div>
 
@@ -248,7 +248,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: MUTED }}>
-                ReferÃªncia
+                Referência
               </p>
               <p className="mt-0.5 font-[family-name:var(--font-sora)] text-xl font-black" style={{ color: RED }}>
                 {result.reference}
@@ -263,7 +263,7 @@ export default function TrackOrderPage({ params }: { params: Promise<{ reference
 
           {result.lastUpdated && (
             <p className="mt-1 text-xs font-medium" style={{ color: MUTED }}>
-              Ãšltima atualizaÃ§Ã£o: {formatDate(result.lastUpdated)}
+              Última atualização: {formatDate(result.lastUpdated)}
             </p>
           )}
 

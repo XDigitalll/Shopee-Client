@@ -1,4 +1,4 @@
-﻿"use client";
+?"use client";
 
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
@@ -20,7 +20,7 @@ const MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
-const SPAM_WORDS = new Set(["oi", "olÃ¡", "ola", "ok", "sim", "nao", "nÃ£o", "produto", "quero", "item", "123", "teste", "test", "ajuda", "help", "info", "hi", "hey", "bom", "obrigado"]);
+const SPAM_WORDS = new Set(["oi", "olá", "ola", "ok", "sim", "nao", "não", "produto", "quero", "item", "123", "teste", "test", "ajuda", "help", "info", "hi", "hey", "bom", "obrigado"]);
 const MIN_DESC_CHARS = 10;
 const MIN_DESC_WORDS = 2;
 const STORE_OPTIONS = [
@@ -468,7 +468,7 @@ export default function NewExternalOrderPage() {
     } catch (error) {
       setFeedback({
         type: "error",
-        msg: normalizeClientError(error, "NÃ£o foi possÃ­vel enviar o pedido. Tenta novamente.").message,
+        msg: normalizeClientError(error, "Não foi possível enviar o pedido. Tenta novamente.").message,
       });
     } finally {
       setIsSubmitting(false);
@@ -551,7 +551,7 @@ export default function NewExternalOrderPage() {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                 </svg>
                 <span className="text-xs font-black" style={{ color: "#166534" }}>
-                  Respondemos normalmente em até 24 horas
+                  Respondemos normalmente em at� 24 horas
                 </span>
               </div>
             </div>
@@ -706,7 +706,7 @@ export default function NewExternalOrderPage() {
             <form onSubmit={(event) => void handleSubmit(event)} className="rounded-[28px] border bg-white p-5 shadow-sm sm:p-7" style={{ borderColor: BORDER }}>
               <div className="grid gap-6">
 
-                {/* Store chips â€” wrap on mobile */}
+                {/* Store chips — wrap on mobile */}
                 <div>
                   <span className="text-sm font-black">Loja</span>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -732,10 +732,10 @@ export default function NewExternalOrderPage() {
                   </div>
                 </div>
 
-                {/* Product input â€” URL or description */}
+                {/* Product input — URL or description */}
                 <div>
                   <label htmlFor="productInput" className="text-sm font-black">
-                    Link ou descriÃ§Ã£o do produto
+                    Link ou descrição do produto
                   </label>
                   <textarea
                     id="productInput"
@@ -754,7 +754,7 @@ export default function NewExternalOrderPage() {
                     rows={3}
                     aria-invalid={Boolean(fieldErrors.product)}
                     aria-describedby={fieldErrors.product ? "productInput-error" : undefined}
-                    placeholder="Cole o link ou descreva: ex. CalÃ§as cargo pretas SHEIN tamanho M"
+                    placeholder="Cole o link ou descreva: ex. Calças cargo pretas SHEIN tamanho M"
                     className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none transition-colors"
                     style={{
                       borderColor: (() => {
@@ -825,7 +825,7 @@ export default function NewExternalOrderPage() {
                     if (s === "valid-description") return (
                       <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold" style={{ color: "#166534" }}>
                         <svg className="shrink-0" width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" /></svg>
-                        DescriÃ§Ã£o reconhecida.
+                        Descrição reconhecida.
                       </p>
                     );
                     if (s === "weak-description" || s === "spam") return (
@@ -836,11 +836,11 @@ export default function NewExternalOrderPage() {
                     );
                     return (
                       <div className="mt-2 rounded-xl p-3" style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}>
-                        <p className="text-xs font-semibold" style={{ color: "#92400E" }}>Exemplos de descriÃ§Ãµes aceites:</p>
+                        <p className="text-xs font-semibold" style={{ color: "#92400E" }}>Exemplos de descrições aceites:</p>
                         <ul className="mt-1 space-y-0.5">
-                          {["CalÃ§as cargo pretas da SHEIN tamanho M", "Nike Air Force branco nÃºmero 42", "iPhone 13 Pro Max azul 256GB"].map((ex) => (
+                          {["Calças cargo pretas da SHEIN tamanho M", "Nike Air Force branco número 42", "iPhone 13 Pro Max azul 256GB"].map((ex) => (
                             <li key={ex} className="flex items-start gap-1 text-xs" style={{ color: "#78350F" }}>
-                              <span className="mt-px shrink-0">Â·</span>
+                              <span className="mt-px shrink-0">·</span>
                               <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setProductLink(ex)}>{ex}</button>
                             </li>
                           ))}
@@ -919,8 +919,8 @@ export default function NewExternalOrderPage() {
                     </p>
                   ) : (
                     <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      Usaremos este nÃºmero para contacto e atualizaÃ§Ãµes da encomenda. Preferencialmente com WhatsApp ativo.
-                      Em breve poderÃ¡s acompanhar este pedido pelo WhatsApp. Por agora, acompanha o estado na Ã¡rea Meus pedidos.
+                      Usaremos este número para contacto e atualizações da encomenda. Preferencialmente com WhatsApp ativo.
+                      Em breve poderás acompanhar este pedido pelo WhatsApp. Por agora, acompanha o estado na área Meus pedidos.
                     </p>
                   )}
                 </div>
@@ -973,7 +973,7 @@ export default function NewExternalOrderPage() {
                       </div>
                     )}
                     <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      PNG, JPG ou WebP. MÃ¡ximo 10MB.
+                      PNG, JPG ou WebP. Máximo 10MB.
                     </p>
                   </div>
                 </div>
@@ -1020,8 +1020,8 @@ export default function NewExternalOrderPage() {
                 <ClientActionFeedback
                   feedback={feedback && feedback.type !== "success" ? feedback : null}
                   onClose={() => setFeedback(null)}
-                  actionLabel={feedback?.type === "error" && /sessÃ£o expirada|Inicia sessÃ£o/i.test(feedback.msg) ? "Entrar novamente" : undefined}
-                  actionHref={feedback?.type === "error" && /sessÃ£o expirada|Inicia sessÃ£o/i.test(feedback.msg) ? "/login?redirect=%2Forders%2Fexternal%2Fnew" : undefined}
+                  actionLabel={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "Entrar novamente" : undefined}
+                  actionHref={feedback?.type === "error" && /sessão expirada|Inicia sessão/i.test(feedback.msg) ? "/login?redirect=%2Forders%2Fexternal%2Fnew" : undefined}
                 />
               </div>
             </form>
