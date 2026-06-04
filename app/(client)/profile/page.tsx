@@ -452,9 +452,16 @@ export default function ProfilePage() {
       const emailErr = validateEmailOptional(personalForm.email);
       if (emailErr) errors.email = emailErr;
     }
-    const normalised = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
-    const phoneErr = validatePhoneOptional(normalised);
-    if (phoneErr) errors.phoneNumber = phoneErr;
+    // Only validate phone format when the user actually changed it.
+    // Pre-filling the form with the stored phone should never trigger a
+    // validation error on unrelated saves (e.g. editing only the email).
+    const storedPhoneNorm = profile?.phoneNumber ? normalizePhone(profile.phoneNumber) : "";
+    const enteredPhoneNorm = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
+    const phoneActuallyChanged = Boolean(personalForm.phoneNumber.trim()) && enteredPhoneNorm !== storedPhoneNorm;
+    if (phoneActuallyChanged) {
+      const phoneErr = validatePhoneOptional(enteredPhoneNorm);
+      if (phoneErr) errors.phoneNumber = phoneErr;
+    }
     if (personalForm.city) {
       const cityErr = validateCity(personalForm.city);
       if (cityErr) errors.city = cityErr;
@@ -543,7 +550,9 @@ export default function ProfilePage() {
           firstName: cleanFirst,
           lastName: cleanLast,
           name: [cleanFirst, cleanLast].filter(Boolean).join(" "),
-          phoneNumber: cleanPhone || null,
+          // Only include phone when it actually changed; omitting it lets the
+          // backend skip phone processing entirely (null = skip, not delete).
+          ...(phoneWillChange ? { phoneNumber: cleanPhone || null } : {}),
           birthDate: personalForm.birthDate || null,
           gender: personalForm.gender || null,
           city: cleanCityVal || null,
@@ -1105,13 +1114,16 @@ export default function ProfilePage() {
                       {personalErrors.email && personalTouched.email && (
                         <p id="personal-email-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.email}</p>
                       )}
-                      <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
-                        {isXdigitalEmail
-                          ? "A tua conta foi criada via telefone. Adiciona um email real para receber confirmacoes."
-                          : profile?.emailVerified
-                            ? "Se alterares o email, o novo endereço terá de ser verificado."
-                            : "Podes corrigir o email agora. Após guardar, enviamos um link de verificação."}
-                      </p>
+                      {isXdigitalEmail && (
+                        <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                          A tua conta foi criada via telefone. Adiciona um email real para receber confirmacoes.
+                        </p>
+                      )}
+                      {!isXdigitalEmail && profile?.emailVerified && (
+                        <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                          Se alterares o email, o novo endereço terá de ser verificado.
+                        </p>
+                      )}
                     </>
                   ) : isXdigitalEmail && !isEditingPersonal ? (
                     // Synthetic email + not editing: call to action
