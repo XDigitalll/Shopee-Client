@@ -448,7 +448,7 @@ export default function ProfilePage() {
     if (firstErr) errors.firstName = firstErr;
     const lastErr = validateName(personalForm.lastName);
     if (lastErr) errors.lastName = lastErr;
-    if (isXdigitalEmail && personalForm.email) {
+    if (canEditEmail && personalForm.email) {
       const emailErr = validateEmailOptional(personalForm.email);
       if (emailErr) errors.email = emailErr;
     }
@@ -524,13 +524,15 @@ export default function ProfilePage() {
       const cleanPhone = personalForm.phoneNumber.trim() ? normalizePhone(personalForm.phoneNumber) : "";
       const cleanCityVal = personalForm.city ? cleanCity(personalForm.city) : "";
       const trimmedEmail = personalForm.email.trim() ? normalizeEmail(personalForm.email) : "";
-      const currentEmail = profile?.email && !profile.email.endsWith("@xdigital.local") ? normalizeEmail(profile.email) : "";
+      const currentEmail = profile?.email ? normalizeEmail(profile.email) : "";
       const currentPhone = profile?.phoneNumber ? normalizePhone(profile.phoneNumber) : "";
-      const emailWillChange = Boolean(trimmedEmail && trimmedEmail !== currentEmail);
+      const emailWillChange = Boolean(canEditEmail && trimmedEmail && trimmedEmail !== currentEmail);
       const phoneWillChange = Boolean(cleanPhone && cleanPhone !== currentPhone);
 
-      if ((emailWillChange || phoneWillChange) && !verificationOk) {
-        setDangerFeedback("Verifica o teu email ou telefone antes de alterar dados sensiveis do perfil.");
+      // Only gate phone changes behind verification (email changes are self-service
+      // for LOCAL accounts — the new address will need verification after saving).
+      if (phoneWillChange && !verificationOk) {
+        setDangerFeedback("Verifica o teu telefone antes de o alterar.");
         return;
       }
 
@@ -545,7 +547,7 @@ export default function ProfilePage() {
           birthDate: personalForm.birthDate || null,
           gender: personalForm.gender || null,
           city: cleanCityVal || null,
-          ...(isXdigitalEmail && trimmedEmail ? { email: trimmedEmail } : {}),
+          ...(canEditEmail && trimmedEmail ? { email: trimmedEmail } : {}),
         }),
       });
 
@@ -561,7 +563,11 @@ export default function ProfilePage() {
       setIsEditingPersonal(false);
       setPersonalErrors({});
       setPersonalTouched({});
-      setFeedback("Dados pessoais atualizados com sucesso.");
+      setFeedback(
+        emailWillChange
+          ? "Email atualizado. Enviamos um link de verificação para o novo endereço."
+          : "Dados pessoais atualizados com sucesso."
+      );
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel guardar os dados pessoais.");
     } finally {
@@ -808,6 +814,9 @@ export default function ProfilePage() {
   const isAccountActive = accountPct === 100;
   const isVerified = profile?.securityVerificationLevel === "VERIFIED";
   const verificationOk = profile?.authProvider === "GOOGLE" || profile?.emailVerified === true || profile?.phoneVerified === true;
+  // LOCAL and synthetic-email accounts can always edit their email.
+  // Google accounts cannot — the email is managed externally.
+  const canEditEmail = profile?.authProvider !== "GOOGLE";
   const verifiedBadge = isAccountActive
     ? (isVerified ? "Conta verificada" : "Conta ativa")
     : `Perfil ${accountPct}% completo`;
@@ -1072,9 +1081,13 @@ export default function ProfilePage() {
                   <p id="personal-lastName-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.lastName}</p>
                 )}
               </Field>
-              <Field label={isXdigitalEmail && isEditingPersonal ? "Email real" : "Email"} disabled={!isXdigitalEmail || !isEditingPersonal}>
+              <Field
+                label={canEditEmail && isEditingPersonal && isXdigitalEmail ? "Email real" : "Email"}
+                disabled={!canEditEmail || !isEditingPersonal}
+              >
                 <div className="relative">
-                  {isXdigitalEmail && isEditingPersonal ? (
+                  {canEditEmail && isEditingPersonal ? (
+                    // LOCAL account in editing mode: always editable
                     <>
                       <input
                         id="personal-email"
@@ -1093,10 +1106,15 @@ export default function ProfilePage() {
                         <p id="personal-email-error" className="mt-1 text-xs font-medium" style={{ color: RED }}>{personalErrors.email}</p>
                       )}
                       <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
-                        A tua conta foi criada via telefone. Adiciona um email real para receber confirmacoes.
+                        {isXdigitalEmail
+                          ? "A tua conta foi criada via telefone. Adiciona um email real para receber confirmacoes."
+                          : profile?.emailVerified
+                            ? "Se alterares o email, o novo endereço terá de ser verificado."
+                            : "Podes corrigir o email agora. Após guardar, enviamos um link de verificação."}
                       </p>
                     </>
-                  ) : isXdigitalEmail ? (
+                  ) : isXdigitalEmail && !isEditingPersonal ? (
+                    // Synthetic email + not editing: call to action
                     <button
                       type="button"
                       onClick={() => { setIsEditingPersonal(true); }}
@@ -1107,6 +1125,7 @@ export default function ProfilePage() {
                       <span className="rounded-full px-2.5 py-0.5 text-[11px] font-black" style={{ background: RED, color: "white" }}>Adicionar</span>
                     </button>
                   ) : (
+                    // Not editing (LOCAL with real email), or Google (always disabled)
                     <div className="relative">
                       <input
                         value={personalForm.email}
@@ -1114,9 +1133,13 @@ export default function ProfilePage() {
                         className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
                         style={inputDisabledStyle}
                       />
-                      {(profile?.authProvider === "GOOGLE" || authSource === "GOOGLE") && (
+                      {(profile?.authProvider === "GOOGLE" || authSource === "GOOGLE") ? (
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-white px-2 py-0.5 text-[10px] font-black" style={{ color: "#4285F4", border: "1px solid #E8E8E8" }}>Google</span>
-                      )}
+                      ) : !profile?.emailVerified ? (
+                        <p className="mt-1.5 text-xs" style={{ color: MUTED }}>
+                          Email nao verificado. Clica em &ldquo;Editar&rdquo; para corrigir.
+                        </p>
+                      ) : null}
                     </div>
                   )}
                 </div>
