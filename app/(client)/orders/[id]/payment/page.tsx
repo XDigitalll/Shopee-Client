@@ -52,6 +52,7 @@ type PaySuiteInitResponse = {
 // confirmed  — payment detected as paid; show success + auto-redirect
 // timed_out  — 90 s elapsed without confirmation; show calm message + manual verify only
 type ReturnPhase = "idle" | "confirming" | "confirmed" | "timed_out";
+type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
 
 const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
   { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento instantâneo" },
@@ -74,6 +75,13 @@ const RETURNING_POLL_DURATION_MS = 90_000;
 const RETURNING_POLL_INTERVAL_MS = 3_000;
 const IDLE_POLL_INTERVAL_MS = 10_000;
 const CONFIRMED_REDIRECT_DELAY_MS = 3_000;
+const PAYMENT_STATE_STYLES: Record<PaymentStateTone, { bg: string; border: string; color: string; soft: string }> = {
+  info: { bg: "#EFF6FF", border: "#BFDBFE", color: "#1E40AF", soft: "#DBEAFE" },
+  success: { bg: "#F0FDF4", border: "#86EFAC", color: "#166534", soft: "#DCFCE7" },
+  warning: { bg: "#FFFBEB", border: "#FDE68A", color: "#92400E", soft: "#FEF3C7" },
+  danger: { bg: "#FFF5F5", border: "#FECACA", color: "#991B1B", soft: "#FEE2E2" },
+  neutral: { bg: "#F9FAFB", border: "#E5E7EB", color: "#374151", soft: "#F3F4F6" },
+};
 
 // Classify the gateway status string returned by the sync endpoint.
 export function classifySyncResult(status?: string): "confirmed" | "pending" | "failed" {
@@ -168,6 +176,8 @@ export default function OrderPaymentPage() {
   const [isSyncBusy, setIsSyncBusy] = useState(false);
 
   const returningFromPaySuite = searchParams.get("psr") === "1";
+  const [isInitialOrderLoading, setIsInitialOrderLoading] = useState(true);
+  const [isInitialSyncLoading, setIsInitialSyncLoading] = useState(returningFromPaySuite);
   const [returnPhase, setReturnPhase] = useState<ReturnPhase>(
     returningFromPaySuite ? "confirming" : "idle",
   );
@@ -176,9 +186,13 @@ export default function OrderPaymentPage() {
   const [redirectCountdown, setRedirectCountdown] = useState(CONFIRMED_REDIRECT_DELAY_MS / 1000);
 
   const isPaySuiteBusy = paysuiteAction.isRunning;
+  const isInitialPaymentLoading = isInitialOrderLoading || isInitialSyncLoading;
 
   const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!token || !orderId) return;
+    if (!token || !orderId) {
+      setIsInitialOrderLoading(false);
+      return;
+    }
     try {
       const orders = await fetchWithToken<Order[]>("/api/orders/my-orders", token);
       setAllOrders(orders);
@@ -214,6 +228,8 @@ export default function OrderPaymentPage() {
           msg: error instanceof Error ? error.message : "Não foi possível carregar o pedido.",
         });
       }
+    } finally {
+      setIsInitialOrderLoading(false);
     }
   }, [orderId, token]);
 
@@ -244,9 +260,16 @@ export default function OrderPaymentPage() {
   // One automatic sync attempt 2 s after entering confirming phase.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!returningFromPaySuite || !token || !orderId) return;
+    if (!returningFromPaySuite) {
+      setIsInitialSyncLoading(false);
+      return;
+    }
+    if (!token || !orderId) {
+      setIsInitialSyncLoading(false);
+      return;
+    }
     devLog("[PAYMENT_RETURN_STARTED]", { orderId });
-    const timeout = window.setTimeout(() => { void performSync({ auto: true }); }, 2000);
+    const timeout = window.setTimeout(() => { void performSync({ auto: true, initial: true }); }, 2000);
     return () => window.clearTimeout(timeout);
   // Intentionally runs once on mount.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,9 +338,101 @@ export default function OrderPaymentPage() {
     && verificationOk
     && (explicitFailure || syncConfirmedFailure)
     && !hasActivePaySuitePayment;
+  const confirmingSecondsLeft = Math.max(
+    0,
+    Math.ceil((RETURNING_POLL_DURATION_MS - confirmingElapsed) / 1000),
+  );
+  const canShowSafeRetry = verificationOk && (canGenerateRetry || canRetryAfterTimeout);
+  const paysuiteStatus = (paysuitePayment?.status ?? order?.payment?.status ?? "").toUpperCase();
+  const paysuiteReference = paysuitePayment?.providerReference
+    ?? paysuitePayment?.paymentReference
+    ?? order?.payment?.providerReference
+    ?? null;
+  const paysuiteTransactionId = order?.payment?.transactionId ?? null;
+  const paymentState = (() => {
+    if (returnPhase === "confirmed" || isPaid) {
+      return {
+        tone: "success" as PaymentStateTone,
+        icon: "✅",
+        title: "Pagamento confirmado",
+        body: "O teu pagamento foi recebido com sucesso. O pedido ja esta em processamento.",
+        detail: returnPhase === "confirmed"
+          ? `A redirecionar para os teus pedidos em ${redirectCountdown}s.`
+          : null,
+      };
+    }
 
-  async function performSync({ auto = false }: { auto?: boolean } = {}) {
-    if (syncInFlightRef.current) return; // mutex — blocks parallel calls
+    if (paysuiteStatus === "LATE_PAYMENT") {
+      return {
+        tone: "warning" as PaymentStateTone,
+        icon: "⚠️",
+        title: "Recebemos um pagamento fora do tempo esperado",
+        body: "A nossa equipa ira analisar este pagamento. Se o valor saiu da tua conta, nao pagues novamente.",
+        detail: "Podes acompanhar o pedido por aqui ou falar com o suporte.",
+      };
+    }
+
+    if (orderStatus === "PAYMENT_REJECTED" || ["FAILED", "CANCELLED", "AMOUNT_MISMATCH"].includes(paysuiteStatus)) {
+      return {
+        tone: "danger" as PaymentStateTone,
+        icon: "❌",
+        title: "O pagamento nao foi confirmado",
+        body: cleanDisplayText(order?.adminMessageForClient)
+          || "Este pagamento nao foi concluido. Gera uma nova tentativa apenas se o valor nao saiu da tua conta.",
+        detail: canShowSafeRetry ? "Ja podes gerar uma nova tentativa segura." : null,
+      };
+    }
+
+    if (returnPhase === "timed_out") {
+      return {
+        tone: canShowSafeRetry ? "warning" as PaymentStateTone : "info" as PaymentStateTone,
+        icon: "⏳",
+        title: "Estamos a confirmar o teu pagamento",
+        body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
+        detail: canShowSafeRetry
+          ? "A ultima verificacao nao encontrou uma confirmacao activa para este pagamento."
+          : "Usa Verificar atualizacao para consultar novamente a PaySuite.",
+      };
+    }
+
+    if (returnPhase === "confirming" || hasActivePaySuitePayment || isProcessing) {
+      return {
+        tone: "info" as PaymentStateTone,
+        icon: "⏳",
+        title: "Estamos a confirmar o pagamento",
+        body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
+        detail: returnPhase === "confirming" && confirmingSecondsLeft > 0
+          ? `A verificar automaticamente (${confirmingSecondsLeft}s restantes).`
+          : "Esta pagina actualiza automaticamente quando o gateway enviar a confirmacao.",
+      };
+    }
+
+    if (canGenerateRetry) {
+      return {
+        tone: "neutral" as PaymentStateTone,
+        icon: "↻",
+        title: "Nova tentativa disponivel",
+        body: "A verificacao nao encontrou evidencia financeira para a tentativa anterior. Se o valor nao saiu da tua conta, podes gerar um novo checkout.",
+        detail: "Se o valor saiu, nao pagues novamente e fala com o suporte.",
+      };
+    }
+
+    return {
+      tone: "info" as PaymentStateTone,
+      icon: "⏳",
+      title: visual.title === "Pagamento pendente" ? "Pronto para iniciar o pagamento" : visual.title,
+      body: visual.body,
+      detail: null,
+    };
+  })();
+  const paymentStateStyle = PAYMENT_STATE_STYLES[paymentState.tone];
+
+  async function performSync({ auto = false, initial = false }: { auto?: boolean; initial?: boolean } = {}) {
+    if (!auto && isInitialPaymentLoading) return;
+    if (syncInFlightRef.current) {
+      if (initial) setIsInitialSyncLoading(false);
+      return;
+    } // mutex — blocks parallel calls
     syncInFlightRef.current = true;
     setIsSyncBusy(true);
 
@@ -369,10 +484,12 @@ export default function OrderPaymentPage() {
     } finally {
       syncInFlightRef.current = false;
       setIsSyncBusy(false);
+      if (initial) setIsInitialSyncLoading(false);
     }
   }
 
   async function handlePaySuitePayment() {
+    if (isInitialPaymentLoading) return;
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessão expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -437,6 +554,7 @@ export default function OrderPaymentPage() {
   }
 
   async function handlePaySuiteRetry() {
+    if (isInitialPaymentLoading) return;
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessao expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -478,13 +596,42 @@ export default function OrderPaymentPage() {
     }
   }
 
-  const confirmingSecondsLeft = Math.max(
-    0,
-    Math.ceil((RETURNING_POLL_DURATION_MS - confirmingElapsed) / 1000),
-  );
-
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-24 md:pb-0">
+    <div className="relative mx-auto max-w-5xl pb-24 md:pb-0">
+      {isInitialPaymentLoading ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 px-4 backdrop-blur-sm"
+          aria-live="polite"
+          role="status"
+        >
+          <div
+            className="w-full max-w-xs rounded-[24px] border bg-white p-5 text-center shadow-[0_20px_60px_rgba(16,24,40,0.16)]"
+            style={{ borderColor: "#F2D4CC" }}
+          >
+            <svg
+              className="mx-auto h-8 w-8 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={RED}
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+            <p className="mt-4 text-sm font-black" style={{ color: "#1A1410" }}>
+              A carregar dados do pagamento...
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
+              Aguarde um instante.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={`space-y-5 transition ${isInitialPaymentLoading ? "pointer-events-none select-none opacity-60 blur-[2px]" : ""}`}
+        aria-busy={isInitialPaymentLoading}
+      >
       <Link
         href="/orders"
         className="inline-flex rounded-full border px-4 py-2 text-sm font-bold"
@@ -532,117 +679,139 @@ export default function OrderPaymentPage() {
           </div>
         </div>
 
-        {/* ── CONFIRMING (0–90 s): spinner only, zero buttons ── */}
-        {returnPhase === "confirming" ? (
-          <div
-            className="mt-6 rounded-[24px] border p-6 text-center"
-            style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}
-          >
-            <svg
-              className="mx-auto mb-4 h-10 w-10 animate-spin"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={AMBER}
-              strokeWidth={2}
-            >
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
-            <p className="text-xl font-black" style={{ color: "#92400E" }}>
-              A confirmar pagamento
-            </p>
-            <p className="mt-2 text-sm leading-6" style={{ color: "#78350F" }}>
-              Ainda estamos a confirmar o pagamento junto da PaySuite.
-              <br />
-              Não feches esta página.
-            </p>
-            {confirmingSecondsLeft > 0 && (
-              <p className="mt-3 text-xs" style={{ color: "#B45309" }}>
-                A verificar automaticamente… ({confirmingSecondsLeft}s restantes)
-              </p>
-            )}
-          </div>
-        ) : null}
-
-        {/* ── CONFIRMED: success screen + auto-redirect countdown ── */}
-        {returnPhase === "confirmed" ? (
-          <div
-            className="mt-6 rounded-[24px] border p-6 text-center"
-            style={{ borderColor: "#86EFAC", background: "#F0FDF4" }}
-          >
+        <div
+          className="mt-6 rounded-[24px] border p-4 sm:p-5"
+          style={{
+            background: paymentStateStyle.bg,
+            borderColor: paymentStateStyle.border,
+            color: paymentStateStyle.color,
+          }}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div
-              className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full"
-              style={{ background: "#DCFCE7" }}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl"
+              style={{ background: paymentStateStyle.soft }}
+              aria-hidden="true"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke={GREEN} strokeWidth={2.5} className="h-8 w-8">
-                <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              {returnPhase === "confirming" ? (
+                <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth={2}>
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
+              ) : paymentState.icon}
             </div>
-            <p className="text-xl font-black" style={{ color: "#166534" }}>
-              Pagamento confirmado
-            </p>
-            <p className="mt-2 text-sm" style={{ color: "#4B5563" }}>
-              O teu pagamento foi recebido com sucesso. O pedido já está em processamento.
-            </p>
-            <p className="mt-3 text-xs" style={{ color: "#6B7280" }}>
-              A redirecionar para os teus pedidos em {redirectCountdown}s…
-            </p>
-            <Link
-              href="/orders"
-              className="mt-5 inline-flex rounded-2xl px-6 py-3 text-sm font-black text-white"
-              style={{ background: GREEN }}
-            >
-              Ver os meus pedidos agora
-            </Link>
-          </div>
-        ) : null}
-
-        {/* ── TIMED-OUT: calm message + manual verify only, no pay button ── */}
-        {returnPhase === "timed_out" ? (
-          <div
-            className="mt-6 rounded-[24px] border p-5"
-            style={{ background: "#FFFBEB", borderColor: "#FDE68A" }}
-          >
-            <p className="text-sm font-black" style={{ color: "#92400E" }}>
-              Ainda estamos a confirmar o pagamento junto da PaySuite
-            </p>
-            <p className="mt-2 text-sm leading-6" style={{ color: "#78350F" }}>
-              Se o dinheiro já saiu da tua conta, não pagues novamente.
-              A confirmação é feita exclusivamente pelo gateway PaySuite — não pelo redirect.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void performSync()}
-                disabled={isSyncBusy}
-                className="rounded-xl px-4 py-2 text-sm font-semibold"
-                style={{
-                  background: isSyncBusy ? "#E5E7EB" : "#FDE68A",
-                  color: isSyncBusy ? "#9CA3AF" : "#92400E",
-                }}
-              >
-                {isSyncBusy ? "A verificar…" : "Verificar novamente"}
-              </button>
-              <Link
-                href="/orders"
-                className="rounded-xl px-4 py-2 text-sm font-semibold"
-                style={{ background: "#F3F4F6", color: "#374151", border: "1px solid #D1D5DB" }}
-              >
-                Voltar aos meus pedidos
-              </Link>
+            <div className="min-w-0 flex-1">
+              <p className="text-lg font-black sm:text-xl">{paymentState.title}</p>
+              <p className="mt-2 text-sm leading-6" style={{ color: "#374151" }}>
+                {paymentState.body}
+              </p>
+              {paymentState.detail ? (
+                <p className="mt-2 text-xs font-semibold leading-5" style={{ color: paymentStateStyle.color }}>
+                  {paymentState.detail}
+                </p>
+              ) : null}
             </div>
           </div>
-        ) : null}
 
-        {/* Status banner — idle and timed_out phases */}
-        {(returnPhase === "idle" || returnPhase === "timed_out") ? (
-          <div
-            className="mt-5 rounded-[22px] border px-4 py-4"
-            style={{ background: visual.bg, borderColor: visual.border, color: visual.color }}
-          >
-            <p className="text-sm font-black">{visual.title}</p>
-            <p className="mt-1 text-sm leading-6">{visual.body}</p>
-          </div>
-        ) : null}
+          {(paysuiteReference || paysuiteTransactionId || paysuiteStatus) ? (
+            <div
+              className="mt-4 grid gap-2 rounded-2xl border bg-white/70 p-3 text-xs sm:grid-cols-3"
+              style={{ borderColor: paymentStateStyle.border }}
+            >
+              {paysuiteReference ? (
+                <div>
+                  <p className="font-semibold uppercase" style={{ color: "#6B7280" }}>Referencia</p>
+                  <p className="mt-1 break-all font-black" style={{ color: "#1F2937" }}>{paysuiteReference}</p>
+                </div>
+              ) : null}
+              {paysuiteTransactionId ? (
+                <div>
+                  <p className="font-semibold uppercase" style={{ color: "#6B7280" }}>Transacao</p>
+                  <p className="mt-1 break-all font-black" style={{ color: "#1F2937" }}>{paysuiteTransactionId}</p>
+                </div>
+              ) : null}
+              {paysuiteStatus ? (
+                <div>
+                  <p className="font-semibold uppercase" style={{ color: "#6B7280" }}>Estado PaySuite</p>
+                  <p className="mt-1 break-all font-black" style={{ color: "#1F2937" }}>{paysuiteStatus}</p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {returnPhase !== "confirming" ? (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {!isPaid ? (
+                <button
+                  type="button"
+                  onClick={() => void performSync()}
+                  disabled={isInitialPaymentLoading || isSyncBusy}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
+                  style={{
+                    background: isSyncBusy ? "#E5E7EB" : paymentStateStyle.soft,
+                    color: isSyncBusy ? "#9CA3AF" : paymentStateStyle.color,
+                    border: `1px solid ${paymentStateStyle.border}`,
+                  }}
+                >
+                  {isSyncBusy ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                      </svg>
+                      A verificar...
+                    </>
+                  ) : "Verificar atualizacao"}
+                </button>
+              ) : null}
+
+              {canGenerateRetry && verificationOk ? (
+                <button
+                  type="button"
+                  onClick={() => void handlePaySuiteRetry()}
+                  disabled={isInitialPaymentLoading || isPaySuiteBusy}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
+                  style={{ background: isPaySuiteBusy ? "#9CA3AF" : GREEN }}
+                >
+                  {isPaySuiteBusy ? "A gerar..." : "Gerar nova tentativa"}
+                </button>
+              ) : null}
+
+              {(returnPhase === "confirmed" || isPaid) ? (
+                <Link
+                  href="/orders"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
+                  style={{ background: GREEN }}
+                >
+                  Ver os meus pedidos
+                </Link>
+              ) : null}
+
+              {returnPhase === "timed_out" ? (
+                <Link
+                  href="/orders"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
+                  style={{ background: "#FFFFFF", borderColor: "#D1D5DB", color: "#374151" }}
+                >
+                  Voltar aos meus pedidos
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!isPaid ? (
+            <div className="mt-4 border-t pt-3 text-xs leading-5" style={{ borderColor: paymentStateStyle.border, color: "#6B7280" }}>
+              <p>{PAYMENT_SUPPORT_MESSAGE}</p>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noreferrer" className="font-semibold" style={{ color: "#15803D" }}>
+                  Suporte WhatsApp
+                </a>
+                <a href={`mailto:${SUPPORT_EMAIL}`} className="font-semibold" style={{ color: "#4B5563" }}>
+                  Email
+                </a>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
 
         {needsVerificationForPayment ? (
           <div
@@ -659,38 +828,6 @@ export default function OrderPaymentPage() {
           </div>
         ) : null}
 
-        {!isPaid ? (
-          <div
-            className="mt-4 rounded-2xl border px-4 py-4"
-            style={{ background: "#FFF7ED", borderColor: "#FDBA74", color: "#7C2D12" }}
-          >
-            <p className="text-sm font-black">Pagamento com cuidado</p>
-            <p className="mt-2 text-sm leading-6">
-              Ainda nao recebemos confirmacao da PaySuite para este pagamento. Se o valor NAO saiu da tua conta, podes gerar uma nova tentativa de pagamento quando a verificacao indicar que nao ha evidencia financeira.
-            </p>
-            <p className="mt-2 text-sm leading-6 font-semibold">
-              {PAYMENT_SUPPORT_MESSAGE}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <a
-                href={SUPPORT_WHATSAPP_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl px-4 py-2 text-sm font-black text-white"
-                style={{ background: "#16A34A" }}
-              >
-                Falar com suporte no WhatsApp
-              </a>
-              <a
-                href={`mailto:${SUPPORT_EMAIL}`}
-                className="rounded-xl border px-4 py-2 text-sm font-black"
-                style={{ borderColor: "#FDBA74", color: "#9A3412", background: "#FFFFFF" }}
-              >
-                Enviar email
-              </a>
-            </div>
-          </div>
-        ) : null}
 
         {/* Feedback banner */}
         {feedback ? (
@@ -706,125 +843,6 @@ export default function OrderPaymentPage() {
           </div>
         ) : null}
 
-        {/* PAID — terminal success (reached via polling/webhook in idle phase) */}
-        {isPaid && returnPhase === "idle" ? (
-          <div
-            className="mt-6 rounded-[24px] border p-6 text-center"
-            style={{ borderColor: "#86EFAC", background: "#F0FDF4" }}
-          >
-            <p className="text-xl font-black" style={{ color: "#166534" }}>
-              Pedido pago com sucesso
-            </p>
-            <p className="mt-2 text-sm" style={{ color: "#4B5563" }}>
-              O teu pedido foi confirmado e está a ser processado.
-            </p>
-            <Link
-              href="/orders"
-              className="mt-5 inline-flex rounded-2xl px-6 py-3 text-sm font-black text-white"
-              style={{ background: GREEN }}
-            >
-              Ver os meus pedidos
-            </Link>
-          </div>
-        ) : null}
-
-        {/* Processing — webhook fired, waiting for final status */}
-        {isProcessing && returnPhase === "idle" ? (
-          <div
-            className="mt-6 rounded-[24px] border p-5"
-            style={{ borderColor: "#BFDBFE", background: "#EFF6FF" }}
-          >
-            <p className="text-sm font-semibold" style={{ color: "#1D4ED8" }}>
-              A aguardar confirmação automática do pagamento. Esta página actualiza a cada 10 segundos.
-            </p>
-          </div>
-        ) : null}
-
-        {/* Active PaySuite payment — block new payment, show verify option */}
-        {hasActivePaySuitePayment && returnPhase === "idle" ? (
-          <div
-            className="mt-4 rounded-2xl border px-4 py-4"
-            style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}
-          >
-            <p className="text-sm font-black" style={{ color: "#1E40AF" }}>
-              Pagamento em curso
-            </p>
-            <p className="mt-1 text-sm leading-6" style={{ color: "#374151" }}>
-              Já existe uma tentativa de pagamento em curso para este pedido.
-              {paysuitePayment?.providerReference && (
-                <> Referência: <strong>{paysuitePayment.providerReference}</strong></>
-              )}
-            </p>
-            <button
-              type="button"
-              onClick={() => void performSync()}
-              disabled={isSyncBusy}
-              className="mt-3 rounded-xl px-4 py-2 text-sm font-semibold"
-              style={{
-                background: isSyncBusy ? "#E5E7EB" : "#DBEAFE",
-                color: isSyncBusy ? "#9CA3AF" : "#1E40AF",
-                border: "1px solid #BFDBFE",
-              }}
-            >
-              {isSyncBusy ? "A verificar estado…" : "Verificar estado do pagamento"}
-            </button>
-          </div>
-        ) : null}
-
-        {/* Manual sync — idle, PENDING_PAYMENT, no active PaySuite tx */}
-        {canGenerateRetry && verificationOk ? (
-          <div
-            className="mt-4 rounded-2xl border px-4 py-4"
-            style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}
-          >
-            <p className="text-sm font-black" style={{ color: "#9A3412" }}>
-              Podes gerar uma nova tentativa
-            </p>
-            <p className="mt-1 text-sm leading-6" style={{ color: "#7C2D12" }}>
-              Se o valor NÃO saiu da tua conta, podes gerar um novo checkout PaySuite. Se saiu, NÃO pagues novamente; fala com o suporte.
-            </p>
-            <button
-              type="button"
-              onClick={() => void handlePaySuiteRetry()}
-              disabled={isPaySuiteBusy}
-              className="mt-3 rounded-xl px-4 py-2 text-sm font-black text-white"
-              style={{ background: isPaySuiteBusy ? "#9CA3AF" : RED }}
-            >
-              {isPaySuiteBusy ? "A gerar..." : "Gerar nova tentativa de pagamento"}
-            </button>
-          </div>
-        ) : null}
-
-        {canPay && !hasActivePaySuitePayment ? (
-          <div
-            className="mt-4 rounded-2xl border px-4 py-3"
-            style={{ borderColor: "#E5E7EB", background: "#F9FAFB" }}
-          >
-            <p className="text-xs" style={{ color: "#6B7280" }}>
-              Já pagaste via PaySuite mas o pedido ainda aparece como pendente?
-            </p>
-            <button
-              type="button"
-              onClick={() => void performSync()}
-              disabled={isSyncBusy}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold"
-              style={{
-                background: isSyncBusy ? "#E5E7EB" : "#F3F4F6",
-                color: isSyncBusy ? "#9CA3AF" : "#374151",
-                border: "1px solid #D1D5DB",
-              }}
-            >
-              {isSyncBusy ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                  </svg>
-                  A verificar estado…
-                </>
-              ) : "Verificar estado do pagamento"}
-            </button>
-          </div>
-        ) : null}
 
         {/* CAN PAY — PaySuite method selector + pay button */}
         {(canPay || canRetryAfterTimeout) ? (
@@ -861,7 +879,7 @@ export default function OrderPaymentPage() {
                       key={item.key}
                       type="button"
                       onClick={() => setPaysuiteMethod(item.key)}
-                      disabled={isPaySuiteBusy}
+                      disabled={isInitialPaymentLoading || isPaySuiteBusy}
                       className="rounded-[22px] border p-4 text-left transition"
                       style={{
                         borderColor: active ? GREEN : "#C7E7D3",
@@ -909,18 +927,20 @@ export default function OrderPaymentPage() {
               <button
                 type="button"
                 onClick={() => void handlePaySuitePayment()}
-                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-4 text-base font-black text-white"
                 style={{
                   background:
-                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                    isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0
                       ? "#9CA3AF"
                       : GREEN,
                 }}
               >
                 {isPaySuiteBusy
                   ? "A iniciar pagamento..."
-                  : `Pagar ${formatMoney(officialAmount)} agora`}
+                  : canRetryAfterTimeout
+                    ? "Gerar nova tentativa"
+                    : `Pagar ${formatMoney(officialAmount)} agora`}
               </button>
               <ClientActionFeedback
                 feedback={feedback}
@@ -946,21 +966,22 @@ export default function OrderPaymentPage() {
               <button
                 type="button"
                 onClick={() => void handlePaySuitePayment()}
-                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
                 style={{
                   background:
-                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                    isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0
                       ? "#9CA3AF"
                       : GREEN,
                 }}
               >
-                {isPaySuiteBusy ? "A iniciar..." : "Pagar agora"}
+                {isPaySuiteBusy ? "A iniciar..." : canRetryAfterTimeout ? "Gerar nova tentativa" : "Pagar agora"}
               </button>
             </div>
           </div>
         ) : null}
       </section>
+      </div>
     </div>
   );
 }
