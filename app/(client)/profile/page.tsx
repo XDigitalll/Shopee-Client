@@ -4,7 +4,7 @@ import Image, { type ImageLoaderProps } from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
 import { refreshStoredSession } from "@/lib/auth";
 import { useAuth } from "@/components/auth-provider";
@@ -331,6 +331,7 @@ const emptyAddressForm: AddressForm = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { token, userLabel, userEmail, userInitials, userAvatarUrl, authSource, logout, refreshProfile } = useAuth();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [stats, setStats] = useState<OrderStats | null>(null);
@@ -359,6 +360,7 @@ export default function ProfilePage() {
   const [personalTouched, setPersonalTouched] = useState<Partial<Record<keyof PersonalForm, boolean>>>({});
   const [addressErrors, setAddressErrors] = useState<Partial<Record<string, string>>>({});
   const [addressTouched, setAddressTouched] = useState<Partial<Record<string, boolean>>>({});
+  const [highlightVerification, setHighlightVerification] = useState(false);
 
   const personalRef = useRef<HTMLElement | null>(null);
   const addressesRef = useRef<HTMLElement | null>(null);
@@ -425,6 +427,25 @@ export default function ProfilePage() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [verifyCooldown]);
+
+  useEffect(() => {
+    if (!profile || searchParams.get("focus") !== "verification") return;
+
+    setActive("security");
+    setHighlightVerification(true);
+
+    const scrollTimer = window.setTimeout(() => {
+      securityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    const highlightTimer = window.setTimeout(() => {
+      setHighlightVerification(false);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(highlightTimer);
+    };
+  }, [profile, searchParams]);
 
   const fullName = useMemo(() => {
     const names = [personalForm.firstName, personalForm.lastName].filter(Boolean).join(" ").trim();
@@ -1475,7 +1496,17 @@ export default function ProfilePage() {
             </div>
           </section>
 
-          <section ref={securityRef} className="rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+          <section
+            id="account-verification"
+            ref={securityRef}
+            className="rounded-[28px] border bg-white p-6 shadow-sm transition-all duration-500"
+            style={{
+              borderColor: highlightVerification ? RED : "#F2D4CC",
+              boxShadow: highlightVerification
+                ? "0 0 0 4px rgba(232, 67, 26, 0.14), 0 18px 44px rgba(232, 67, 26, 0.18)"
+                : undefined,
+            }}
+          >
             <div>
               <p className="text-sm font-semibold" style={{ color: RED }}>Seguranca</p>
               <h2 className="mt-1 text-2xl font-black" style={{ color: TEXT, fontFamily: "'Sora', sans-serif" }}>Protecao da conta</h2>
