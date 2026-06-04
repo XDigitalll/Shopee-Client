@@ -85,6 +85,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const showMobileAccountWarnings = Boolean(token) && (hasProfileWarning || (hasRealEmail && !emailVerified));
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -299,6 +300,33 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
           </button>
         </div>
 
+        {showMobileAccountWarnings ? (
+          <div className="sm:hidden border-t px-3 py-2" style={{ borderColor: "rgba(255,255,255,0.16)", background: RED_DARK }}>
+            <div className="mx-auto flex max-w-7xl flex-col gap-2 min-[380px]:flex-row min-[380px]:flex-wrap">
+              {hasRealEmail && !emailVerified ? (
+                <Link
+                  href="/profile"
+                  className="inline-flex min-h-9 flex-1 items-center justify-center rounded-full px-3 py-2 text-center text-[12px] font-black leading-tight shadow-sm"
+                  style={{ background: "#FFF7E8", color: "#7C2D12" }}
+                >
+                  <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black" style={{ background: "#FED7AA", color: "#7C2D12" }}>!</span>
+                  Email nao verificado
+                </Link>
+              ) : null}
+              {hasProfileWarning ? (
+                <Link
+                  href="/profile"
+                  className="inline-flex min-h-9 flex-1 items-center justify-center rounded-full px-3 py-2 text-center text-[12px] font-black leading-tight text-white shadow-sm"
+                  style={{ background: "rgba(255,255,255,0.18)" }}
+                >
+                  <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-white text-[10px] font-black" style={{ color: RED }}>!</span>
+                  Conta {accountCompletionPercentage}% completa
+                </Link>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         {menuOpen && (
           <div ref={menuPanelRef} className="sm:hidden border-t" style={{ borderColor: "rgba(255,255,255,0.2)", background: RED_DARK }}>
             <div className="space-y-2 px-4 py-4">
@@ -348,7 +376,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
           </div>
         )}
       </header>
-      <div className="h-14 shrink-0 sm:h-16" />
+      <div className={showMobileAccountWarnings ? "h-[136px] shrink-0 sm:h-16" : "h-14 shrink-0 sm:h-16"} />
 
       <main className={fullWidth ? "flex-1 overflow-x-hidden" : "mx-auto w-full max-w-7xl flex-1 overflow-x-hidden px-4 py-6 sm:px-6 lg:px-8"}>{children}</main>
 

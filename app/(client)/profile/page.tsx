@@ -792,6 +792,17 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAccountVerificationAction = () => {
+    if (verificationOk) return;
+    if (isXdigitalEmail || !profile?.email) {
+      setFeedback("Adiciona um email real nos dados pessoais para verificares a conta.");
+      setIsEditingPersonal(true);
+      goToSection("personal");
+      return;
+    }
+    void handleSendVerifyCode("EMAIL");
+  };
+
   const initials = profile?.initials || userInitials;
   const accountPct = profile?.accountCompletionPercentage ?? 0;
   const isAccountActive = accountPct === 100;
@@ -1429,7 +1440,7 @@ export default function ProfilePage() {
                   <div>
                     <p className="text-sm font-bold" style={{ color: TEXT }}>Seguranca e verificacao</p>
                     <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
-                      Conta ativa significa que podes entrar. Conta verificada significa que podes pagar e concluir acoes sensiveis.
+                      A verificacao ajuda a proteger a tua conta e permite concluir acoes sensiveis, como pagamentos, alteracoes de dados e recuperacao de acesso.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1440,17 +1451,35 @@ export default function ProfilePage() {
                   </div>
                 </div>
                 <div className="mt-4 grid gap-2 text-sm" style={{ color: MUTED }}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Nome</span>
-                    <strong style={{ color: fullName && fullName !== "Cliente" ? GREEN : RED }}>{fullName && fullName !== "Cliente" ? "OK" : "Pendente"}</strong>
+                  <div className="grid gap-1 rounded-2xl px-3 py-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-0 sm:py-0">
+                    <span>Nome completo</span>
+                    <strong style={{ color: fullName && fullName !== "Cliente" ? GREEN : RED }}>{fullName && fullName !== "Cliente" ? "Verificado" : "Pendente"}</strong>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Morada</span>
-                    <strong style={{ color: profile?.hasDeliveryAddress ? GREEN : RED }}>{profile?.hasDeliveryAddress ? "OK" : "Pendente"}</strong>
+                  <div className="grid gap-1 rounded-2xl px-3 py-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-0 sm:py-0">
+                    <span>Morada de entrega</span>
+                    <strong style={{ color: profile?.hasDeliveryAddress ? GREEN : RED }}>{profile?.hasDeliveryAddress ? "Verificado" : "Pendente"}</strong>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Canal verificado para pagamentos</span>
-                    <strong style={{ color: isVerified ? GREEN : RED }}>{isVerified ? "OK" : "Verificar email/telefone"}</strong>
+                  <div className="grid gap-2 rounded-2xl px-3 py-2 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:px-0 sm:py-0">
+                    <span>Verificacao da conta</span>
+                    {verificationOk ? (
+                      <strong style={{ color: GREEN }}>Conta verificada</strong>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleAccountVerificationAction}
+                        disabled={verifySending || verifyCooldown > 0 || (verifySent && verifyChannel === "EMAIL")}
+                        className="w-full rounded-2xl px-4 py-2.5 text-sm font-black text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55 sm:w-auto"
+                        style={{ background: RED }}
+                      >
+                        {verifyCooldown > 0 && verifyChannel === "EMAIL"
+                          ? `Reenviar em ${verifyCooldown}s`
+                          : verifySending && verifyChannel === "EMAIL"
+                            ? "A enviar..."
+                            : verifySent && verifyChannel === "EMAIL"
+                              ? "Codigo enviado"
+                              : "Verificar agora"}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
