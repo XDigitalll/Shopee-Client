@@ -64,6 +64,7 @@ function CartIcon() {
 const PUBLIC_ORDER_ROUTES = ["/external-order", "/orders/external/new", "/delivery-address"];
 const PUBLIC_CATALOG_ROUTES = ["/", "/store", "/cart"];
 const REQUIRES_AUTH = ["/checkout", "/orders", "/profile", "/settings"];
+const CART_COUNT_CACHE_TTL_MS = 8000;
 
 export function ClientShell({ children, fullWidth = false }: { children: ReactNode; fullWidth?: boolean }) {
   const pathname = usePathname();
@@ -84,6 +85,9 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
   const menuPanelRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const [cartCount, setCartCount] = useState(0);
+  const cartFetchInFlightRef = useRef<Promise<void> | null>(null);
+  const lastCartFetchAtRef = useRef(0);
+  const lastCartTokenRef = useRef<string | null>(null);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const showMobileAccountWarnings = Boolean(token) && (hasProfileWarning || (hasRealEmail && !emailVerified));
 
@@ -110,24 +114,45 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     return () => window.clearTimeout(timeoutId);
   }, [userAvatarUrl]);
 
-  const loadCartCount = useCallback(async () => {
-    if (!token) {
+  const loadCartCount = useCallback((options?: { force?: boolean }) => {
+    if (!isReady || !token) {
       setCartCount(0);
-      return;
+      lastCartTokenRef.current = null;
+      lastCartFetchAtRef.current = 0;
+      return Promise.resolve();
     }
 
-    try {
-      const response = await fetch("/api/cart", { cache: "no-store", credentials: "same-origin" });
-      if (!response.ok) return;
-      const cart = await response.json() as Cart;
-      setCartCount((cart.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0));
-    } catch {
-      setCartCount(0);
+    const force = Boolean(options?.force);
+    const now = Date.now();
+    const tokenChanged = lastCartTokenRef.current !== token;
+    if (!force && !tokenChanged && now - lastCartFetchAtRef.current < CART_COUNT_CACHE_TTL_MS) {
+      return Promise.resolve();
     }
-  }, [token]);
+    if (cartFetchInFlightRef.current) {
+      return cartFetchInFlightRef.current;
+    }
+
+    lastCartTokenRef.current = token;
+    lastCartFetchAtRef.current = now;
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/cart", { cache: "no-store", credentials: "same-origin" });
+        if (!response.ok) return;
+        const cart = await response.json() as Cart;
+        setCartCount((cart.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0));
+      } catch {
+        setCartCount(0);
+      } finally {
+        cartFetchInFlightRef.current = null;
+      }
+    })();
+
+    cartFetchInFlightRef.current = request;
+    return request;
+  }, [isReady, token]);
 
   useEffect(() => {
-    if (!token) {
+    if (!isReady || !token) {
       const timeoutId = window.setTimeout(() => {
         setCartCount(0);
       }, 0);
@@ -136,32 +161,20 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     }
 
     const initialLoadTimeoutId = window.setTimeout(() => {
-      void loadCartCount();
+      void loadCartCount({ force: true });
     }, 0);
 
     const refresh = () => {
-      void loadCartCount();
+      void loadCartCount({ force: true });
     };
 
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void loadCartCount();
-      }
-    };
-
-    const intervalId = window.setInterval(refresh, 5000);
-    window.addEventListener("focus", refresh);
     window.addEventListener(CLIENT_DATA_CHANGED_EVENT, refresh);
-    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
-      window.clearInterval(intervalId);
       window.clearTimeout(initialLoadTimeoutId);
-      window.removeEventListener("focus", refresh);
       window.removeEventListener(CLIENT_DATA_CHANGED_EVENT, refresh);
-      document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [loadCartCount, token]);
+  }, [isReady, loadCartCount, token]);
 
   const pageTitle = useMemo(() => {
     if (pathname?.startsWith("/orders/external/new")) return "Comprar do estrangeiro";

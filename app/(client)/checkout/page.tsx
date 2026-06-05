@@ -130,7 +130,7 @@ function buildProfileNameUpdatePayload(profile: CustomerProfile, fullName: strin
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { token, userEmail, refreshProfile } = useAuth();
+  const { isReady, token, userEmail, refreshProfile } = useAuth();
   const [cart, setCart] = useState<Cart | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<UserAddress[]>([]);
@@ -169,7 +169,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const loadCheckout = async () => {
-      if (!token) return;
+      if (!isReady || !token) return;
       setIsLoading(true);
       try {
         const [payload, me, addresses] = await Promise.all([
@@ -220,7 +220,7 @@ export default function CheckoutPage() {
       }
     };
     void loadCheckout();
-  }, [token]);
+  }, [isReady, token]);
 
   useEffect(() => {
     if (!savedAddresses.length || selectedAddressId === "manual" || selectedAddressId == null) {

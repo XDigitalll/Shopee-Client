@@ -48,7 +48,7 @@ async function fetchWithAuth<T>(url: string, _token: string, init?: RequestInit)
 
 export default function CartPage() {
   const router = useRouter();
-  const { token } = useAuth();
+  const { isReady, token } = useAuth();
   const [cart, setCart] = useState<Cart | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
@@ -60,6 +60,9 @@ export default function CartPage() {
   const [confirmRemoveSelected, setConfirmRemoveSelected] = useState(false);
 
   const loadCart = useCallback(async () => {
+    if (!isReady) {
+      return;
+    }
     if (!token) {
       setCart({ cartId: 0, userId: 0, totalPrice: 0, items: [] });
       setSelectedIds([]);
@@ -68,11 +71,17 @@ export default function CartPage() {
     }
     setIsLoading(true);
     try {
-      const payload = await fetchWithAuth<Cart>("/api/cart", token);
-      setCart(payload);
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new Event("client:data-changed"));
+      const response = await fetch("/api/cart", { cache: "no-store", credentials: "same-origin" });
+      if (response.status === 401) {
+        setCart({ cartId: 0, userId: 0, totalPrice: 0, items: [] });
+        setSelectedIds([]);
+        return;
       }
+      const payload = (await response.json().catch(() => null)) as Cart | null;
+      if (!response.ok || !payload) {
+        throw new Error("Não foi possível carregar o carrinho.");
+      }
+      setCart(payload);
       setSelectedIds((current) => {
         const validIds = new Set((payload.items || []).map((item) => item.itemId));
         const preserved = current.filter((id) => validIds.has(id));
@@ -83,7 +92,7 @@ export default function CartPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [isReady, token]);
 
   useEffect(() => {
     void loadCart();
@@ -151,6 +160,9 @@ export default function CartPage() {
       }
       setFeedback({ type: "info", msg: "Itens selecionados removidos." });
       await loadCart();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("client:data-changed"));
+      }
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível remover os selecionados." });
     } finally {
@@ -161,7 +173,7 @@ export default function CartPage() {
 
   const proceedToCheckout = () => {
     if (!token) {
-      router.push("/login?redirect=%2Fcheckout&reason=checkout");
+      router.push("/login?redirect=%2Fcart&reason=checkout");
       return;
     }
 
@@ -196,12 +208,29 @@ export default function CartPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {!isReady || isLoading ? (
             <ClientSectionSkeleton
               title="A carregar o carrinho"
               message="Estamos a recuperar os itens, quantidades e totais antes de fechar a tua compra."
               rows={3}
             />
+          ) : !token ? (
+            <div className="rounded-[28px] border bg-white px-6 py-14 text-center shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+                Entrar ou criar conta para continuar
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6" style={{ color: "#6B7280" }}>
+                Para veres o teu carrinho e finalizar a compra, precisamos associar os itens à tua conta.
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Link href="/login?redirect=%2Fcart" className="rounded-2xl px-5 py-3 text-sm font-black text-white" style={{ background: RED }}>
+                  Entrar
+                </Link>
+                <Link href="/login?tab=register&redirect=%2Fcart" className="rounded-2xl border px-5 py-3 text-sm font-black" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>
+                  Criar conta
+                </Link>
+              </div>
+            </div>
           ) : !cart?.items?.length ? (
             <div className="rounded-[28px] border border-dashed bg-white px-6 py-20 text-center" style={{ borderColor: "#F2D4CC" }}>
               <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>O teu carrinho esta vazio</h2>
