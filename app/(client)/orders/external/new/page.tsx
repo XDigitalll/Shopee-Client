@@ -17,6 +17,7 @@ const BORDER = "#F2D4CC";
 const SOFT = "#FFF0EC";
 const PHONE_PATTERN = /^\+258(82|83|84|85|86|87)\d{7}$/;
 const MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024;
+const MAX_SCREENSHOTS = 3;
 const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
@@ -172,7 +173,8 @@ export default function NewExternalOrderPage() {
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [phoneNumber, setPhoneNumber] = useState(() => userPhone || "+258");
-  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [screenshots, setScreenshots] = useState<File[]>([]);
+  const [screenshotPreviews, setScreenshotPreviews] = useState<string[]>([]);
   const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
@@ -205,6 +207,14 @@ export default function NewExternalOrderPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const previews = screenshots.map((file) => URL.createObjectURL(file));
+    setScreenshotPreviews(previews);
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [screenshots]);
+
   function normalizePhone(value: string) {
     let digits = value.replace(/\D/g, "");
     if (digits.startsWith("00258")) {
@@ -223,13 +233,14 @@ export default function NewExternalOrderPage() {
     const parsed = extractExternalOrderInput(productLink);
     const effectiveInput = parsed.productLink || parsed.cleanDescription || "";
     const inputState = getInputState(effectiveInput);
-    if ((inputState === "empty" || inputState === "spam") && !screenshot) {
+    const hasScreenshots = screenshots.length > 0;
+    if ((inputState === "empty" || inputState === "spam") && !hasScreenshots) {
       return {
         field: "product",
         message: "Cola o link da loja ou descreve o produto com nome, loja, cor, tamanho ou modelo.",
       };
     }
-    if (inputState === "weak-description" && !screenshot) {
+    if (inputState === "weak-description" && !hasScreenshots) {
       return {
         field: "product",
         message: "Descreve melhor o produto: inclui nome, loja, cor, tamanho ou modelo.",
@@ -286,35 +297,50 @@ export default function NewExternalOrderPage() {
     });
   }
 
-  function handleScreenshotChange(file: File | null) {
-    if (!file) {
-      setScreenshot(null);
+  function handleScreenshotChange(files: FileList | File[] | null) {
+    const selectedFiles = Array.from(files ?? []);
+    if (!selectedFiles.length) {
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
       }
       return;
     }
 
-    const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
-    if (!ACCEPTED_SCREENSHOT_TYPES.includes(file.type) || !ACCEPTED_SCREENSHOT_EXTENSIONS.includes(extension)) {
-      setScreenshot(null);
+    if (screenshots.length + selectedFiles.length > MAX_SCREENSHOTS) {
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
       }
-      setFeedback({ type: "error", msg: "Formato invalido. Envie JPG, PNG ou WebP." });
+      setFeedback({ type: "error", msg: "Podes adicionar no máximo 3 fotos." });
       return;
     }
 
-    if (file.size > MAX_SCREENSHOT_SIZE) {
-      setScreenshot(null);
-      if (screenshotInputRef.current) {
-        screenshotInputRef.current.value = "";
+    for (const file of selectedFiles) {
+      const extension = `.${file.name.split(".").pop()?.toLowerCase() || ""}`;
+      if (!ACCEPTED_SCREENSHOT_TYPES.includes(file.type) || !ACCEPTED_SCREENSHOT_EXTENSIONS.includes(extension)) {
+        if (screenshotInputRef.current) {
+          screenshotInputRef.current.value = "";
+        }
+        setFeedback({ type: "error", msg: "Formato inválido. Envia PNG, JPG ou WebP." });
+        return;
       }
-      setFeedback({ type: "error", msg: "O screenshot deve ter no maximo 10MB." });
-      return;
+
+      if (file.size > MAX_SCREENSHOT_SIZE) {
+        if (screenshotInputRef.current) {
+          screenshotInputRef.current.value = "";
+        }
+        setFeedback({ type: "error", msg: "Cada foto deve ter no máximo 10MB." });
+        return;
+      }
     }
 
-    setScreenshot(file);
+    setScreenshots((current) => [...current, ...selectedFiles]);
+    if (screenshotInputRef.current) {
+      screenshotInputRef.current.value = "";
+    }
+  }
+
+  function removeScreenshot(index: number) {
+    setScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
   }
 
   async function saveOrderReference(reference: string) {
@@ -357,7 +383,7 @@ export default function NewExternalOrderPage() {
     setSelectedStore("SHEIN");
     setVariant("");
     setQuantity(1);
-    setScreenshot(null);
+    setScreenshots([]);
     setAcceptedLegalTerms(false);
     setFieldErrors({});
     setFeedback(null);
@@ -418,8 +444,11 @@ export default function NewExternalOrderPage() {
       body.set("variantDetails", cleanVariant);
       body.set("productDetails", cleanVariant);
     }
-    if (screenshot) {
-      body.append("screenshot", screenshot, screenshot.name);
+    if (screenshots.length > 0) {
+      body.append("screenshot", screenshots[0], screenshots[0].name);
+      screenshots.forEach((file) => {
+        body.append("screenshots", file, file.name);
+      });
     }
 
     setIsSubmitting(true);
@@ -460,7 +489,7 @@ export default function NewExternalOrderPage() {
       setQuantity(1);
       setPhoneNumber(phoneToKeep);
       setAcceptedLegalTerms(false);
-      setScreenshot(null);
+      setScreenshots([]);
       if (screenshotInputRef.current) {
         screenshotInputRef.current.value = "";
       }
@@ -925,55 +954,65 @@ export default function NewExternalOrderPage() {
                   )}
                 </div>
 
-                {/* Screenshot */}
+                {/* Screenshots */}
                 <div>
-                  <span className="text-sm font-black">Foto ou screenshot <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
+                  <span className="text-sm font-black">Fotos ou screenshots <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
                   <div className="mt-2">
                     <input
                       ref={screenshotInputRef}
                       id="screenshotInput"
                       type="file"
+                      multiple
                       accept={ACCEPTED_SCREENSHOT_TYPES.join(",")}
-                      onChange={(event) => handleScreenshotChange(event.target.files?.[0] ?? null)}
+                      onChange={(event) => handleScreenshotChange(event.target.files ?? null)}
                       disabled={isSubmitting}
                       className="sr-only"
                       aria-hidden="true"
                       tabIndex={-1}
                     />
-                    {!screenshot ? (
-                      <button
-                        type="button"
-                        disabled={isSubmitting}
-                        onClick={() => screenshotInputRef.current?.click()}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3.5 text-sm font-black transition active:opacity-80"
-                        style={{ borderColor: BORDER, background: "#FFFDFC", color: TEXT }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                        </svg>
-                        Adicionar foto ou screenshot
-                      </button>
-                    ) : (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: SOFT }}>
-                        <div className="flex min-w-0 items-center gap-2">
-                          <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style={{ color: RED, flexShrink: 0 }}>
-                            <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                          </svg>
-                          <span className="truncate text-sm font-bold" style={{ color: TEXT }}>{screenshot.name}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleScreenshotChange(null)}
-                          disabled={isSubmitting}
-                          className="shrink-0 text-sm font-black"
-                          style={{ color: RED }}
-                        >
-                          Remover
-                        </button>
+                    <button
+                      type="button"
+                      disabled={isSubmitting || screenshots.length >= MAX_SCREENSHOTS}
+                      onClick={() => screenshotInputRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3.5 text-sm font-black transition active:opacity-80 disabled:cursor-not-allowed disabled:opacity-55"
+                      style={{ borderColor: BORDER, background: "#FFFDFC", color: TEXT }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                      </svg>
+                      Adicionar fotos ou screenshots
+                    </button>
+                    {screenshots.length > 0 ? (
+                      <div className="mt-3 grid gap-2">
+                        {screenshots.map((file, index) => (
+                          <div key={`${file.name}-${file.size}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border px-3 py-3" style={{ borderColor: BORDER, background: SOFT }}>
+                            <div className="flex min-w-0 items-center gap-3">
+                              {screenshotPreviews[index] ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={screenshotPreviews[index]} alt={`Foto selecionada ${index + 1}`} className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                              ) : (
+                                <span className="h-12 w-12 shrink-0 rounded-xl" style={{ background: "#FFFDFC" }} />
+                              )}
+                              <div className="min-w-0">
+                                <span className="block truncate text-sm font-bold" style={{ color: TEXT }}>{file.name}</span>
+                                <span className="text-xs font-semibold" style={{ color: MUTED }}>{(file.size / (1024 * 1024)).toFixed(1)}MB</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeScreenshot(index)}
+                              disabled={isSubmitting}
+                              className="shrink-0 text-sm font-black disabled:cursor-not-allowed disabled:opacity-55"
+                              style={{ color: RED }}
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                    ) : null}
                     <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      PNG, JPG ou WebP. Máximo 10MB.
+                      PNG, JPG ou WebP. Máximo 3 fotos, até 10MB cada.
                     </p>
                   </div>
                 </div>
