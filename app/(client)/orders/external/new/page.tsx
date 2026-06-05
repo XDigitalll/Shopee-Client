@@ -116,6 +116,16 @@ type SuccessOrderState = {
   loginIdentifier?: string;
 };
 
+type SubmittedOrderSummary = {
+  store: string;
+  input: string;
+  inputType: "LINK" | "DESCRIPTION";
+  characteristics: string;
+  quantity: number;
+  phone: string;
+  photoNames: string[];
+};
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -180,6 +190,7 @@ export default function NewExternalOrderPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "info" | "loading"; msg: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successOrder, setSuccessOrder] = useState<SuccessOrderState | null>(null);
+  const [submittedOrderSummary, setSubmittedOrderSummary] = useState<SubmittedOrderSummary | null>(null);
   const productInputRef = useRef<HTMLTextAreaElement | null>(null);
   const quantityInputRef = useRef<HTMLInputElement | null>(null);
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
@@ -379,6 +390,7 @@ export default function NewExternalOrderPage() {
 
   function startAnotherOrder() {
     setSuccessOrder(null);
+    setSubmittedOrderSummary(null);
     setProductLink("");
     setSelectedStore("SHEIN");
     setVariant("");
@@ -413,6 +425,15 @@ export default function NewExternalOrderPage() {
     const cleanVariant = variant.trim();
     const cleanPhone = normalizePhone(phoneNumber);
     const cleanCommPhone = cleanPhone;
+    const summaryToDisplay: SubmittedOrderSummary = {
+      store: parsed.sourceStore || selectedStore,
+      input: parsed.productLink || cleanDescription || cleanLink,
+      inputType: parsed.productLink ? "LINK" : "DESCRIPTION",
+      characteristics: cleanVariant,
+      quantity,
+      phone: cleanPhone,
+      photoNames: screenshots.map((file) => file.name),
+    };
 
     const body = new FormData();
     body.append("productLink", cleanLink);
@@ -483,6 +504,7 @@ export default function NewExternalOrderPage() {
         temporaryPassword: response.temporaryPassword,
         loginIdentifier: response.loginIdentifier,
       });
+      setSubmittedOrderSummary(summaryToDisplay);
       const phoneToKeep = userPhone || cleanPhone || phoneNumber || "+258";
       setProductLink("");
       setVariant("");
@@ -584,6 +606,54 @@ export default function NewExternalOrderPage() {
                 </span>
               </div>
             </div>
+
+            {submittedOrderSummary ? (
+              <div className="mt-6 rounded-2xl border p-4 sm:p-5" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
+                <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+                  Informações enviadas
+                </p>
+                <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                  <div className="rounded-xl px-3 py-3" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Loja escolhida</p>
+                    <p className="mt-1 font-bold" style={{ color: TEXT }}>{submittedOrderSummary.store}</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-3" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Quantidade</p>
+                    <p className="mt-1 font-bold" style={{ color: TEXT }}>{submittedOrderSummary.quantity}</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-3 sm:col-span-2" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>
+                      {submittedOrderSummary.inputType === "LINK" ? "Link enviado" : "Descrição enviada"}
+                    </p>
+                    <p className="mt-1 break-words font-bold leading-6" style={{ color: TEXT }}>{submittedOrderSummary.input}</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-3 sm:col-span-2" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Características informadas</p>
+                    <p className="mt-1 whitespace-pre-wrap font-bold leading-6" style={{ color: TEXT }}>
+                      {submittedOrderSummary.characteristics || "Nenhuma característica adicional informada."}
+                    </p>
+                  </div>
+                  <div className="rounded-xl px-3 py-3" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Telefone</p>
+                    <p className="mt-1 font-bold" style={{ color: TEXT }}>{submittedOrderSummary.phone}</p>
+                  </div>
+                  <div className="rounded-xl px-3 py-3" style={{ background: "#FFF8F5" }}>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Fotos/screenshots</p>
+                    {submittedOrderSummary.photoNames.length ? (
+                      <ul className="mt-1 space-y-1">
+                        {submittedOrderSummary.photoNames.map((name, index) => (
+                          <li key={`${name}-${index}`} className="truncate font-bold" style={{ color: TEXT }}>
+                            {index + 1}. {name}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 font-bold" style={{ color: TEXT }}>Nenhuma foto enviada.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
@@ -879,21 +949,24 @@ export default function NewExternalOrderPage() {
                   })()}
                 </div>
 
-                {/* Quantity + variant row */}
+                {/* Quantity + characteristics row */}
                 <div className="grid gap-5 sm:grid-cols-[1fr_160px]">
                   <div>
                     <label htmlFor="variantInput" className="text-sm font-black">
-                      Variante <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
+                      Características do produto que queres <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
                     </label>
                     <input
                       id="variantInput"
                       value={variant}
                       onChange={(event) => setVariant(event.target.value)}
                       disabled={isSubmitting}
-                      placeholder="Ex: tamanho M, cor preta, 128GB"
+                      placeholder="Ex: tamanho M, cor preta, 128GB, número 42, modelo Pro Max"
                       className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base outline-none"
                       style={{ borderColor: BORDER, background: "#FFFDFC" }}
                     />
+                    <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
+                      Escreve aqui tudo que pode mudar no produto: tamanho, cor, modelo, memória, número, quantidade por pacote ou qualquer detalhe importante.
+                    </p>
                   </div>
 
                   <div>
