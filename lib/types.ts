@@ -217,6 +217,12 @@ export type Order = {
   needsCustomerCorrection?: boolean;
   customerCorrectionNote?: string | null;
   customerEditable?: boolean;
+  purchaseProofUrl?: string | null;
+  purchaseProofUploadedAt?: string | null;
+  supplierPurchaseAmount?: number | null;
+  supplierOrderReference?: string | null;
+  supplierName?: string | null;
+  purchaseNote?: string | null;
   baseAmount?: number;
   commissionAmount?: number;
   deliveryFee?: number;

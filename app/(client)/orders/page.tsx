@@ -863,6 +863,35 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
+        {isExternal && order.purchaseProofUrl ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#166534" }}>Comprovativo da compra</p>
+                <h3 className="mt-1 text-base font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
+                  Ja compramos o teu produto ao fornecedor.
+                </h3>
+                <p className="mt-1 text-sm" style={{ color: "#166534" }}>
+                  {order.purchaseNote || "O comprovativo da compra ja esta disponivel."}
+                </p>
+                <p className="mt-2 text-xs font-semibold" style={{ color: "#4B5563" }}>
+                  {order.supplierName ? `Loja: ${order.supplierName}. ` : ""}
+                  {order.purchaseProofUploadedAt ? `Data: ${formatDate(order.purchaseProofUploadedAt)}.` : ""}
+                </p>
+              </div>
+              <a
+                href={order.purchaseProofUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl px-4 py-2.5 text-center text-sm font-black text-white"
+                style={{ background: GREEN }}
+              >
+                Ver comprovativo
+              </a>
+            </div>
+          </div>
+        ) : null}
+
         {order.needsCustomerCorrection ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF5D8", borderColor: "#F1D7A8" }}>
             <h3 className="text-base font-black" style={{ color: "#7A5712", fontFamily: "'Sora', sans-serif" }}>
