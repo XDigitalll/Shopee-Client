@@ -213,6 +213,10 @@ export type Order = {
   productDetails?: string;
   requestedQuantity?: number;
   requestScreenshotUrl?: string;
+  requestScreenshotUrls?: string[];
+  needsCustomerCorrection?: boolean;
+  customerCorrectionNote?: string | null;
+  customerEditable?: boolean;
   baseAmount?: number;
   commissionAmount?: number;
   deliveryFee?: number;

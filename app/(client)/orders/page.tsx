@@ -43,6 +43,12 @@ type AddressDraftState = {
   googleMapsLink: string;
   saveToProfile: boolean;
 };
+type ExternalEditDraftState = {
+  productInput: string;
+  productDetails: string;
+  quantity: string;
+  primaryPhoneNumber: string;
+};
 
 function PackageIcon() {
   return (
@@ -189,6 +195,19 @@ function emptyAddressDraft(order?: Order): AddressDraftState {
   };
 }
 
+function emptyExternalEditDraft(order: Order): ExternalEditDraftState {
+  return {
+    productInput: order.externalCartUrl || order.productDetails || "",
+    productDetails: order.productDetails || "",
+    quantity: String(order.requestedQuantity || 1),
+    primaryPhoneNumber: order.primaryPhoneNumber || "",
+  };
+}
+
+function canEditExternalOrder(order: Order) {
+  return order.type === "EXTERNAL" && Boolean(order.customerEditable);
+}
+
 function canCustomerCancel(status: string) {
   return ["CREATED", "PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(status);
 }
@@ -307,6 +326,8 @@ export default function OrdersPage() {
   const [addressDrafts, setAddressDrafts] = useState<Record<number, AddressDraftState>>({});
   const [addressCreateOrderId, setAddressCreateOrderId] = useState<number | null>(null);
   const [addressChangeOrderId, setAddressChangeOrderId] = useState<number | null>(null);
+  const [externalEditOrderId, setExternalEditOrderId] = useState<number | null>(null);
+  const [externalEditDrafts, setExternalEditDrafts] = useState<Record<number, ExternalEditDraftState>>({});
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -380,6 +401,60 @@ export default function OrdersPage() {
       ?? order.defaultAddress?.id
       ?? order.savedAddresses?.[0]?.id
       ?? 0;
+  };
+
+  const startExternalEdit = (order: Order) => {
+    setExternalEditOrderId(order.id);
+    setExternalEditDrafts((current) => ({
+      ...current,
+      [order.id]: current[order.id] ?? emptyExternalEditDraft(order),
+    }));
+  };
+
+  const updateExternalEditDraft = (order: Order, patch: Partial<ExternalEditDraftState>) => {
+    setExternalEditDrafts((current) => ({
+      ...current,
+      [order.id]: {
+        ...(current[order.id] ?? emptyExternalEditDraft(order)),
+        ...patch,
+      },
+    }));
+  };
+
+  const saveExternalEdit = async (order: Order) => {
+    if (!token) return;
+    const draft = externalEditDrafts[order.id] ?? emptyExternalEditDraft(order);
+    const quantity = Number.parseInt(draft.quantity, 10);
+
+    if (!draft.productInput.trim()) {
+      setFeedback({ type: "error", msg: "Indica o link ou descricao do produto." });
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      setFeedback({ type: "error", msg: "A quantidade deve ser pelo menos 1." });
+      return;
+    }
+
+    setBusyOrderId(order.id);
+    try {
+      const updated = await apiFetch<Order>(`orders/${order.id}/customer-edit`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          productLink: draft.productInput.trim(),
+          productDetails: draft.productDetails.trim(),
+          quantity,
+          primaryPhoneNumber: draft.primaryPhoneNumber.trim(),
+        }),
+      });
+      replaceOrder(updated);
+      setExternalEditOrderId(null);
+      setFeedback({ type: "success", msg: "Informacoes do pedido atualizadas." });
+    } catch (error) {
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel atualizar este pedido." });
+    } finally {
+      setBusyOrderId(null);
+    }
   };
 
   const selectDeliveryAddress = async (order: Order) => {
@@ -690,6 +765,14 @@ export default function OrdersPage() {
     const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
     const canConfirmDelivery = Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY";
+    const canEditOrder = canEditExternalOrder(order);
+    const editingExternal = externalEditOrderId === order.id;
+    const externalDraft = externalEditDrafts[order.id] ?? emptyExternalEditDraft(order);
+    const screenshotUrls = order.requestScreenshotUrls?.length
+      ? order.requestScreenshotUrls
+      : order.requestScreenshotUrl
+        ? [order.requestScreenshotUrl]
+        : [];
 
     return (
       <article
@@ -734,6 +817,157 @@ export default function OrdersPage() {
             <span key={chip.key} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#FFF8F5", color: "#6B7280" }}>{chip.label}</span>
           ))}
         </div>
+
+        {isExternal ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFFBF8", borderColor: "#F2D4CC" }}>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Loja escolhida</p>
+                <p className="mt-1 text-sm font-bold" style={{ color: "#1A1410" }}>{order.sourceStore || "Loja externa"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Quantidade</p>
+                <p className="mt-1 text-sm font-bold" style={{ color: "#1A1410" }}>{order.requestedQuantity || 1}</p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Link ou descricao enviada</p>
+                <p className="mt-1 break-words text-sm" style={{ color: "#1A1410", whiteSpace: "pre-wrap" }}>
+                  {order.externalCartUrl || order.productDetails || "Sem descricao informada"}
+                </p>
+              </div>
+              <div className="md:col-span-2">
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Caracteristicas informadas</p>
+                <p className="mt-1 text-sm" style={{ color: "#1A1410", whiteSpace: "pre-wrap" }}>
+                  {order.productDetails || "Nao informado"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Telefone</p>
+                <p className="mt-1 text-sm font-bold" style={{ color: "#1A1410" }}>{order.primaryPhoneNumber || "Nao informado"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#9CA3AF" }}>Fotos/screenshots</p>
+                {screenshotUrls.length ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {screenshotUrls.map((url, index) => (
+                      <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="rounded-2xl border px-3 py-2 text-xs font-black" style={{ borderColor: "#F2D4CC", color: RED }}>
+                        Foto {index + 1}
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Sem fotos enviadas</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {order.needsCustomerCorrection ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF5D8", borderColor: "#F1D7A8" }}>
+            <h3 className="text-base font-black" style={{ color: "#7A5712", fontFamily: "'Sora', sans-serif" }}>
+              Precisamos que atualizes algumas informacoes deste pedido.
+            </h3>
+            {order.customerCorrectionNote ? (
+              <p className="mt-2 text-sm" style={{ color: "#7A5712", whiteSpace: "pre-wrap" }}>{order.customerCorrectionNote}</p>
+            ) : null}
+            {canEditOrder ? (
+              <button
+                type="button"
+                onClick={() => startExternalEdit(order)}
+                className="mt-4 rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                style={{ background: RED }}
+              >
+                Editar informacoes do pedido
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {isExternal && canEditOrder && !order.needsCustomerCorrection && !editingExternal ? (
+          <button
+            type="button"
+            onClick={() => startExternalEdit(order)}
+            className="mt-4 rounded-2xl border px-4 py-2.5 text-sm font-black"
+            style={{ borderColor: "#F2D4CC", color: RED }}
+          >
+            Editar informacoes do pedido
+          </button>
+        ) : null}
+
+        {editingExternal ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F9FAFB", borderColor: "#E5E7EB" }}>
+            <h3 className="text-base font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Editar informacoes do pedido</h3>
+            <div className="mt-4 grid gap-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold" style={{ color: "#374151" }}>Link ou descricao</span>
+                <textarea
+                  rows={4}
+                  value={externalDraft.productInput}
+                  onChange={(event) => updateExternalEditDraft(order, { productInput: event.target.value })}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "#E5E7EB" }}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-bold" style={{ color: "#374151" }}>Caracteristicas do produto</span>
+                <input
+                  value={externalDraft.productDetails}
+                  onChange={(event) => updateExternalEditDraft(order, { productDetails: event.target.value })}
+                  className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                  style={{ borderColor: "#E5E7EB" }}
+                  placeholder="Ex: tamanho M, cor preta, 128GB"
+                />
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold" style={{ color: "#374151" }}>Quantidade</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={externalDraft.quantity}
+                    onChange={(event) => updateExternalEditDraft(order, { quantity: event.target.value })}
+                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={{ borderColor: "#E5E7EB" }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-bold" style={{ color: "#374151" }}>Telefone</span>
+                  <input
+                    value={externalDraft.primaryPhoneNumber}
+                    onChange={(event) => updateExternalEditDraft(order, { primaryPhoneNumber: event.target.value })}
+                    className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                    style={{ borderColor: "#E5E7EB" }}
+                    placeholder="+2588xxxxxxxx"
+                  />
+                </label>
+              </div>
+              <p className="text-xs font-semibold" style={{ color: "#6B7280" }}>
+                As fotos enviadas continuam guardadas. Para substituir fotos, fala com a equipa pelo suporte.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void saveExternalEdit(order)}
+                  disabled={busyOrderId === order.id}
+                  className="rounded-2xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                  style={{ background: RED }}
+                >
+                  {busyOrderId === order.id ? "A guardar..." : "Guardar alteracoes"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExternalEditOrderId(null)}
+                  disabled={busyOrderId === order.id}
+                  className="rounded-2xl border px-4 py-2.5 text-sm font-black"
+                  style={{ borderColor: "#E5E7EB", color: "#6B7280" }}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {trackingSteps.length > 0 && (
           <div className="mt-5 overflow-x-auto pb-2">

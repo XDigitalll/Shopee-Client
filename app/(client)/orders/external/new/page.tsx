@@ -950,23 +950,29 @@ export default function NewExternalOrderPage() {
                 </div>
 
                 {/* Quantity + characteristics row */}
-                <div className="grid gap-5 sm:grid-cols-[1fr_160px]">
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
                   <div>
                     <label htmlFor="variantInput" className="text-sm font-black">
                       Características do produto que queres <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
                     </label>
-                    <input
+                    <textarea
                       id="variantInput"
                       value={variant}
                       onChange={(event) => setVariant(event.target.value)}
                       disabled={isSubmitting}
+                      rows={3}
                       placeholder="Ex: tamanho M, cor preta, 128GB, número 42, modelo Pro Max"
-                      className="mt-2 w-full rounded-2xl border px-4 py-3.5 text-base outline-none"
+                      className="mt-2 w-full resize-y rounded-2xl border px-4 py-3 text-base outline-none transition-colors"
                       style={{ borderColor: BORDER, background: "#FFFDFC" }}
-                    />
-                    <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
+                    ></textarea>
+                    <div className="mt-2 rounded-xl p-3" style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}>
+                    <p className="text-xs font-semibold leading-5" style={{ color: "#92400E" }}>
+                      Escreve tamanho, cor, modelo, memoria, numero, quantidade por pacote ou qualquer detalhe importante para comprarmos exatamente o produto correto.
+                    </p>
+                    <p className="sr-only">
                       Escreve aqui tudo que pode mudar no produto: tamanho, cor, modelo, memória, número, quantidade por pacote ou qualquer detalhe importante.
                     </p>
+                    </div>
                   </div>
 
                   <div>
