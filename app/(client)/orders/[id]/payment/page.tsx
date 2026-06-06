@@ -165,6 +165,7 @@ export default function OrderPaymentPage() {
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const payActionAnchorRef = useRef<HTMLDivElement | null>(null);
   const paysuiteAction = useAsyncAction();
   const [paysuiteMethod, setPaysuiteMethod] = useState<PaySuiteMethod>("MPESA");
   const [paysuitePayment, setPaysuitePayment] = useState<PaySuiteInitResponse | null>(null);
@@ -426,6 +427,18 @@ export default function OrderPaymentPage() {
     };
   })();
   const paymentStateStyle = PAYMENT_STATE_STYLES[paymentState.tone];
+  const payButtonLabel = isPaySuiteBusy
+    ? "A iniciar pagamento..."
+    : canRetryAfterTimeout
+      ? `Gerar nova tentativa - ${formatMoney(officialAmount)}`
+      : `Pagar ${formatMoney(officialAmount)} agora`;
+
+  function selectPaymentMethod(method: PaySuiteMethod) {
+    setPaysuiteMethod(method);
+    window.requestAnimationFrame(() => {
+      payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
 
   async function performSync({ auto = false, initial = false }: { auto?: boolean; initial?: boolean } = {}) {
     if (!auto && isInitialPaymentLoading) return;
@@ -878,7 +891,7 @@ export default function OrderPaymentPage() {
                     <button
                       key={item.key}
                       type="button"
-                      onClick={() => setPaysuiteMethod(item.key)}
+                      onClick={() => selectPaymentMethod(item.key)}
                       disabled={isInitialPaymentLoading || isPaySuiteBusy}
                       className="group flex min-h-[142px] flex-col justify-between rounded-[22px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(20,83,45,0.10)] disabled:hover:translate-y-0 disabled:hover:shadow-none"
                       style={{
@@ -942,6 +955,8 @@ export default function OrderPaymentPage() {
             </div>
 
             {/* Pay button — desktop */}
+            <div ref={payActionAnchorRef} className="h-0 scroll-mt-24" />
+
             <div className="hidden md:block">
               <button
                 type="button"
@@ -955,11 +970,7 @@ export default function OrderPaymentPage() {
                       : GREEN,
                 }}
               >
-                {isPaySuiteBusy
-                  ? "A iniciar pagamento..."
-                  : canRetryAfterTimeout
-                    ? "Gerar nova tentativa"
-                    : `Pagar ${formatMoney(officialAmount)} agora`}
+                {payButtonLabel}
               </button>
               <ClientActionFeedback
                 feedback={feedback}
@@ -994,7 +1005,7 @@ export default function OrderPaymentPage() {
                       : GREEN,
                 }}
               >
-                {isPaySuiteBusy ? "A iniciar..." : canRetryAfterTimeout ? "Gerar nova tentativa" : "Pagar agora"}
+                {payButtonLabel}
               </button>
             </div>
           </div>
