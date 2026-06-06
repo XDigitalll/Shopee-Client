@@ -200,6 +200,7 @@ export type ClientTrackingStep = {
 
 export type Order = {
   id: number;
+  version?: number;
   code?: string;
   type: string;
   sourceStore?: string;

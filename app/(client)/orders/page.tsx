@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClientConfirmDialog, ClientFeedbackDock, ClientListLoadingOverlay, ClientSectionSkeleton } from "@/components/client-feedback-state";
-import { CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
+import { ApiRequestError, CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
@@ -48,6 +48,7 @@ type ExternalEditDraftState = {
   productDetails: string;
   quantity: string;
   primaryPhoneNumber: string;
+  version?: number;
 };
 
 function PackageIcon() {
@@ -201,11 +202,26 @@ function emptyExternalEditDraft(order: Order): ExternalEditDraftState {
     productDetails: order.productDetails || "",
     quantity: String(order.requestedQuantity || 1),
     primaryPhoneNumber: order.primaryPhoneNumber || "",
+    version: order.version,
   };
 }
 
 function canEditExternalOrder(order: Order) {
-  return order.type === "EXTERNAL" && Boolean(order.customerEditable);
+  const status = effectiveOrderStatus(order);
+  return order.type === "EXTERNAL"
+    && (status === "CREATED"
+      || status === "UNDER_REVIEW"
+      || (status === "QUOTED" && Boolean(order.needsCustomerCorrection)));
+}
+
+function lockedEditMessage(status: string) {
+  if (status === "QUOTED") {
+    return "Este pedido ja avancou para cotacao. Para evitar erro na compra, so podes editar se a equipa pedir uma correcao.";
+  }
+  if (["PENDING_PAYMENT", "PAID", "TO_PURCHASE", "PURCHASED", "ORDERED", "IN_TRANSIT", "ARRIVED", "READY_FOR_DELIVERY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status)) {
+    return "Este pedido ja avancou para cotacao ou pagamento, por isso ja nao pode ser editado diretamente.";
+  }
+  return null;
 }
 
 function canCustomerCancel(status: string) {
@@ -328,6 +344,11 @@ export default function OrdersPage() {
   const [addressChangeOrderId, setAddressChangeOrderId] = useState<number | null>(null);
   const [externalEditOrderId, setExternalEditOrderId] = useState<number | null>(null);
   const [externalEditDrafts, setExternalEditDrafts] = useState<Record<number, ExternalEditDraftState>>({});
+  const [externalEditConflict, setExternalEditConflict] = useState<{
+    orderId: number;
+    code: "ORDER_CHANGED" | "NOT_EDITABLE_STATUS" | string;
+    currentStatus?: string;
+  } | null>(null);
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -404,10 +425,11 @@ export default function OrdersPage() {
   };
 
   const startExternalEdit = (order: Order) => {
+    setExternalEditConflict(null);
     setExternalEditOrderId(order.id);
     setExternalEditDrafts((current) => ({
       ...current,
-      [order.id]: current[order.id] ?? emptyExternalEditDraft(order),
+      [order.id]: emptyExternalEditDraft(order),
     }));
   };
 
@@ -445,16 +467,35 @@ export default function OrdersPage() {
           productDetails: draft.productDetails.trim(),
           quantity,
           primaryPhoneNumber: draft.primaryPhoneNumber.trim(),
+          version: draft.version ?? order.version,
         }),
       });
       replaceOrder(updated);
       setExternalEditOrderId(null);
       setFeedback({ type: "success", msg: "Informacoes do pedido atualizadas." });
     } catch (error) {
+      if (error instanceof ApiRequestError
+        && (error.code === "ORDER_CHANGED" || error.code === "NOT_EDITABLE_STATUS" || error.status === 409)) {
+        setExternalEditConflict({
+          orderId: order.id,
+          code: error.code || "ORDER_CHANGED",
+          currentStatus: error.currentStatus,
+        });
+        setExternalEditOrderId(null);
+        setFeedback(null);
+        return;
+      }
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel atualizar este pedido." });
     } finally {
       setBusyOrderId(null);
     }
+  };
+
+  const refreshAfterExternalConflict = async () => {
+    setExternalEditConflict(null);
+    setExternalEditOrderId(null);
+    await loadOrders({ silent: true });
+    setFeedback({ type: "info", msg: "Pedido atualizado com os dados mais recentes." });
   };
 
   const selectDeliveryAddress = async (order: Order) => {
@@ -768,6 +809,8 @@ export default function OrdersPage() {
     const canEditOrder = canEditExternalOrder(order);
     const editingExternal = externalEditOrderId === order.id;
     const externalDraft = externalEditDrafts[order.id] ?? emptyExternalEditDraft(order);
+    const editConflict = externalEditConflict?.orderId === order.id ? externalEditConflict : null;
+    const editLockedMessage = isExternal && !canEditOrder ? lockedEditMessage(status) : null;
     const screenshotUrls = order.requestScreenshotUrls?.length
       ? order.requestScreenshotUrls
       : order.requestScreenshotUrl
@@ -892,6 +935,35 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
+        {editConflict ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
+            <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>
+              O pedido foi atualizado pela equipa
+            </h3>
+            <p className="mt-2 text-sm" style={{ color: "#1D4ED8" }}>
+              Enquanto editavas, este pedido recebeu uma atualizacao. Para evitar erros na compra, confirma novamente os dados atuais.
+            </p>
+            {editConflict.code === "NOT_EDITABLE_STATUS" ? (
+              <p className="mt-2 text-sm font-semibold" style={{ color: "#1D4ED8" }}>
+                Este pedido ja avancou de estado e ja nao pode ser editado diretamente.
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void refreshAfterExternalConflict()}
+                className="rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                style={{ background: RED }}
+              >
+                Atualizar pedido
+              </button>
+              <Link href="/contact" className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#BFDBFE", color: "#1D4ED8" }}>
+                Falar com suporte
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
         {order.needsCustomerCorrection ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF5D8", borderColor: "#F1D7A8" }}>
             <h3 className="text-base font-black" style={{ color: "#7A5712", fontFamily: "'Sora', sans-serif" }}>
@@ -924,7 +996,13 @@ export default function OrdersPage() {
           </button>
         ) : null}
 
-        {editingExternal ? (
+        {editLockedMessage && !editConflict ? (
+          <div className="mt-4 rounded-[24px] border px-4 py-3 text-sm" style={{ background: "#F9FAFB", borderColor: "#E5E7EB", color: "#6B7280" }}>
+            {editLockedMessage}
+          </div>
+        ) : null}
+
+        {editingExternal && canEditOrder ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F9FAFB", borderColor: "#E5E7EB" }}>
             <h3 className="text-base font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Editar informacoes do pedido</h3>
             <div className="mt-4 grid gap-4">
@@ -1201,7 +1279,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {(order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora"}</Link>}
+            {(order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Continuar pagamento"}</Link>}
             {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
             {canConfirmDelivery && (
               <button

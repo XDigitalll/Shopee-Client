@@ -8,13 +8,15 @@ export class ApiRequestError extends Error {
   status?: number;
   code?: string;
   channel?: string;
+  currentStatus?: string;
 
-  constructor(message: string, status?: number, code?: string, channel?: string) {
+  constructor(message: string, status?: number, code?: string, channel?: string, currentStatus?: string) {
     super(message);
     this.name = "ApiRequestError";
     this.status = status;
     this.code = code;
     this.channel = channel;
+    this.currentStatus = currentStatus;
   }
 }
 
@@ -176,6 +178,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
       response.status,
       typeof record.code === "string" ? record.code : undefined,
       typeof record.channel === "string" ? record.channel : undefined,
+      typeof record.currentStatus === "string" ? record.currentStatus : undefined,
     );
   }
 
