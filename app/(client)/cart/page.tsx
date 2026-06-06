@@ -103,9 +103,7 @@ export default function CartPage() {
     return (cart?.items || []).filter((item) => selected.has(item.itemId));
   }, [cart, selectedIds]);
 
-  const selectedLocalItems = selectedItems.filter((item) => item.itemType !== "EXTERNAL" && !item.madeToOrder);
-  const selectedExternalItems = selectedItems.filter((item) => item.itemType === "EXTERNAL" || item.madeToOrder);
-  const selectedLocalSubtotal = selectedLocalItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
+  const selectedSubtotal = selectedItems.reduce((sum, item) => sum + Number(item.subTotal || 0), 0);
   const allSelected = cart?.items?.length ? cart.items.every((item) => selectedIds.includes(item.itemId)) : false;
 
   const patchLocalItem = (productId: number, quantity: number) => {
@@ -199,7 +197,7 @@ export default function CartPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h1 className="text-2xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Carrinho de compras</h1>
-                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Seleciona os itens que queres fechar agora e nos mostramos claramente como a compra sera dividida.</p>
+                <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Revê os produtos no carrinho, ajusta as quantidades e finaliza a compra.</p>
               </div>
               <div className="inline-flex items-center gap-3 rounded-full px-4 py-2" style={{ background: "#FFF4EF" }}>
                 <label className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: "#1A1410" }}><input type="checkbox" checked={allSelected} onChange={() => setSelectedIds(allSelected ? [] : (cart?.items || []).map((item) => item.itemId))} style={{ accentColor: RED }} />Seleccionar todos</label>
@@ -233,16 +231,15 @@ export default function CartPage() {
             </div>
           ) : !cart?.items?.length ? (
             <div className="rounded-[28px] border border-dashed bg-white px-6 py-20 text-center" style={{ borderColor: "#F2D4CC" }}>
-              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>O teu carrinho esta vazio</h2>
-              <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Volta para a loja e adiciona alguns produtos para continuares.</p>
-              <Link href="/store" className="mt-6 inline-flex rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: RED }}>Continuar a comprar</Link>
+              <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>O teu carrinho está vazio</h2>
+              <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Adiciona produtos ao carrinho para concluíres a compra.</p>
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row"><Link href="/store" className="inline-flex justify-center rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: RED }}>Ver produtos da loja</Link><Link href="/orders/external/new" className="inline-flex justify-center rounded-full border px-5 py-3 text-sm font-bold" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Comprar do estrangeiro</Link></div>
             </div>
           ) : (
             <div className="space-y-4">
               {cart.items.map((item) => {
                 const isSelected = selectedIds.includes(item.itemId);
                 const hasDiscount = Number(item.originalPrice || 0) > Number(item.price || 0);
-                const isExternal = item.itemType === "EXTERNAL" || item.madeToOrder;
                 const isBusy = busyItemId === item.itemId;
                 return (
                   <article key={item.itemId} className="rounded-[28px] border bg-white p-4 shadow-sm transition sm:p-5" style={{ borderColor: isSelected ? RED : "#F2D4CC", boxShadow: isSelected ? "0 0 0 1px rgba(232,67,26,0.12)" : "0 6px 18px rgba(15, 23, 42, 0.04)" }}>
@@ -269,10 +266,9 @@ export default function CartPage() {
                           <div className="space-y-2">
                             <div className="flex flex-wrap items-center gap-2">
                               <h2 className="text-lg font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{item.productName}</h2>
-                              {isExternal && <span className="rounded-full px-2.5 py-1 text-[11px] font-black text-white" style={{ background: "#F97316", fontFamily: "'Sora', sans-serif" }}>EXTERNO</span>}
                             </div>
                             <p className="text-sm" style={{ color: "#6B7280" }}>Variante: {item.variantLabel || "Variante padrão"}</p>
-                            {isExternal ? <div className="rounded-2xl px-3 py-2 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}><p className="font-semibold">Aguarda cotação</p><p className="truncate">{item.externalLink || item.availabilityNote || "Link externo submetido"}</p></div> : <p className="text-sm" style={{ color: "#6B7280" }}>{item.availabilityNote || "Produto local com preço já definido."}</p>}
+                            <p className="text-sm" style={{ color: "#6B7280" }}>{item.availabilityNote || "Produto local com preço já definido."}</p>
                           </div>
 
                           <div className="text-left sm:text-right">
@@ -309,31 +305,24 @@ export default function CartPage() {
           <div className="space-y-4 rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
             <div>
               <h2 className="text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Resumo do pedido</h2>
-              <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Se misturares produtos locais e internacionais, fechamos a parte local agora e a internacional segue como proposta separada.</p>
+              <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Revê os produtos locais selecionados antes de finalizar a compra.</p>
             </div>
 
             <div className="space-y-3 rounded-2xl p-4" style={{ background: "#FFF8F5" }}>
-              <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal local</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
+              <div className="flex items-center justify-between text-sm"><span style={{ color: "#6B7280" }}>Subtotal</span><strong style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedSubtotal)}</strong></div>
             </div>
 
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "#F2D4CC", background: "#FFF4EF" }}>
-              <div className="flex items-center justify-between"><span className="text-sm font-semibold" style={{ color: "#6B7280" }}>Total local</span><strong className="text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedLocalSubtotal)}</strong></div>
-            </div>
-
-            <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
-              <p className="font-semibold">Compra internacional em paralelo</p>
-              <p>{selectedExternalItems.length} item(ns) externo(s) selecionados. Eles seguem numa proposta separada com preço final e prazo estimado, sem travar a compra local.</p>
+              <div className="flex items-center justify-between"><span className="text-sm font-semibold" style={{ color: "#6B7280" }}>Total</span><strong className="text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(selectedSubtotal)}</strong></div>
             </div>
 
             <div className="rounded-2xl border px-4 py-4 text-sm" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#6B7280" }}>
-              <p className="font-semibold" style={{ color: "#1A1410" }}>Como esta compra vai funcionar</p>
-              <p className="mt-2">1. Os produtos locais fecham agora com o total acima.</p>
-              <p className="mt-1">2. Os produtos internacionais seguem para uma proposta separada.</p>
-              <p className="mt-1">3. Vais acompanhar tudo no mesmo painel de pedidos.</p>
+              <p className="font-semibold" style={{ color: "#1A1410" }}>Como funciona o carrinho</p>
+              <p className="mt-2">Revê os produtos no carrinho, confirma as quantidades e finaliza a compra quando estiver tudo certo.</p>
             </div>
 
             <div className="grid gap-3">
-              <button type="button" onClick={proceedToCheckout} className="rounded-2xl px-5 py-3.5 text-center text-sm font-black text-white transition" style={{ background: selectedItems.length ? RED : "#FDB8A7", fontFamily: "'Sora', sans-serif", cursor: selectedItems.length ? "pointer" : "not-allowed" }}>{selectedExternalItems.length > 0 && selectedLocalItems.length > 0 ? "Continuar compra composta" : "Finalizar compra"}</button>
+              <button type="button" onClick={proceedToCheckout} className="rounded-2xl px-5 py-3.5 text-center text-sm font-black text-white transition" style={{ background: selectedItems.length ? RED : "#FDB8A7", fontFamily: "'Sora', sans-serif", cursor: selectedItems.length ? "pointer" : "not-allowed" }}>Finalizar compra</button>
               <ClientActionFeedback feedback={checkoutFeedback} onClose={() => setCheckoutFeedback(null)} />
               <Link href="/" className="rounded-2xl border px-5 py-3.5 text-center text-sm font-bold transition" style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}>Continuar a comprar</Link>
             </div>

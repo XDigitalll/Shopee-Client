@@ -351,6 +351,14 @@ export default function CheckoutPage() {
       googleMapsLink: sanitizeUrl(form.googleMapsLink) ?? "",
     };
 
+
+    if (externalItems.length > 0) {
+      setFeedback({
+        type: "error",
+        msg: "O carrinho finaliza apenas produtos da loja local. Remove o item de compra do estrangeiro e envia-o pelo fluxo Comprar do estrangeiro.",
+      });
+      return;
+    }
     setIsSubmitting(true);
     setSubmitFeedback({ type: "loading", msg: "Estamos a validar os teus dados, criar o pedido e preparar o pagamento." });
     setFeedback(null);
@@ -415,7 +423,7 @@ export default function CheckoutPage() {
         setFeedback({
           type: "success",
           msg: result.mixedCheckout && externalOrder
-            ? `Pedido local ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento; a compra internacional ${orderDisplayCode(externalOrder)} fica em análise separada.`
+            ? `Pedido ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento.`
             : `Pedido ${orderDisplayCode(internalOrderForPayment)} criado. A abrir pagamento...`,
         });
         router.push(`/orders/${internalOrderForPayment.id}/payment`);
@@ -444,7 +452,7 @@ export default function CheckoutPage() {
     if (!token || !couponCode.trim()) return;
     if (localItems.length === 0 || total <= 0) {
       setCoupon(null);
-      setCouponFeedback({ type: "info", msg: "Cupões para pedidos externos são validados quando a cotação tiver total final." });
+      setCouponFeedback({ type: "info", msg: "Cupões são aplicados apenas aos produtos locais do carrinho." });
       return;
     }
     setIsApplyingCoupon(true);
@@ -484,7 +492,7 @@ export default function CheckoutPage() {
         <section className="space-y-4">
           <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
             <h1 className="text-xl font-black sm:text-2xl" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Finalizar compra</h1>
-            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Confirma os teus dados e revê claramente o que fecha agora e o que segue como proposta internacional.</p>
+            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>Confirma os teus dados e revê os produtos locais antes de finalizar a compra.</p>
           </div>
 
           {feedback ? <ClientFeedbackBanner message={feedback.msg} tone={feedback.type} /> : null}
@@ -855,7 +863,7 @@ export default function CheckoutPage() {
               </div>
               <ClientActionFeedback feedback={couponFeedback} onClose={() => setCouponFeedback(null)} />
               {coupon?.valid ? <p className="mt-2 text-sm font-medium" style={{ color: "#059669" }}>{coupon.message || "Cupão aplicado."}</p> : null}
-              {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Cupões para pedidos externos são aplicados na cotação quando houver total final.</p> : null}
+              {externalItems.length > 0 && localItems.length === 0 ? <p className="mt-2 text-xs" style={{ color: "#9A3412" }}>Este carrinho finaliza apenas produtos locais.</p> : null}
             </div>
 
             {/* ── Order total summary (before submit) ── */}
@@ -903,7 +911,7 @@ export default function CheckoutPage() {
             {isLoading ? (
               <ClientSectionSkeleton
                 title="A montar o resumo"
-                message="O total, os itens e a separação da compra composta aparecem já a seguir."
+                message="O total e os produtos locais selecionados aparecem já a seguir."
                 rows={2}
               />
             ) : (
@@ -940,8 +948,8 @@ export default function CheckoutPage() {
 
                 {externalItems.length > 0 ? (
                   <div className="rounded-2xl px-4 py-3 text-sm" style={{ background: "#FFF7ED", color: "#9A3412" }}>
-                    <p className="font-semibold">Compra internacional em paralelo</p>
-                    <p>{externalItems.length} item(ns) serão tratados numa proposta separada com preço final e prazo estimado. Esta etapa conclui apenas os produtos locais.</p>
+                    <p className="font-semibold">Produto de compra do estrangeiro no carrinho</p>
+                    <p>Remove esse item do carrinho e usa Comprar do estrangeiro para enviares o link ou descrição.</p>
                   </div>
                 ) : null}
 
@@ -957,9 +965,9 @@ export default function CheckoutPage() {
                     </>
                   ) : (
                     <>
-                      <p className="mt-2">1. Criamos a tua proposta de compra internacional.</p>
-                      <p className="mt-1">2. A equipa analisa preço, frete e prazo.</p>
-                      <p className="mt-1">3. Depois recebes a cotação para aprovar.</p>
+                      <p className="mt-2">1. Remove o item internacional deste carrinho.</p>
+                      <p className="mt-1">2. Usa Comprar do estrangeiro para enviar o link ou descrição.</p>
+                      <p className="mt-1">3. A equipa prepara a cotação no fluxo correto.</p>
                       <p className="mt-3 font-semibold" style={{ color: "#15803D" }}>Em breve poderás acompanhar este pedido pelo WhatsApp.</p>
                       <p className="mt-1 text-xs">Por agora, acompanha o estado na área Meus pedidos.</p>
                     </>

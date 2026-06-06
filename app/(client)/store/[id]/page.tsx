@@ -426,7 +426,9 @@ export default function ProductDetailPage() {
   const discountPct = originalPrice > price && price > 0 ? Math.round((1 - price / originalPrice) * 100) : 0;
   const stock = typeof selectedVariant?.stock === "number" ? selectedVariant.stock : product?.stock;
   const variantRequired = product?.hasVariants && !selectedVariant;
-  const canAdd = !variantRequired && (product?.madeToOrder || typeof stock !== "number" || stock > 0);
+  const isExternalProduct = product?.madeToOrder || product?.source === "EXTERNAL";
+  const canAdd = !variantRequired && (isExternalProduct || typeof stock !== "number" || stock > 0);
+  const canUseCta = canAdd && (isReady || isExternalProduct);
   const sizeOptions = Array.from(new Set((product?.variants || []).map((v) => v.size).filter(Boolean) as string[]));
   const colorOptions = Array.from(new Set((product?.variants || []).map((v) => v.color).filter(Boolean) as string[]));
 
@@ -489,6 +491,13 @@ export default function ProductDetailPage() {
   };
 
   const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
+    if (isExternalProduct) {
+      const input = product?.externalLink || product?.name || "";
+      const query = input ? `?input=${encodeURIComponent(input)}` : "";
+      setFeedback({ type: "info", msg: "Este produto é pedido por cotação. Usa Comprar do estrangeiro para enviares o link ou descrição." });
+      router.push(`/orders/external/new${query}`);
+      return;
+    }
     if (!isReady) return;
     if (!token) {
       setFeedback({ type: "info", msg: "Inicia sessão para adicionar ao carrinho." });
@@ -954,11 +963,11 @@ export default function ProductDetailPage() {
 
             {/* CTAs */}
             <div className="hidden gap-3 lg:grid lg:grid-cols-2">
-              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd || !isReady} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canAdd && isReady ? RED : "#E5E7EB", color: canAdd && isReady ? RED : "#9CA3AF", background: canAdd && isReady ? "white" : "#F9FAFB" }}>
-                {busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
+              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF", background: canUseCta ? "white" : "#F9FAFB" }}>
+                {isExternalProduct ? "Pedir cotação" : busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
               </button>
-              <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd || !isReady} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canAdd && isReady ? RED : "#9CA3AF" }}>
-                {busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
+              <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
+                {isExternalProduct ? "Comprar do estrangeiro" : busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
               </button>
             </div>
 
@@ -1218,11 +1227,11 @@ export default function ProductDetailPage() {
             <p className="line-clamp-1 text-xs font-semibold" style={{ color: "#6B7280" }}>{product.name}</p>
             <p className="text-base font-black" style={{ color: RED }}>{formatMoney(price)}</p>
           </div>
-          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canAdd || !isReady} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canAdd && isReady ? RED : "#E5E7EB", color: canAdd && isReady ? RED : "#9CA3AF" }}>
-            {busyAction === "add" || !isReady ? "..." : "Carrinho"}
+          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF" }}>
+            {isExternalProduct ? "Cotação" : busyAction === "add" || !isReady ? "..." : "Carrinho"}
           </button>
-          <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canAdd || !isReady} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canAdd && isReady ? RED : "#9CA3AF" }}>
-            {busyAction === "buy" || !isReady ? "..." : "Comprar"}
+          <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
+            {isExternalProduct ? "Estrangeiro" : busyAction === "buy" || !isReady ? "..." : "Comprar"}
           </button>
         </div>
       </div>

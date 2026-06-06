@@ -56,7 +56,7 @@ type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
 
 const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
   { key: "MPESA", label: "M-Pesa", icon: "M", hint: "Pagamento instantâneo" },
-  { key: "EMOLA", label: "eMola", icon: "E", hint: "Carteira digital" },
+  { key: "EMOLA", label: "e-Mola", icon: "E", hint: "Carteira digital" },
   { key: "CARD", label: "Visa", icon: "V", hint: "Cartão Visa" },
 ];
 
@@ -880,23 +880,42 @@ export default function OrderPaymentPage() {
                       type="button"
                       onClick={() => setPaysuiteMethod(item.key)}
                       disabled={isInitialPaymentLoading || isPaySuiteBusy}
-                      className="rounded-[22px] border p-4 text-left transition"
+                      className="group flex min-h-[142px] flex-col justify-between rounded-[22px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(20,83,45,0.10)] disabled:hover:translate-y-0 disabled:hover:shadow-none"
                       style={{
                         borderColor: active ? GREEN : "#C7E7D3",
                         background: active ? "#ECFDF5" : "#FFFFFF",
+                        boxShadow: active ? "0 0 0 3px rgba(46,139,87,0.10)" : "none",
                       }}
                     >
                       <span
-                        className="flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-black text-white"
-                        style={{ background: active ? GREEN : "#9CA3AF" }}
+                        className="flex h-[62px] items-center justify-center rounded-2xl border bg-white px-3"
+                        style={{ borderColor: active ? "#2E8B5755" : "#E5E7EB" }}
                       >
-                        {item.icon}
+                        {item.key === "MPESA" ? (
+                          <img
+                            src="/payment-methods/mpesa.png"
+                            alt="M-Pesa"
+                            className="max-h-11 max-w-[132px] object-contain"
+                          />
+                        ) : item.key === "EMOLA" ? (
+                          <img
+                            src="/payment-methods/emola.png"
+                            alt="e-Mola"
+                            className="max-h-11 max-w-[132px] object-contain"
+                          />
+                        ) : (
+                          <span className="font-[family-name:var(--font-sora)] text-2xl font-black tracking-[0.08em] text-[#1A4DB3]">
+                            VISA
+                          </span>
+                        )}
                       </span>
-                      <span className="mt-3 block text-sm font-black" style={{ color: "#1A1410" }}>
-                        {item.label}
-                      </span>
-                      <span className="mt-1 block text-xs" style={{ color: "#6B7280" }}>
-                        {item.hint}
+                      <span className="mt-3 block">
+                        <span className="block text-sm font-black" style={{ color: "#1A1410" }}>
+                          {item.label}
+                        </span>
+                        <span className="mt-1 block text-xs" style={{ color: "#6B7280" }}>
+                          {item.hint}
+                        </span>
                       </span>
                     </button>
                   );
