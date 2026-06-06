@@ -435,6 +435,7 @@ export default function OrderPaymentPage() {
 
   function selectPaymentMethod(method: PaySuiteMethod) {
     setPaysuiteMethod(method);
+    if (window.matchMedia("(max-width: 767px)").matches) return;
     window.requestAnimationFrame(() => {
       payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
