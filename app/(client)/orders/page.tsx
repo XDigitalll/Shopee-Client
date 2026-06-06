@@ -183,6 +183,37 @@ function buildPhoneHref(phone: string | null | undefined) {
   return trimmed ? `tel:${trimmed.replace(/\s/g, "")}` : null;
 }
 
+function deliveryPriceInfo(order: Order) {
+  const explicitPrice = [order.deliveryPrice, order.shippingPrice, order.assignedDeliveryFee]
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => Number(value))
+    .find((value) => Number.isFinite(value));
+  const fallbackFee = Number(order.deliveryFee);
+  const amount = explicitPrice ?? (fallbackFee > 0 ? fallbackFee : undefined);
+
+  if (amount === undefined) {
+    return {
+      kind: "pending" as const,
+      title: "Preço da entrega será confirmado pela equipa",
+      payment: null,
+    };
+  }
+
+  if (amount <= 0) {
+    return {
+      kind: "free" as const,
+      title: "Entrega grátis",
+      payment: null,
+    };
+  }
+
+  return {
+    kind: "priced" as const,
+    title: formatMoney(amount),
+    payment: order.deliveryPaymentMode || (order.payOnDelivery ? "Na entrega" : null),
+  };
+}
+
 function emptyAddressDraft(order?: Order): AddressDraftState {
   return {
     label: "Casa",
@@ -1172,9 +1203,11 @@ export default function OrdersPage() {
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
             <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua encomenda está a caminho</h3>
             <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>{order.deliveryStatusLabel || "A equipa de delivery está a caminho da tua morada com a tua encomenda."}</p>
-            {(order.assignedDriverName || order.assignedDriverPhone) && (
+            {(() => {
+              const deliveryPrice = deliveryPriceInfo(order);
+              return (
               <div className="mt-4 flex flex-col gap-3 rounded-[20px] bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: "#1D4ED8" }}>Estafeta</p>
                   <p className="mt-1 text-sm font-black" style={{ color: "#111827", fontFamily: "'Sora', sans-serif" }}>
                     {order.assignedDriverName || "Estafeta atribuido"}
@@ -1184,18 +1217,30 @@ export default function OrdersPage() {
                       {order.assignedDriverPhone}
                     </a>
                   ) : null}
+                  <div className="mt-3 rounded-2xl border px-3 py-2.5" style={{ background: "rgba(239, 246, 255, 0.78)", borderColor: "#BFDBFE" }}>
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: "#1D4ED8" }}>Entrega</p>
+                    {deliveryPrice.kind === "priced" ? (
+                      <>
+                        <p className="mt-1 text-sm font-black" style={{ color: "#111827", fontFamily: "'Sora', sans-serif" }}>{deliveryPrice.title}</p>
+                        {deliveryPrice.payment ? <p className="mt-0.5 text-xs font-semibold" style={{ color: "#1D4ED8" }}>Pagamento: {deliveryPrice.payment}</p> : null}
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm font-bold" style={{ color: deliveryPrice.kind === "free" ? "#166534" : "#1D4ED8" }}>{deliveryPrice.title}</p>
+                    )}
+                  </div>
                 </div>
                 {order.assignedDriverPhone ? (
                   <a
                     href={buildPhoneHref(order.assignedDriverPhone) ?? undefined}
-                    className="rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                    className="inline-flex w-full justify-center rounded-2xl px-4 py-2.5 text-sm font-black text-white sm:w-auto"
                     style={{ background: RED }}
                   >
                     Ligar para o estafeta
                   </a>
                 ) : null}
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 

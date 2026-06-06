@@ -227,6 +227,11 @@ export type Order = {
   baseAmount?: number;
   commissionAmount?: number;
   deliveryFee?: number;
+  deliveryPrice?: number | null;
+  shippingPrice?: number | null;
+  assignedDeliveryFee?: number | null;
+  deliveryCurrency?: string | null;
+  deliveryPaymentMode?: string | null;
   urgentSurchargeAmount?: number;
   exchangeRate?: number;
   totalAmount?: number;
