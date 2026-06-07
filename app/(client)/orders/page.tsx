@@ -8,7 +8,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
 import { cleanDisplayText } from "@/lib/text";
-import type { ClientTrackingStep, Order, OrderItem, OrderStats, UserAddress } from "@/lib/types";
+import type { ClarificationField, ClientTrackingStep, Order, OrderItem, OrderStats, UserAddress } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 
 const RED = "#E8431A";
@@ -43,12 +43,27 @@ type AddressDraftState = {
   googleMapsLink: string;
   saveToProfile: boolean;
 };
+const CLARIFICATION_LABELS: Record<ClarificationField | string, string> = {
+  SIZE: "Tamanho",
+  COLOR: "Cor",
+  MODEL: "Modelo",
+  QUANTITY: "Quantidade",
+  STORAGE: "Memoria/capacidade",
+  LINK: "Link correto",
+  PHOTO: "Fotos/screenshots",
+  OTHER: "Outro detalhe",
+};
 type ExternalEditDraftState = {
   productInput: string;
   productDetails: string;
   quantity: string;
   primaryPhoneNumber: string;
   version?: number;
+};
+type ClarificationDraftState = {
+  answers: Record<string, string>;
+  photos: File[];
+  submitted?: boolean;
 };
 
 function PackageIcon() {
@@ -380,6 +395,7 @@ export default function OrdersPage() {
     code: "ORDER_CHANGED" | "NOT_EDITABLE_STATUS" | string;
     currentStatus?: string;
   } | null>(null);
+  const [clarificationDrafts, setClarificationDrafts] = useState<Record<number, ClarificationDraftState>>({});
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -446,6 +462,74 @@ export default function OrdersPage() {
 
   const replaceOrder = (updated: Order) => {
     setOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
+  };
+
+  const updateClarificationAnswer = (orderId: number, field: ClarificationField, value: string) => {
+    setClarificationDrafts((current) => ({
+      ...current,
+      [orderId]: {
+        answers: {
+          ...(current[orderId]?.answers ?? {}),
+          [field]: value,
+        },
+        photos: current[orderId]?.photos ?? [],
+        submitted: current[orderId]?.submitted,
+      },
+    }));
+  };
+
+  const updateClarificationPhotos = (orderId: number, files: FileList | null) => {
+    const photos = Array.from(files ?? []).slice(0, 3);
+    setClarificationDrafts((current) => ({
+      ...current,
+      [orderId]: {
+        answers: current[orderId]?.answers ?? {},
+        photos,
+        submitted: current[orderId]?.submitted,
+      },
+    }));
+  };
+
+  const submitClarificationAnswer = async (order: Order) => {
+    if (!token || !order.activeClarificationRequest) return;
+
+    const request = order.activeClarificationRequest;
+    const draft = clarificationDrafts[order.id] ?? { answers: {}, photos: [] };
+    const requestedFields = request.requestedFields ?? [];
+    const answers = requestedFields.reduce<Record<string, string>>((acc, field) => {
+      if (field !== "PHOTO") {
+        acc[field] = draft.answers[field] ?? "";
+      }
+      return acc;
+    }, {});
+
+    setBusyOrderId(order.id);
+    try {
+      const endpoint = `orders/${order.id}/clarification-request/${request.id}/answer`;
+      if (requestedFields.includes("PHOTO")) {
+        const body = new FormData();
+        body.append("answers", JSON.stringify(answers));
+        draft.photos.slice(0, 3).forEach((photo) => body.append("photos", photo));
+        await apiFetch(endpoint, { method: "POST", token, body });
+      } else {
+        await apiFetch(endpoint, {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answers }),
+        });
+      }
+
+      setClarificationDrafts((current) => ({
+        ...current,
+        [order.id]: { ...draft, submitted: true },
+      }));
+      await loadOrders({ silent: true });
+      setFeedback({ type: "success", msg: "Detalhes enviados. A equipa vai rever e preparar a cotacao." });
+    } catch (error) {
+      setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel enviar os detalhes." });
+    } finally {
+      setBusyOrderId(null);
+    }
   };
 
   const selectedAddressIdFor = (order: Order) => {
@@ -842,6 +926,10 @@ export default function OrdersPage() {
     const externalDraft = externalEditDrafts[order.id] ?? emptyExternalEditDraft(order);
     const editConflict = externalEditConflict?.orderId === order.id ? externalEditConflict : null;
     const editLockedMessage = isExternal && !canEditOrder ? lockedEditMessage(status) : null;
+    const activeClarification = order.activeClarificationRequest?.status === "PENDING"
+      ? order.activeClarificationRequest
+      : null;
+    const clarificationDraft = clarificationDrafts[order.id] ?? { answers: {}, photos: [] };
     const screenshotUrls = order.requestScreenshotUrls?.length
       ? order.requestScreenshotUrls
       : order.requestScreenshotUrl
@@ -995,7 +1083,74 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {order.needsCustomerCorrection ? (
+        {activeClarification ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF1F2", borderColor: "#FBCFE8" }}>
+            <h3 className="text-base font-black" style={{ color: "#881337", fontFamily: "'Sora', sans-serif" }}>
+              Precisamos de mais detalhes para cotar o teu pedido
+            </h3>
+            {activeClarification.message ? (
+              <p className="mt-2 text-sm" style={{ color: "#9F1239", whiteSpace: "pre-wrap" }}>{activeClarification.message}</p>
+            ) : null}
+            {clarificationDraft.submitted ? (
+              <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold" style={{ color: "#166534" }}>
+                Detalhes enviados. A equipa vai rever e preparar a cotacao.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-4">
+                {activeClarification.requestedFields.filter((field) => field !== "PHOTO").map((field) => (
+                  <label key={field} className="block">
+                    <span className="mb-1 block text-sm font-bold" style={{ color: "#881337" }}>
+                      {CLARIFICATION_LABELS[field] || field}
+                    </span>
+                    {field === "LINK" || field === "OTHER" ? (
+                      <textarea
+                        rows={field === "OTHER" ? 3 : 2}
+                        value={clarificationDraft.answers[field] ?? ""}
+                        onChange={(event) => updateClarificationAnswer(order.id, field, event.target.value)}
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                        style={{ borderColor: "#FBCFE8", background: "white" }}
+                      />
+                    ) : (
+                      <input
+                        value={clarificationDraft.answers[field] ?? ""}
+                        onChange={(event) => updateClarificationAnswer(order.id, field, event.target.value)}
+                        className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
+                        style={{ borderColor: "#FBCFE8", background: "white" }}
+                      />
+                    )}
+                  </label>
+                ))}
+                {activeClarification.requestedFields.includes("PHOTO") ? (
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-bold" style={{ color: "#881337" }}>Fotos/screenshots adicionais</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(event) => updateClarificationPhotos(order.id, event.target.files)}
+                      className="w-full rounded-2xl border bg-white px-4 py-3 text-sm outline-none"
+                      style={{ borderColor: "#FBCFE8" }}
+                    />
+                    <p className="mt-1 text-xs font-semibold" style={{ color: "#9F1239" }}>
+                      Podes enviar ate 3 imagens. Selecionadas: {clarificationDraft.photos.length}
+                    </p>
+                  </label>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void submitClarificationAnswer(order)}
+                  disabled={busyOrderId === order.id}
+                  className="rounded-2xl px-4 py-2.5 text-sm font-black text-white disabled:opacity-60"
+                  style={{ background: RED }}
+                >
+                  {busyOrderId === order.id ? "A enviar..." : "Enviar detalhes"}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {order.needsCustomerCorrection && !activeClarification ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF5D8", borderColor: "#F1D7A8" }}>
             <h3 className="text-base font-black" style={{ color: "#7A5712", fontFamily: "'Sora', sans-serif" }}>
               Precisamos que atualizes algumas informacoes deste pedido.

@@ -198,6 +198,29 @@ export type ClientTrackingStep = {
   occurredAt?: string | null;
 };
 
+export type ClarificationField =
+  | "SIZE"
+  | "COLOR"
+  | "MODEL"
+  | "QUANTITY"
+  | "STORAGE"
+  | "LINK"
+  | "PHOTO"
+  | "OTHER";
+
+export type OrderClarificationRequest = {
+  id: number;
+  orderId: number;
+  requestedByAdminId?: number | null;
+  status: "PENDING" | "ANSWERED" | "CANCELLED";
+  message?: string | null;
+  requestedFields: ClarificationField[];
+  answers?: Record<string, string>;
+  photoUrls?: string[];
+  createdAt?: string;
+  answeredAt?: string | null;
+};
+
 export type Order = {
   id: number;
   version?: number;
@@ -216,7 +239,9 @@ export type Order = {
   requestScreenshotUrl?: string;
   requestScreenshotUrls?: string[];
   needsCustomerCorrection?: boolean;
+  needsClarification?: boolean;
   customerCorrectionNote?: string | null;
+  activeClarificationRequest?: OrderClarificationRequest | null;
   customerEditable?: boolean;
   purchaseProofUrl?: string | null;
   purchaseProofUploadedAt?: string | null;
