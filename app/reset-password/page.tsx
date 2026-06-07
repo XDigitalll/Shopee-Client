@@ -20,6 +20,7 @@ function ResetPasswordForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 8) { setError("A senha deve ter pelo menos 8 caracteres."); return; }
+    if (!/[A-Za-zÀ-ÿ]/.test(password) || !/\d/.test(password)) { setError("A senha deve conter letras e numeros."); return; }
     if (password !== confirm) { setError("As senhas nao coincidem."); return; }
     setLoading(true);
     setError("");
@@ -60,8 +61,8 @@ function ResetPasswordForm() {
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
-        <h2 className="text-2xl font-black">Senha redefinida!</h2>
-        <p className="mt-3 text-sm leading-7 text-[#6D625C]">A sua senha foi atualizada com sucesso. Pode entrar com a nova senha.</p>
+        <h2 className="text-2xl font-black">Senha atualizada com sucesso.</h2>
+        <p className="mt-3 text-sm leading-7 text-[#6D625C]">Ja podes entrar.</p>
         <Link href="/login" className="mt-6 inline-flex rounded-2xl px-6 py-3 text-sm font-bold text-white" style={{ background: RED }}>
           Entrar agora
         </Link>
@@ -72,7 +73,7 @@ function ResetPasswordForm() {
   return (
     <>
       <h1 className="mt-8 text-3xl font-black">Nova senha</h1>
-      <p className="mt-2 text-sm leading-7 text-[#6D625C]">Escolha uma nova senha segura para a sua conta.</p>
+      <p className="mt-2 text-sm leading-7 text-[#6D625C]">Escolhe uma nova senha segura para a tua conta.</p>
 
       {error && (
         <div className="mt-4 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B42318]">{error}</div>
