@@ -244,6 +244,7 @@ export type Order = {
   activeClarificationRequest?: OrderClarificationRequest | null;
   clarificationHistory?: OrderClarificationRequest[];
   customerEditable?: boolean;
+  purchaseConfirmedAt?: string | null;
   purchaseProofUrl?: string | null;
   purchaseProofUploadedAt?: string | null;
   supplierPurchaseAmount?: number | null;

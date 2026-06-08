@@ -1054,6 +1054,22 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
+        {isExternal && order.purchaseConfirmedAt && !order.purchaseProofUrl ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
+            <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#166534" }}>Compra confirmada</p>
+            <h3 className="mt-1 text-base font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
+              A equipa ja comprou o teu produto.
+            </h3>
+            <p className="mt-1 text-sm" style={{ color: "#166534" }}>
+              {order.supplierName ? `Comprado em: ${order.supplierName}.` : "A compra foi realizada com sucesso."}
+              {order.supplierPurchaseAmount ? ` Valor pago: ${order.supplierPurchaseAmount} MZN.` : ""}
+            </p>
+            <p className="mt-2 text-xs" style={{ color: "#4B5563" }}>
+              O comprovativo sera enviado em breve.
+            </p>
+          </div>
+        ) : null}
+
         {isExternal && order.purchaseProofUrl ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
