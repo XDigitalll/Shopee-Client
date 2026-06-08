@@ -144,7 +144,7 @@ function buildTemporaryAccessDocument(order: SuccessOrderState) {
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
-  <title>Acesso temporario ShopeeMz</title>
+  <title>Acesso temporário ShopeeMz</title>
   <style>
     body { margin: 0; padding: 32px; font-family: Arial, sans-serif; color: #1A1410; background: #fff; }
     .sheet { max-width: 680px; margin: 0 auto; border: 2px solid #E8431A; border-radius: 20px; padding: 28px; }
@@ -161,12 +161,12 @@ function buildTemporaryAccessDocument(order: SuccessOrderState) {
 <body>
   <main class="sheet">
     <div class="eyebrow">ShopeeMz</div>
-    <h1>Acesso temporario criado</h1>
-    <p>Guarda estes dados. Por seguranca, vais trocar a senha no primeiro acesso.</p>
+    <h1>Acesso temporário criado</h1>
+    <p>Guarda estes dados. Por segurança, deverás trocar a senha no primeiro acesso.</p>
     <section class="box">
-      <div class="row"><span class="label">Referencia do pedido:</span><code>${reference}</code></div>
+      <div class="row"><span class="label">Referência do pedido:</span><code>${reference}</code></div>
       <div class="row"><span class="label">Telefone:</span><code>${loginIdentifier}</code></div>
-      <div class="row"><span class="label">Senha temporaria:</span><code>${temporaryPassword}</code></div>
+      <div class="row"><span class="label">Senha temporária:</span><code>${temporaryPassword}</code></div>
     </section>
     <p>Depois de entrares, cria uma senha nova e acompanha o pedido em Meus pedidos.</p>
   </main>
@@ -263,15 +263,15 @@ export default function NewExternalOrderPage() {
     }
 
     if (!phoneNumber.trim()) {
-      return { field: "phone", message: "Preenche o telefone principal. Exemplo: +25884xxxxxxx." };
+      return { field: "phone", message: "Preenche o teu telefone de contacto. Exemplo: +25884xxxxxxx." };
     }
 
     if (!PHONE_PATTERN.test(normalizePhone(phoneNumber))) {
-      return { field: "phone", message: "Usa um telefone valido de Mocambique. Exemplo: +25884xxxxxxx." };
+      return { field: "phone", message: "Utiliza um número de telefone válido de Moçambique. Exemplo: +25884xxxxxxx." };
     }
 
     if (!acceptedLegalTerms) {
-      return { field: "terms", message: "Marca esta caixa para confirmar os Termos de Uso e a Politica de Privacidade." };
+      return { field: "terms", message: "Aceita os Termos de Uso e a Política de Privacidade para continuar." };
     }
 
     return null;
@@ -360,27 +360,27 @@ export default function NewExternalOrderPage() {
         throw new Error("Clipboard unavailable");
       }
       await navigator.clipboard.writeText(reference);
-      setFeedback({ type: "success", msg: "Referencia guardada." });
+      setFeedback({ type: "success", msg: "Referência guardada." });
     } catch {
-      setFeedback({ type: "info", msg: `Guarda esta referencia: ${reference}` });
+      setFeedback({ type: "info", msg: `Guarda esta referência: ${reference}` });
     }
   }
 
   function saveTemporaryAccessPdf(order: SuccessOrderState) {
     if (!order.temporaryPassword) {
-      setFeedback({ type: "info", msg: "Nao ha senha temporaria para guardar neste pedido." });
+      setFeedback({ type: "info", msg: "Não existe senha temporária para guardar neste pedido." });
       return;
     }
 
     const printWindow = window.open("", "_blank", "width=720,height=900");
     if (!printWindow) {
-      setFeedback({ type: "info", msg: "Permite abrir a janela de impressao para guardar o acesso em PDF." });
+      setFeedback({ type: "info", msg: "Permite abrir a janela de impressão para guardares o acesso em PDF." });
       return;
     }
 
     printWindow.document.write(buildTemporaryAccessDocument(order));
     printWindow.document.close();
-    setFeedback({ type: "success", msg: "Folha de acesso aberta. Escolhe Guardar como PDF." });
+    setFeedback({ type: "success", msg: "Folha de acesso aberta. Escolhe 'Guardar como PDF'." });
 
     window.setTimeout(() => {
       printWindow.focus();
@@ -473,7 +473,7 @@ export default function NewExternalOrderPage() {
     }
 
     setIsSubmitting(true);
-    setFeedback({ type: "loading", msg: "A enviar pedido para analise." });
+    setFeedback({ type: "loading", msg: "A enviar pedido para análise..." });
 
     try {
       const response = await apiFetch<SubmissionResponse>("orders/external", {
@@ -489,7 +489,7 @@ export default function NewExternalOrderPage() {
         response.code?.trim() ||
         null;
       if (!nextOrderNumber) {
-        throw new Error("O pedido foi recebido, mas a referencia nao veio na resposta. Tenta novamente ou contacta o suporte.");
+        throw new Error("O pedido foi recebido, mas a referência não chegou na resposta. Tenta novamente ou contacta o suporte.");
       }
       const nextMessage = response.message || "Recebemos o teu pedido. Vamos analisar e entrar em contacto pelo telefone informado.";
 
@@ -536,39 +536,39 @@ export default function NewExternalOrderPage() {
             Compra internacional
           </p>
           <h1 className="mt-2 font-[family-name:var(--font-sora)] text-3xl font-black leading-tight sm:text-4xl">
-            {isLoggedIn ? "Pede cotacao do estrangeiro" : "Pede cotacao sem criar conta"}
+            Peça uma cotação internacional
           </h1>
           <p className="mt-3 text-sm leading-7" style={{ color: MUTED }}>
             {isLoggedIn
-              ? "Cola o link ou descreve o produto. A equipa valida preco, disponibilidade e prazo antes do pagamento."
-              : "Cola o link ou descreve o produto, deixa o teu telefone e a equipa confirma o resto antes de qualquer pagamento."}
+              ? "Envia o link ou descreve o produto que pretendes comprar. A nossa equipa confirma o preço, disponibilidade e prazo antes do pagamento."
+              : "Envia o link ou descreve o produto, deixa o teu telefone e a nossa equipa confirma tudo antes de qualquer pagamento."}
           </p>
         </section>
 
         {successOrder ? (
           <section className="rounded-[28px] border bg-white p-6 shadow-sm sm:p-8" style={{ borderColor: successOrder.firstGuestOrder ? RED : BORDER }}>
             <p className="text-sm font-black uppercase tracking-[0.2em]" style={{ color: RED }}>
-              {successOrder.authenticatedOrder ? "Pedido registado" : successOrder.firstGuestOrder ? "Bem-vindo ao ShopeeMz" : "Ja temos uma conta para ti"}
+              {successOrder.authenticatedOrder ? "Pedido registado" : successOrder.firstGuestOrder ? "Bem-vindo ao ShopeeMz" : "Já temos uma conta para ti"}
             </p>
             <h2 className="mt-3 font-[family-name:var(--font-sora)] text-3xl font-black">
               {successOrder.authenticatedOrder
                 ? "Pedido recebido e associado a tua conta."
                 : successOrder.firstGuestOrder
-                  ? "O teu pedido ja entrou para analise."
-                  : "Ja encontramos uma conta associada a este telefone."}
+                  ? "O teu pedido já entrou para análise."
+                  : "Já encontrámos uma conta associada a este telefone."}
             </h2>
             <p className="mt-4 whitespace-pre-line text-base font-semibold leading-8" style={{ color: MUTED }}>
               {successOrder.authenticatedOrder
-                ? "A equipa vai analisar o preco, disponibilidade e prazo. Podes acompanhar tudo na pagina de pedidos."
+                ? "A nossa equipa vai analisar o preço, disponibilidade e prazo. Podes acompanhar tudo na página de pedidos."
                 : successOrder.firstGuestOrder
                   ? successOrder.message
-                  : "Recebemos o teu pedido. Entra para acompanhares todos os teus pedidos, recupera o acesso se precisares, ou continua pelo Telegram."}
+                  : "Recebemos o teu pedido. Entra para acompanhares todos os teus pedidos ou recupera o acesso se precisares."}
             </p>
 
             {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
               <div className="mt-5 rounded-2xl border-2 p-5 space-y-3" style={{ borderColor: RED, background: SOFT }}>
                 <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
-                  Acesso temporario criado
+                  Acesso temporário criado
                 </p>
                 <div className="grid gap-2 text-sm font-bold" style={{ color: TEXT }}>
                   <div className="flex items-center gap-3">
@@ -578,21 +578,21 @@ export default function NewExternalOrderPage() {
                     </code>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span style={{ color: MUTED }}>Senha temporaria:</span>
+                    <span style={{ color: MUTED }}>Senha temporária:</span>
                     <code className="rounded-lg px-2 py-1 font-mono text-sm font-black" style={{ background: "#fff", color: RED }}>
                       {successOrder.temporaryPassword}
                     </code>
                   </div>
                 </div>
                 <p className="text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                  Guarda estes dados. Por seguranca, vais trocar a senha no primeiro acesso.
+                  Guarda estes dados. Por segurança, deverás trocar a senha no primeiro acesso.
                 </p>
               </div>
             ) : null}
 
             <div className="mt-5 flex flex-wrap items-start gap-4">
               <div className="inline-flex flex-col gap-1 rounded-2xl px-5 py-4" style={{ background: SOFT, color: RED }}>
-                <span className="text-xs font-black uppercase tracking-[0.18em]">Referencia do pedido</span>
+                <span className="text-xs font-black uppercase tracking-[0.18em]">Referência do pedido</span>
                 <span className="font-[family-name:var(--font-sora)] text-2xl font-black">
                   {successOrder.number}
                 </span>
@@ -602,7 +602,7 @@ export default function NewExternalOrderPage() {
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                 </svg>
                 <span className="text-xs font-black" style={{ color: "#166534" }}>
-                  Respondemos normalmente em at� 24 horas
+                  Respondemos normalmente em até 24 horas
                 </span>
               </div>
             </div>
@@ -638,7 +638,7 @@ export default function NewExternalOrderPage() {
                     <p className="mt-1 font-bold" style={{ color: TEXT }}>{submittedOrderSummary.phone}</p>
                   </div>
                   <div className="rounded-xl px-3 py-3" style={{ background: "#FFF8F5" }}>
-                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Fotos/screenshots</p>
+                    <p className="text-xs font-black uppercase tracking-[0.12em]" style={{ color: MUTED }}>Fotos/capturas de ecrã</p>
                     {submittedOrderSummary.photoNames.length ? (
                       <ul className="mt-1 space-y-1">
                         {submittedOrderSummary.photoNames.map((name, index) => (
@@ -701,7 +701,7 @@ export default function NewExternalOrderPage() {
                   className="rounded-2xl border px-5 py-3 text-sm font-black"
                   style={{ borderColor: BORDER, color: RED, background: "white" }}
                 >
-                  Guardar referencia
+                  Guardar referência
                 </button>
               ) : null}
               {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
@@ -744,7 +744,7 @@ export default function NewExternalOrderPage() {
               <div className="mb-4 rounded-[24px] border p-4 sm:p-5" style={{ borderColor: BORDER, background: SOFT }}>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Pedido ligado a tua conta</p>
+                    <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Pedido associado à tua conta</p>
                     <p className="mt-1 text-sm font-semibold" style={{ color: TEXT }}>
                       {userLabel || userEmail || "Cliente ShopeeMz"}
                     </p>
@@ -771,7 +771,7 @@ export default function NewExternalOrderPage() {
                 </div>
                 {!userPhone && (
                   <div className="mt-3 rounded-2xl border px-4 py-3 text-sm font-semibold" style={{ borderColor: "#FCA5A5", background: "#FFF5F5", color: "#B42318" }}>
-                    Adiciona um telefone no teu perfil para recebermos atualizacoes sobre este pedido.
+                    Adiciona um número de telefone no teu perfil para receberes atualizações sobre este pedido.
                   </div>
                 )}
               </div>
@@ -795,7 +795,7 @@ export default function NewExternalOrderPage() {
                       A processar o teu pedido...
                     </p>
                     <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>
-                      Estamos a enviar os detalhes para a equipa. Mantem esta pagina aberta ate aparecer a referencia do pedido.
+                      Estamos a enviar os detalhes para a nossa equipa. Mantém esta página aberta até aparecer a referência do pedido.
                     </p>
                   </div>
                 </div>
@@ -853,7 +853,7 @@ export default function NewExternalOrderPage() {
                     rows={3}
                     aria-invalid={Boolean(fieldErrors.product)}
                     aria-describedby={fieldErrors.product ? "productInput-error" : undefined}
-                    placeholder="Cole o link ou descreva: ex. Calças cargo pretas SHEIN tamanho M"
+                    placeholder="Cola o link ou descreve o produto. Ex.: Calças cargo pretas da SHEIN, tamanho M"
                     className="mt-2 w-full resize-none rounded-2xl border px-4 py-3 text-base outline-none transition-colors"
                     style={{
                       borderColor: (() => {
@@ -897,7 +897,7 @@ export default function NewExternalOrderPage() {
                         </div>
                         {parsedInput.cleanDescription ? (
                           <div>
-                            <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#15803D" }}>Descricao limpa</p>
+                            <p className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: "#15803D" }}>Descrição limpa</p>
                             <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6" style={{ color: TEXT }}>
                               {parsedInput.cleanDescription}
                             </p>
@@ -935,9 +935,9 @@ export default function NewExternalOrderPage() {
                     );
                     return (
                       <div className="mt-2 rounded-xl p-3" style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}>
-                        <p className="text-xs font-semibold" style={{ color: "#92400E" }}>Exemplos de descrições aceites:</p>
+                        <p className="text-xs font-semibold" style={{ color: "#92400E" }}>Exemplos de pedidos aceites:</p>
                         <ul className="mt-1 space-y-0.5">
-                          {["Calças cargo pretas da SHEIN tamanho M", "Nike Air Force branco número 42", "iPhone 13 Pro Max azul 256GB"].map((ex) => (
+                          {["Calças cargo pretas da SHEIN, tamanho M", "Nike Air Force branco, número 42", "iPhone 13 Pro Max azul, 256GB"].map((ex) => (
                             <li key={ex} className="flex items-start gap-1 text-xs" style={{ color: "#78350F" }}>
                               <span className="mt-px shrink-0">·</span>
                               <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => setProductLink(ex)}>{ex}</button>
@@ -953,7 +953,7 @@ export default function NewExternalOrderPage() {
                 <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_160px] lg:items-start">
                   <div>
                     <label htmlFor="variantInput" className="text-sm font-black">
-                      Características do produto que queres <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
+                      Características do produto <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span>
                     </label>
                     <textarea
                       id="variantInput"
@@ -967,7 +967,7 @@ export default function NewExternalOrderPage() {
                     ></textarea>
                     <div className="mt-2 rounded-xl p-3" style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}>
                     <p className="text-xs font-semibold leading-5" style={{ color: "#92400E" }}>
-                      Escreve tamanho, cor, modelo, memoria, numero, quantidade por pacote ou qualquer detalhe importante para comprarmos exatamente o produto correto.
+                      Indica tamanho, cor, modelo, memória, número ou qualquer detalhe importante para encontrarmos exatamente o produto correto.
                     </p>
                     <p className="sr-only">
                       Escreve aqui tudo que pode mudar no produto: tamanho, cor, modelo, memória, número, quantidade por pacote ou qualquer detalhe importante.
@@ -1004,7 +1004,7 @@ export default function NewExternalOrderPage() {
                 {/* Primary phone */}
                 <div>
                   <label htmlFor="phoneInput" className="text-sm font-black">
-                    Telefone para contacto
+                    Telefone de contacto
                   </label>
                   <input
                     id="phoneInput"
@@ -1027,15 +1027,14 @@ export default function NewExternalOrderPage() {
                     </p>
                   ) : (
                     <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      Usaremos este número para contacto e atualizações da encomenda. Preferencialmente com WhatsApp ativo.
-                      Em breve poderás acompanhar este pedido pelo WhatsApp. Por agora, acompanha o estado na área Meus pedidos.
+                      Usaremos este número para acompanhar a tua encomenda e enviar atualizações importantes. Preferencialmente com WhatsApp ativo.
                     </p>
                   )}
                 </div>
 
                 {/* Screenshots */}
                 <div>
-                  <span className="text-sm font-black">Fotos ou screenshots <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
+                  <span className="text-sm font-black">Fotos ou capturas de ecrã <span className="font-semibold" style={{ color: MUTED }}>(opcional)</span></span>
                   <div className="mt-2">
                     <input
                       ref={screenshotInputRef}
@@ -1059,7 +1058,7 @@ export default function NewExternalOrderPage() {
                       <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
                       </svg>
-                      Adicionar fotos ou screenshots
+                      Adicionar fotos ou capturas de ecrã
                     </button>
                     {screenshots.length > 0 ? (
                       <div className="mt-3 grid gap-2">
@@ -1091,7 +1090,7 @@ export default function NewExternalOrderPage() {
                       </div>
                     ) : null}
                     <p className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      PNG, JPG ou WebP. Máximo 3 fotos, até 10MB cada.
+                      PNG, JPG ou WebP. Máximo 3 imagens, até 10MB cada.
                     </p>
                   </div>
                 </div>
@@ -1116,7 +1115,7 @@ export default function NewExternalOrderPage() {
                     </Link>{" "}
                     e a{" "}
                     <Link href="/privacy" className="font-black" style={{ color: RED }}>
-                      Politica de Privacidade
+                      Política de Privacidade
                     </Link>
                     .
                   </span>
@@ -1133,7 +1132,7 @@ export default function NewExternalOrderPage() {
                   className="w-full rounded-2xl px-5 py-4 text-base font-black text-white transition disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ background: RED }}
                 >
-                  {isSubmitting ? "A processar pedido..." : "Pedir cotacao"}
+                  {isSubmitting ? "A enviar pedido..." : "Enviar pedido de cotação"}
                 </button>
                 <ClientActionFeedback
                   feedback={feedback && feedback.type !== "success" ? feedback : null}
