@@ -70,7 +70,8 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
   const pathname = usePathname();
   const router = useRouter();
   const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, hasProfileWarning, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
-  const { attentionCount } = useOrdersAttention();
+  const { summary: ordersAttentionSummary, attentionCount } = useOrdersAttention();
+  const ordersAttentionHref = ordersAttentionSummary.orders.find((order) => order.actionUrl)?.actionUrl ?? "/orders";
   const needsAuth = useMemo(() => {
     const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
     const isPublicCatalogRoute = PUBLIC_CATALOG_ROUTES.some((p) => pathname === p || (p !== "/" && pathname?.startsWith(p + "/")));
@@ -214,7 +215,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={item.href === "/orders" && attentionCount > 0 ? ordersAttentionHref : item.href}
                   className="rounded-full px-3 py-1.5 text-[13px] font-semibold transition xl:px-4 xl:py-2 xl:text-sm"
                   style={{
                     background: isActive ? "white" : "transparent",
@@ -377,7 +378,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                 </Link>
               )}
               {navItems.map((item) => (
-                <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
+                <Link key={item.href} href={item.href === "/orders" && attentionCount > 0 ? ordersAttentionHref : item.href} onClick={() => setMenuOpen(false)} className="flex items-center justify-between rounded-2xl px-3 py-3 text-sm font-semibold text-white/90 hover:bg-white/10">
                   {item.label}
                   {item.href === "/orders" && attentionCount > 0 ? <NotificationBadge count={attentionCount} tone="light" /> : null}
                 </Link>

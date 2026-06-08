@@ -242,6 +242,7 @@ export type Order = {
   needsClarification?: boolean;
   customerCorrectionNote?: string | null;
   activeClarificationRequest?: OrderClarificationRequest | null;
+  clarificationHistory?: OrderClarificationRequest[];
   customerEditable?: boolean;
   purchaseProofUrl?: string | null;
   purchaseProofUploadedAt?: string | null;

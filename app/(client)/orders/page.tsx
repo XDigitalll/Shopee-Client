@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClientConfirmDialog, ClientFeedbackDock, ClientListLoadingOverlay, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { ApiRequestError, CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -48,9 +49,9 @@ const CLARIFICATION_LABELS: Record<ClarificationField | string, string> = {
   COLOR: "Cor",
   MODEL: "Modelo",
   QUANTITY: "Quantidade",
-  STORAGE: "Memoria/capacidade",
+  STORAGE: "Memória/capacidade",
   LINK: "Link correto",
-  PHOTO: "Fotos/screenshots",
+  PHOTO: "Fotos ou capturas de ecrã",
   OTHER: "Outro detalhe",
 };
 type ExternalEditDraftState = {
@@ -376,6 +377,8 @@ async function fetchWithToken<T>(url: string, _token: string) {
 
 export default function OrdersPage() {
   const { token, userInitials, userLabel } = useAuth();
+  const searchParams = useSearchParams();
+  const highlightParam = searchParams.get("highlight")?.trim() ?? "";
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats>({ totalOrders: 0, inProgress: 0, delivered: 0, totalSpent: 0 });
   const [filter, setFilter] = useState<FilterKey>("ALL");
@@ -397,6 +400,7 @@ export default function OrdersPage() {
   } | null>(null);
   const [clarificationDrafts, setClarificationDrafts] = useState<Record<number, ClarificationDraftState>>({});
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
+  const highlightedOrderRef = useRef<HTMLElement | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
     if (!token) return;
@@ -459,6 +463,25 @@ export default function OrdersPage() {
   }, [filter, orders]);
 
   const orderGroups = useMemo(() => buildOrderGroups(filteredOrders, filter), [filter, filteredOrders]);
+  const highlightedOrderId = useMemo(() => {
+    if (!highlightParam) return null;
+    const normalized = highlightParam.toLowerCase();
+    return orders.find((order) =>
+      String(order.id) === highlightParam ||
+      String(order.code ?? "").toLowerCase() === normalized ||
+      orderDisplayCode(order).toLowerCase() === normalized
+    )?.id ?? null;
+  }, [highlightParam, orders]);
+
+  useEffect(() => {
+    if (!highlightedOrderId || isLoading) return;
+
+    const timer = window.setTimeout(() => {
+      highlightedOrderRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [highlightedOrderId, isLoading]);
 
   const replaceOrder = (updated: Order) => {
     setOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -524,7 +547,7 @@ export default function OrdersPage() {
         [order.id]: { ...draft, submitted: true },
       }));
       await loadOrders({ silent: true });
-      setFeedback({ type: "success", msg: "Detalhes enviados. A equipa vai rever e preparar a cotacao." });
+      setFeedback({ type: "success", msg: "Detalhes enviados. A equipa vai rever e preparar a tua cotação." });
     } catch (error) {
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel enviar os detalhes." });
     } finally {
@@ -930,6 +953,8 @@ export default function OrdersPage() {
       ? order.activeClarificationRequest
       : null;
     const clarificationDraft = clarificationDrafts[order.id] ?? { answers: {}, photos: [] };
+    const clarificationSubmitted = Boolean(clarificationDraft.submitted);
+    const isHighlightedOrder = highlightedOrderId === order.id;
     const screenshotUrls = order.requestScreenshotUrls?.length
       ? order.requestScreenshotUrls
       : order.requestScreenshotUrl
@@ -939,8 +964,12 @@ export default function OrdersPage() {
     return (
       <article
         key={order.id}
-        className={`rounded-[28px] border bg-white p-5 ${isNested ? "shadow-none" : "shadow-sm"}`}
-        style={{ borderColor: isNested ? "#F6CFC2" : "#F2D4CC" }}
+        ref={isHighlightedOrder ? highlightedOrderRef : undefined}
+        className={`rounded-[28px] border bg-white p-5 transition ${isNested ? "shadow-none" : "shadow-sm"}`}
+        style={{
+          borderColor: isHighlightedOrder ? RED : isNested ? "#F6CFC2" : "#F2D4CC",
+          boxShadow: isHighlightedOrder ? "0 0 0 4px rgba(232,67,26,0.12), 0 24px 70px rgba(232,67,26,0.16)" : undefined,
+        }}
       >
         {isNested && (
           <div className="mb-3 inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em]" style={{ background: "#FFF8F5", color: RED }}>
@@ -1084,16 +1113,31 @@ export default function OrdersPage() {
         ) : null}
 
         {activeClarification ? (
-          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF1F2", borderColor: "#FBCFE8" }}>
-            <h3 className="text-base font-black" style={{ color: "#881337", fontFamily: "'Sora', sans-serif" }}>
-              Precisamos de mais detalhes para cotar o teu pedido
-            </h3>
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF7ED", borderColor: "#FDBA74", boxShadow: "0 16px 40px rgba(249,115,22,0.12)" }}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-lg" style={{ background: "#FFEDD5", color: "#C2410C" }}>
+                  !
+                </span>
+                <div>
+                  <h3 className="text-base font-black" style={{ color: "#7C2D12", fontFamily: "'Sora', sans-serif" }}>
+                    Precisamos de mais detalhes para cotar o teu pedido
+                  </h3>
+                  <p className="mt-1 text-sm font-semibold" style={{ color: "#9A3412" }}>
+                    Confirma estas informações para a equipa preparar a tua cotação.
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex w-fit rounded-full px-3 py-1 text-xs font-black" style={{ background: "#FED7AA", color: "#7C2D12" }}>
+                Resposta pendente
+              </span>
+            </div>
             {activeClarification.message ? (
-              <p className="mt-2 text-sm" style={{ color: "#9F1239", whiteSpace: "pre-wrap" }}>{activeClarification.message}</p>
+              <p className="mt-3 rounded-2xl bg-white/70 px-4 py-3 text-sm" style={{ color: "#7C2D12", whiteSpace: "pre-wrap" }}>{activeClarification.message}</p>
             ) : null}
-            {clarificationDraft.submitted ? (
+            {clarificationSubmitted ? (
               <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm font-bold" style={{ color: "#166534" }}>
-                Detalhes enviados. A equipa vai rever e preparar a cotacao.
+                Detalhes enviados. A equipa vai rever e preparar a tua cotação.
               </p>
             ) : (
               <div className="mt-4 grid gap-4">
@@ -1108,28 +1152,28 @@ export default function OrdersPage() {
                         value={clarificationDraft.answers[field] ?? ""}
                         onChange={(event) => updateClarificationAnswer(order.id, field, event.target.value)}
                         className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                        style={{ borderColor: "#FBCFE8", background: "white" }}
+                        style={{ borderColor: "#FDBA74", background: "white" }}
                       />
                     ) : (
                       <input
                         value={clarificationDraft.answers[field] ?? ""}
                         onChange={(event) => updateClarificationAnswer(order.id, field, event.target.value)}
                         className="w-full rounded-2xl border px-4 py-3 text-sm outline-none"
-                        style={{ borderColor: "#FBCFE8", background: "white" }}
+                        style={{ borderColor: "#FDBA74", background: "white" }}
                       />
                     )}
                   </label>
                 ))}
                 {activeClarification.requestedFields.includes("PHOTO") ? (
                   <label className="block">
-                    <span className="mb-1 block text-sm font-bold" style={{ color: "#881337" }}>Fotos/screenshots adicionais</span>
+                    <span className="mb-1 block text-sm font-bold" style={{ color: "#881337" }}>Fotos ou capturas de ecrã adicionais</span>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
                       onChange={(event) => updateClarificationPhotos(order.id, event.target.files)}
                       className="w-full rounded-2xl border bg-white px-4 py-3 text-sm outline-none"
-                      style={{ borderColor: "#FBCFE8" }}
+                      style={{ borderColor: "#FDBA74" }}
                     />
                     <p className="mt-1 text-xs font-semibold" style={{ color: "#9F1239" }}>
                       Podes enviar ate 3 imagens. Selecionadas: {clarificationDraft.photos.length}
@@ -1147,6 +1191,69 @@ export default function OrdersPage() {
                 </button>
               </div>
             )}
+          </div>
+        ) : null}
+
+        {!activeClarification && clarificationSubmitted ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F0FDF4", borderColor: "#BBF7D0" }}>
+            <h3 className="text-base font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
+              Detalhes enviados com sucesso
+            </h3>
+            <p className="mt-2 text-sm font-semibold" style={{ color: "#166534" }}>
+              A equipa vai rever as informações e continuar a tua cotação.
+            </p>
+          </div>
+        ) : null}
+
+        {order.clarificationHistory?.length ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F8FAFC", borderColor: "#E2E8F0" }}>
+            <p className="text-xs font-bold uppercase tracking-[0.16em]" style={{ color: "#64748B" }}>
+              Respostas anteriores
+            </p>
+            <h3 className="mt-1 text-sm font-black" style={{ color: "#334155", fontFamily: "'Sora', sans-serif" }}>
+              O que já enviaste à equipa
+            </h3>
+            <div className="mt-3 space-y-3">
+              {order.clarificationHistory.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border px-4 py-3"
+                  style={{ borderColor: "#CBD5E1", background: "white" }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-bold" style={{ color: "#64748B" }}>
+                      {index === 0 ? "Primeira resposta" : `Atualização ${index}`}
+                    </p>
+                    {item.answeredAt && (
+                      <p className="text-xs" style={{ color: "#94A3B8" }}>
+                        {formatDate(item.answeredAt)}
+                      </p>
+                    )}
+                  </div>
+                  {item.requestedFields?.filter((f) => f !== "PHOTO").length ? (
+                    <div className="mt-2 grid gap-2">
+                      {item.requestedFields
+                        .filter((f) => f !== "PHOTO")
+                        .map((field) => (
+                          <div key={field}>
+                            <p className="text-[11px] font-semibold" style={{ color: "#94A3B8" }}>
+                              {CLARIFICATION_LABELS[field] || field}
+                            </p>
+                            <p className="text-sm font-semibold" style={{ color: "#1E293B" }}>
+                              {item.answers?.[field] || "—"}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                  {item.photoUrls?.length ? (
+                    <p className="mt-2 text-xs font-semibold" style={{ color: "#94A3B8" }}>
+                      {item.photoUrls.length} foto{item.photoUrls.length !== 1 ? "s" : ""} enviada{item.photoUrls.length !== 1 ? "s" : ""}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 
@@ -1292,7 +1399,6 @@ export default function OrdersPage() {
         {isExternal && status === "QUOTED" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}>
             <div className="flex items-start gap-2">
-              <span className="mt-0.5 shrink-0 text-base">?</span>
               <div>
                 <h3 className="text-base font-black" style={{ color: "#9A3412", fontFamily: "'Sora', sans-serif" }}>Cotacao pronta!</h3>
                 <p className="mt-1 text-sm" style={{ color: "#9A3412" }}>Ja temos o preco final da tua compra. Revê a proposta e decide se queres continuar.</p>

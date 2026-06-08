@@ -44,7 +44,7 @@ export function useOrdersAttention() {
     const onVisibility = () => {
       if (document.visibilityState === "visible") run();
     };
-    const intervalId = window.setInterval(run, 60_000);
+    const intervalId = window.setInterval(run, 10_000);
     window.addEventListener("focus", run);
     window.addEventListener(CLIENT_DATA_CHANGED_EVENT, run);
     document.addEventListener("visibilitychange", onVisibility);
