@@ -1479,7 +1479,7 @@ export default function OrdersPage() {
         {status === "OUT_FOR_DELIVERY" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
             <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua encomenda está a caminho</h3>
-            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>{order.deliveryStatusLabel || "A equipa de delivery está a caminho da tua morada com a tua encomenda."}</p>
+            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>A equipa de delivery está a caminho da tua morada com a tua encomenda.</p>
             {(() => {
               const deliveryPrice = deliveryPriceInfo(order);
               return (
