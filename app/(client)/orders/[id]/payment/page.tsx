@@ -47,11 +47,29 @@ type PaySuiteInitResponse = {
   retryReason?: string;
 };
 
-// idle       — normal page access (no ?psr=1)
-// confirming — 0–90 s autonomous window after returning from PaySuite (zero buttons)
-// confirmed  — payment detected as paid; show success + auto-redirect
-// timed_out  — 90 s elapsed without confirmation; show calm message + manual verify only
-type ReturnPhase = "idle" | "confirming" | "confirmed" | "timed_out";
+// 10-state machine — each state is mutually exclusive.
+// loading_order      — initial page load, data not yet available
+// checking_payment   — returned from PaySuite (?psr=1), auto-sync in progress
+// ready_to_pay       — PENDING_PAYMENT/PAYMENT_REJECTED, no active payment, method selector visible
+// redirecting_to_paysuite — pay API call in progress, full overlay shown
+// returned_pending   — after auto-sync or manual verify: payment not yet confirmed
+// retry_warning      — warning modal displayed before allowing a new attempt
+// retry_choose_method — user confirmed warning, method selector shown for retry
+// confirmed          — payment confirmed, auto-redirect countdown running
+// failed             — payment definitively failed (gateway terminal status or PAYMENT_REJECTED)
+// error_recoverable  — load error the user can recover by retrying
+type PaymentUiState =
+  | "loading_order"
+  | "checking_payment"
+  | "ready_to_pay"
+  | "redirecting_to_paysuite"
+  | "returned_pending"
+  | "retry_warning"
+  | "retry_choose_method"
+  | "confirmed"
+  | "failed"
+  | "error_recoverable";
+
 type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
 
 const PAYSUITE_METHODS: Array<{ key: PaySuiteMethod; label: string; icon: string; hint: string }> = [
@@ -160,6 +178,7 @@ export default function OrderPaymentPage() {
   const router = useRouter();
   const { token, isAuthenticated, user } = useAuth();
   const orderId = Number(params.id);
+  const returningFromPaySuite = searchParams.get("psr") === "1";
 
   const [order, setOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -176,119 +195,15 @@ export default function OrderPaymentPage() {
   const confirmedLoggedRef = useRef(false);
   const [isSyncBusy, setIsSyncBusy] = useState(false);
 
-  const returningFromPaySuite = searchParams.get("psr") === "1";
-  const [isInitialOrderLoading, setIsInitialOrderLoading] = useState(true);
-  const [isInitialSyncLoading, setIsInitialSyncLoading] = useState(returningFromPaySuite);
-  const [returnPhase, setReturnPhase] = useState<ReturnPhase>(
-    returningFromPaySuite ? "confirming" : "idle",
+  const [uiState, setUiState] = useState<PaymentUiState>(
+    returningFromPaySuite ? "checking_payment" : "loading_order",
   );
-  const confirmingStartRef = useRef<number>(returningFromPaySuite ? Date.now() : 0);
-  const [confirmingElapsed, setConfirmingElapsed] = useState(0);
   const [redirectCountdown, setRedirectCountdown] = useState(CONFIRMED_REDIRECT_DELAY_MS / 1000);
-  const [showRetryWarningModal, setShowRetryWarningModal] = useState(false);
-  const [showRetryMethodSelector, setShowRetryMethodSelector] = useState(false);
+  // True during the first 90 s after returning from PaySuite — drives faster background polling.
+  const [fastPollActive, setFastPollActive] = useState(returningFromPaySuite);
 
   const isPaySuiteBusy = paysuiteAction.isRunning;
-  const isInitialPaymentLoading = isInitialOrderLoading || isInitialSyncLoading;
-
-  const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!token || !orderId) {
-      setIsInitialOrderLoading(false);
-      return;
-    }
-    try {
-      const orders = await fetchWithToken<Order[]>("/api/orders/my-orders", token);
-      setAllOrders(orders);
-      const currentOrder = orders.find((item) => item.id === orderId) || null;
-      setOrder(currentOrder);
-
-      // Keep paysuitePayment in sync with what the backend reports.
-      // This ensures hasActivePaySuitePayment and syncConfirmedFailure are accurate
-      // on fresh page load and after every background poll — not just after a
-      // manual "Pagar agora" click (which is the only other place setPaysuitePayment runs).
-      if (currentOrder?.payment?.provider?.toUpperCase() === "PAYSUITE") {
-        setPaysuitePayment({
-          status: currentOrder.payment.status,
-          providerReference: currentOrder.payment.providerReference,
-          checkoutUrl: currentOrder.payment.checkoutUrl,
-          providerStatus: currentOrder.payment.providerStatus,
-          expectedAmount: currentOrder.payment.expectedAmount,
-          canRetry: false,
-        });
-      }
-
-      if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
-        setReturnPhase("confirmed");
-        if (!confirmedLoggedRef.current) {
-          confirmedLoggedRef.current = true;
-          devLog("[PAYMENT_RETURN_CONFIRMED]", { orderId, status: currentOrder.status });
-        }
-      }
-    } catch (error) {
-      if (!silent) {
-        setFeedback({
-          type: "error",
-          msg: error instanceof Error ? error.message : "Não foi possível carregar o pedido.",
-        });
-      }
-    } finally {
-      setIsInitialOrderLoading(false);
-    }
-  }, [orderId, token]);
-
-  useEffect(() => { void loadOrder(); }, [loadOrder]);
-
-  // Adaptive polling — fast during confirming, slow otherwise.
-  useEffect(() => {
-    if (!token || !orderId || returnPhase === "confirmed") return;
-    const intervalMs = returnPhase === "confirming" ? RETURNING_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
-    const interval = window.setInterval(() => { void loadOrder({ silent: true }); }, intervalMs);
-    return () => window.clearInterval(interval);
-  }, [loadOrder, orderId, token, returnPhase]);
-
-  // Confirming window: countdown ticker + timeout transition.
-  useEffect(() => {
-    if (returnPhase !== "confirming") return;
-    const interval = window.setInterval(() => {
-      const elapsed = Date.now() - confirmingStartRef.current;
-      setConfirmingElapsed(elapsed);
-      if (elapsed >= RETURNING_POLL_DURATION_MS) {
-        setReturnPhase("timed_out");
-        devLog("[PAYMENT_RETURN_TIMEOUT]", { orderId });
-      }
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [orderId, returnPhase]);
-
-  // One automatic sync attempt 2 s after entering confirming phase.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!returningFromPaySuite) {
-      setIsInitialSyncLoading(false);
-      return;
-    }
-    if (!token || !orderId) {
-      setIsInitialSyncLoading(false);
-      return;
-    }
-    devLog("[PAYMENT_RETURN_STARTED]", { orderId });
-    const timeout = window.setTimeout(() => { void performSync({ auto: true, initial: true }); }, 2000);
-    return () => window.clearTimeout(timeout);
-  // Intentionally runs once on mount.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Auto-redirect countdown after confirmed phase.
-  useEffect(() => {
-    if (returnPhase !== "confirmed") return;
-    const interval = window.setInterval(() => {
-      setRedirectCountdown((c) => {
-        if (c <= 1) { router.push("/orders"); return 0; }
-        return c - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(interval);
-  }, [returnPhase, router]);
+  const isLoading = uiState === "loading_order" || uiState === "checking_payment";
 
   const relatedOrders = useMemo(
     () => (order?.purchaseGroupKey
@@ -316,73 +231,76 @@ export default function OrderPaymentPage() {
     && !isPaid
     && !!paysuitePayment?.canRetry
     && lastSyncNoFinancialEvidence;
-  const needsVerificationForPayment = (orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED")
-    && !verificationOk
-    && !hasActivePaySuitePayment
-    && returnPhase === "idle";
-
-  // Payment form is shown only in idle phase with no active PaySuite transaction.
-  const canPay = (orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED")
-    && verificationOk
-    && !hasActivePaySuitePayment
-    && !canGenerateRetry
-    && returnPhase === "idle";
-
-  // Allow retry in timed_out when:
-  // (a) backend reported PAYMENT_REJECTED — explicit server-side failure, OR
-  // (b) the last sync (or background poll) confirmed a terminal payment status
-  //     from the gateway: FAILED, CANCELLED, AMOUNT_MISMATCH, LATE_PAYMENT.
-  //     The order may still be PENDING_PAYMENT but no money is coming — retry is safe.
   const explicitFailure = orderStatus === "PAYMENT_REJECTED";
   const syncConfirmedFailure = TERMINAL_PAYMENT_STATUSES.has(
     (paysuitePayment?.status ?? "").toUpperCase(),
   );
-  const canRetryAfterTimeout = returnPhase === "timed_out"
-    && verificationOk
-    && (explicitFailure || syncConfirmedFailure)
-    && !hasActivePaySuitePayment;
-  const confirmingSecondsLeft = Math.max(
-    0,
-    Math.ceil((RETURNING_POLL_DURATION_MS - confirmingElapsed) / 1000),
-  );
-  const canShowSafeRetry = verificationOk && (canGenerateRetry || canRetryAfterTimeout);
-  // Method selector is shown either for a fresh payment (canPay) or after the user confirmed
-  // they understand the risk of retrying (isRetryMethodSelector).
-  const isRetryMethodSelector = canShowSafeRetry && showRetryMethodSelector;
-  const methodSelectorVisible = canPay || isRetryMethodSelector;
+  // Safe to show the retry/change-method path when payment has definitively failed or backend says canRetry.
+  const canShowSafeRetry = verificationOk
+    && !hasActivePaySuitePayment
+    && (canGenerateRetry || explicitFailure || syncConfirmedFailure)
+    && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
+
+  // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
+  const methodSelectorVisible = (uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method";
+  const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
+  // True when the method selector is for a retry/new-attempt (not a first payment).
+  const isRetryContext = uiState === "retry_choose_method";
+
   const paysuiteStatus = (paysuitePayment?.status ?? order?.payment?.status ?? "").toUpperCase();
   const paysuiteReference = paysuitePayment?.providerReference
     ?? paysuitePayment?.paymentReference
     ?? order?.payment?.providerReference
     ?? null;
   const paysuiteTransactionId = order?.payment?.transactionId ?? null;
-  const paymentState = (() => {
-    if (returnPhase === "confirmed" || isPaid) {
+
+  const payButtonLabel = isPaySuiteBusy
+    ? "A iniciar pagamento..."
+    : isRetryContext && canGenerateRetry
+      ? `Gerar nova tentativa de pagamento — ${formatMoney(officialAmount)}`
+      : `Pagar ${formatMoney(officialAmount)} agora`;
+
+  // Status card content — single source of truth, derived from uiState.
+  const statusCard = (() => {
+    if (uiState === "confirmed" || isPaid) {
       return {
         tone: "success" as PaymentStateTone,
-        icon: "✅",
+        icon: "✅" as string | null,
+        showSpinner: false,
         title: "Pagamento confirmado",
         body: "O teu pagamento foi recebido com sucesso. O pedido ja esta em processamento.",
-        detail: returnPhase === "confirmed"
+        detail: uiState === "confirmed"
           ? `A redirecionar para os teus pedidos em ${redirectCountdown}s.`
           : null,
       };
     }
 
-    if (paysuiteStatus === "LATE_PAYMENT") {
+    if (uiState === "redirecting_to_paysuite") {
       return {
-        tone: "warning" as PaymentStateTone,
-        icon: "⚠️",
-        title: "Recebemos um pagamento fora do tempo esperado",
-        body: "A nossa equipa ira analisar este pagamento. Se o valor saiu da tua conta, nao pagues novamente.",
-        detail: "Podes acompanhar o pedido por aqui ou falar com o suporte.",
+        tone: "info" as PaymentStateTone,
+        icon: null,
+        showSpinner: true,
+        title: "A iniciar pagamento...",
+        body: "Estás a ser redirecionado para o checkout PaySuite. Não feches esta página.",
+        detail: null,
       };
     }
 
-    if (orderStatus === "PAYMENT_REJECTED" || ["FAILED", "CANCELLED", "AMOUNT_MISMATCH"].includes(paysuiteStatus)) {
+    if (uiState === "failed") {
+      if (paysuiteStatus === "LATE_PAYMENT") {
+        return {
+          tone: "warning" as PaymentStateTone,
+          icon: "⚠️",
+          showSpinner: false,
+          title: "Recebemos um pagamento fora do tempo esperado",
+          body: "A nossa equipa ira analisar este pagamento. Se o valor saiu da tua conta, nao pagues novamente.",
+          detail: "Podes acompanhar o pedido por aqui ou falar com o suporte.",
+        };
+      }
       return {
         tone: "danger" as PaymentStateTone,
         icon: "❌",
+        showSpinner: false,
         title: "O pagamento nao foi confirmado",
         body: cleanDisplayText(order?.adminMessageForClient)
           || "Este pagamento nao foi concluido. Gera uma nova tentativa apenas se o valor nao saiu da tua conta.",
@@ -390,69 +308,191 @@ export default function OrderPaymentPage() {
       };
     }
 
-    if (returnPhase === "timed_out") {
+    if (uiState === "returned_pending" || uiState === "retry_warning") {
       return {
         tone: canShowSafeRetry ? "warning" as PaymentStateTone : "info" as PaymentStateTone,
         icon: "⏳",
+        showSpinner: false,
         title: "Estamos a confirmar o teu pagamento",
         body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
         detail: canShowSafeRetry
           ? "A ultima verificacao nao encontrou uma confirmacao activa para este pagamento."
-          : "Ainda nao conseguimos confirmar. Se o valor saiu da conta, aguarda 2 minutos e clica em Verificar pagamento.",
-      };
-    }
-
-    if (returnPhase === "confirming" || hasActivePaySuitePayment || isProcessing) {
-      return {
-        tone: "info" as PaymentStateTone,
-        icon: "⏳",
-        title: "Estamos a confirmar o pagamento",
-        body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
-        detail: returnPhase === "confirming" && confirmingSecondsLeft > 0
-          ? `A verificar automaticamente (${confirmingSecondsLeft}s restantes).`
           : "Esta pagina actualiza automaticamente quando o gateway enviar a confirmacao.",
       };
     }
 
-    if (canGenerateRetry) {
+    if (uiState === "retry_choose_method") {
       return {
-        tone: "neutral" as PaymentStateTone,
+        tone: "warning" as PaymentStateTone,
         icon: "↻",
-        title: "Nova tentativa disponivel",
-        body: "A verificacao nao encontrou evidencia financeira para a tentativa anterior. Se o valor nao saiu da tua conta, podes gerar um novo checkout.",
+        showSpinner: false,
+        title: canGenerateRetry ? "Nova tentativa disponivel" : "Escolhe o metodo de pagamento",
+        body: canGenerateRetry
+          ? "A verificacao nao encontrou evidencia financeira para a tentativa anterior. Se o valor nao saiu da tua conta, podes gerar um novo checkout."
+          : "Escolhe o metodo e paga novamente.",
         detail: "Se o valor saiu, nao pagues novamente e fala com o suporte.",
       };
     }
 
+    if (uiState === "error_recoverable") {
+      return {
+        tone: "danger" as PaymentStateTone,
+        icon: "⚠️",
+        showSpinner: false,
+        title: "Nao foi possivel carregar o pedido",
+        body: "Verifica a tua ligacao a internet e tenta novamente.",
+        detail: null,
+      };
+    }
+
+    // ready_to_pay (and loading states — covered by overlay)
     return {
       tone: "info" as PaymentStateTone,
       icon: "⏳",
+      showSpinner: false,
       title: visual.title === "Pagamento pendente" ? "Pronto para iniciar o pagamento" : visual.title,
       body: visual.body,
       detail: null,
     };
   })();
-  const paymentStateStyle = PAYMENT_STATE_STYLES[paymentState.tone];
-  const payButtonLabel = isPaySuiteBusy
-    ? "A iniciar pagamento..."
-    : isRetryMethodSelector && canGenerateRetry
-      ? `Gerar nova tentativa de pagamento — ${formatMoney(officialAmount)}`
-      : `Pagar ${formatMoney(officialAmount)} agora`;
+  const paymentStateStyle = PAYMENT_STATE_STYLES[statusCard.tone];
 
-  function selectPaymentMethod(method: PaySuiteMethod) {
-    setPaysuiteMethod(method);
-    if (window.matchMedia("(max-width: 767px)").matches) return;
-    window.requestAnimationFrame(() => {
-      payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-  }
+  const loadOrder = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!token || !orderId) {
+      if (!silent) setUiState(prev => prev === "loading_order" ? "error_recoverable" : prev);
+      return;
+    }
+    try {
+      const orders = await fetchWithToken<Order[]>("/api/orders/my-orders", token);
+      setAllOrders(orders);
+      const currentOrder = orders.find((item) => item.id === orderId) || null;
+      setOrder(currentOrder);
+
+      // Keep paysuitePayment in sync with what the backend reports.
+      if (currentOrder?.payment?.provider?.toUpperCase() === "PAYSUITE") {
+        setPaysuitePayment({
+          status: currentOrder.payment.status,
+          providerReference: currentOrder.payment.providerReference,
+          checkoutUrl: currentOrder.payment.checkoutUrl,
+          providerStatus: currentOrder.payment.providerStatus,
+          expectedAmount: currentOrder.payment.expectedAmount,
+          canRetry: false,
+        });
+      }
+
+      if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
+        setUiState("confirmed");
+        if (!confirmedLoggedRef.current) {
+          confirmedLoggedRef.current = true;
+          devLog("[PAYMENT_RETURN_CONFIRMED]", { orderId, status: currentOrder.status });
+        }
+        return;
+      }
+
+      setUiState(prev => {
+        if (prev === "confirmed") return prev; // never un-confirm
+
+        if (!silent && prev === "loading_order") {
+          // Initial load: compute first stable state.
+          if (!currentOrder) return "error_recoverable";
+          const status = currentOrder.status;
+          const pmt = currentOrder.payment;
+          const pmtPayload: PaySuiteInitResponse | null =
+            pmt?.provider?.toUpperCase() === "PAYSUITE"
+              ? { status: pmt.status, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
+              : null;
+          const active = isActivePaySuitePayment(pmtPayload);
+          const processing = status === "PAYMENT_SUBMITTED" || status === "PAYMENT_UNDER_REVIEW";
+          const rejected = status === "PAYMENT_REJECTED";
+          const terminalGateway = TERMINAL_PAYMENT_STATUSES.has((pmt?.status ?? "").toUpperCase());
+
+          if (rejected || terminalGateway) return "failed";
+          if (active || processing) return "returned_pending";
+          if (status === "PENDING_PAYMENT") return "ready_to_pay";
+          return "returned_pending";
+        }
+
+        if (silent && currentOrder) {
+          // Background poll: apply only safe, unambiguous transitions.
+          const status = currentOrder.status;
+          const pmt = currentOrder.payment;
+          const pmtPayload: PaySuiteInitResponse | null =
+            pmt?.provider?.toUpperCase() === "PAYSUITE"
+              ? { status: pmt.status, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
+              : null;
+          const active = isActivePaySuitePayment(pmtPayload);
+          const rejected = status === "PAYMENT_REJECTED";
+          const terminalGateway = TERMINAL_PAYMENT_STATUSES.has((pmt?.status ?? "").toUpperCase());
+
+          // Active payment found while user is on the pay form: hide it to prevent duplicate payment.
+          if (prev === "ready_to_pay" && active) return "returned_pending";
+          // Backend now reports a terminal failure: escalate to failed.
+          if (prev === "returned_pending" && (rejected || terminalGateway)) return "failed";
+        }
+
+        return prev;
+      });
+    } catch (error) {
+      if (!silent) {
+        setFeedback({
+          type: "error",
+          msg: error instanceof Error ? error.message : "Não foi possível carregar o pedido.",
+        });
+        setUiState(prev => prev === "loading_order" ? "error_recoverable" : prev);
+      }
+    }
+  }, [orderId, token]);
+
+  useEffect(() => { void loadOrder(); }, [loadOrder]);
+
+  // Adaptive polling — fast during the return window, slow otherwise.
+  useEffect(() => {
+    if (!token || !orderId || uiState === "confirmed") return;
+    const intervalMs = fastPollActive ? RETURNING_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
+    const interval = window.setInterval(() => { void loadOrder({ silent: true }); }, intervalMs);
+    return () => window.clearInterval(interval);
+  }, [loadOrder, orderId, token, uiState, fastPollActive]);
+
+  // Return window: fast-poll timeout — after 90 s, drop back to slow polling.
+  useEffect(() => {
+    if (!returningFromPaySuite || !fastPollActive) return;
+    const timer = window.setTimeout(() => {
+      setFastPollActive(false);
+      devLog("[PAYMENT_RETURN_TIMEOUT]", { orderId });
+    }, RETURNING_POLL_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [fastPollActive, orderId, returningFromPaySuite]);
+
+  // One automatic sync attempt 2 s after entering checking_payment phase.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!returningFromPaySuite) return;
+    if (!token || !orderId) {
+      setUiState("returned_pending");
+      return;
+    }
+    devLog("[PAYMENT_RETURN_STARTED]", { orderId });
+    const timeout = window.setTimeout(() => { void performSync({ auto: true, initial: true }); }, 2000);
+    return () => window.clearTimeout(timeout);
+  // Intentionally runs once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-redirect countdown after confirmed state.
+  useEffect(() => {
+    if (uiState !== "confirmed") return;
+    const interval = window.setInterval(() => {
+      setRedirectCountdown((c) => {
+        if (c <= 1) { router.push("/orders"); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [uiState, router]);
 
   async function performSync({ auto = false, initial = false }: { auto?: boolean; initial?: boolean } = {}) {
-    if (!auto && isInitialPaymentLoading) return;
-    if (syncInFlightRef.current) {
-      if (initial) setIsInitialSyncLoading(false);
-      return;
-    } // mutex — blocks parallel calls
+    if (!auto && isLoading) return;
+    if (syncInFlightRef.current) return; // mutex — blocks parallel calls
     syncInFlightRef.current = true;
     setIsSyncBusy(true);
 
@@ -473,23 +513,20 @@ export default function OrderPaymentPage() {
       if (outcome === "confirmed") {
         emitClientDataChanged();
         await loadOrder();
-        setReturnPhase("confirmed");
+        setUiState("confirmed");
         setFeedback({ type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." });
         devLog("[PAYMENT_SYNC_CONFIRMED]", { orderId: targetId, status: syncResult.status });
       } else if (outcome === "failed") {
-        // Persist the sync response so syncConfirmedFailure becomes true immediately,
-        // unblocking canRetryAfterTimeout without waiting for the next background poll.
         setPaysuitePayment(syncResult);
-        // Use functional updater — performSync may be a stale closure (empty-deps auto-sync effect).
-        setReturnPhase(prev => prev === "confirming" ? "timed_out" : prev);
+        // Functional updater: stale closure cannot override "confirmed" if polling already confirmed it.
+        if (initial) setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending");
         if (!auto) {
           setFeedback({ type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." });
         }
         devLog("[PAYMENT_SYNC_FAILED]", { orderId: targetId, status: syncResult.status });
       } else {
-        // Persist pending sync result so hasActivePaySuitePayment reflects the latest
-        // gateway state (e.g. keeps blocking a duplicate payment attempt).
         setPaysuitePayment(syncResult);
+        if (initial) setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending");
         if (!auto) {
           setFeedback({
             type: "error",
@@ -499,17 +536,17 @@ export default function OrderPaymentPage() {
         devLog("[PAYMENT_SYNC_PENDING]", { orderId: targetId, status: syncResult.status });
       }
     } catch (err) {
+      if (initial) setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending");
       const msg = normalizeClientError(err, "Não foi possível verificar o estado do pagamento.").message;
       if (!auto) setFeedback({ type: "error", msg });
     } finally {
       syncInFlightRef.current = false;
       setIsSyncBusy(false);
-      if (initial) setIsInitialSyncLoading(false);
     }
   }
 
   async function handlePaySuitePayment() {
-    if (isInitialPaymentLoading) return;
+    if (isLoading) return;
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessão expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -534,6 +571,8 @@ export default function OrderPaymentPage() {
 
     setFieldError(null);
     setFeedback(null);
+    const prevState = uiState;
+    setUiState("redirecting_to_paysuite");
 
     let capturedErrorMsg: string | null = null;
 
@@ -566,6 +605,7 @@ export default function OrderPaymentPage() {
     });
 
     if (!result) {
+      setUiState(prevState);
       setFeedback({
         type: "error",
         msg: capturedErrorMsg ?? "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
@@ -574,7 +614,7 @@ export default function OrderPaymentPage() {
   }
 
   async function handlePaySuiteRetry() {
-    if (isInitialPaymentLoading) return;
+    if (isLoading) return;
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessao expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -587,6 +627,9 @@ export default function OrderPaymentPage() {
       router.push("/profile");
       return;
     }
+
+    const prevState = uiState;
+    setUiState("redirecting_to_paysuite");
 
     const result = await paysuiteAction.run(async () => {
       const returnUrl = typeof window !== "undefined"
@@ -609,6 +652,7 @@ export default function OrderPaymentPage() {
     });
 
     if (!result) {
+      setUiState(prevState);
       setFeedback({
         type: "error",
         msg: "Nao foi possivel gerar uma nova tentativa. Se o valor saiu da tua conta, nao pagues novamente; fala com o suporte.",
@@ -616,9 +660,18 @@ export default function OrderPaymentPage() {
     }
   }
 
+  function selectPaymentMethod(method: PaySuiteMethod) {
+    setPaysuiteMethod(method);
+    if (window.matchMedia("(max-width: 767px)").matches) return;
+    window.requestAnimationFrame(() => {
+      payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   return (
     <div className="relative mx-auto max-w-5xl pb-24 md:pb-0">
-      {isInitialPaymentLoading ? (
+      {/* Full-page overlay: initial load or checking payment after PaySuite return */}
+      {isLoading ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-white/70 px-4 backdrop-blur-sm"
           aria-live="polite"
@@ -639,12 +692,12 @@ export default function OrderPaymentPage() {
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
             <p className="mt-4 text-sm font-black" style={{ color: "#1A1410" }}>
-              {returningFromPaySuite && isInitialSyncLoading
+              {uiState === "checking_payment"
                 ? "Estamos a verificar se o pagamento foi concluído."
                 : "A carregar dados do pagamento..."}
             </p>
             <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
-              {returningFromPaySuite && isInitialSyncLoading
+              {uiState === "checking_payment"
                 ? "Não pagues novamente."
                 : "Aguarde um instante."}
             </p>
@@ -652,9 +705,40 @@ export default function OrderPaymentPage() {
         </div>
       ) : null}
 
+      {/* Redirect overlay: pay API call in progress — locks UI, prevents double-tap */}
+      {uiState === "redirecting_to_paysuite" ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-white/80 px-4 backdrop-blur-sm"
+          aria-live="polite"
+          role="status"
+        >
+          <div
+            className="w-full max-w-xs rounded-[24px] border bg-white p-5 text-center shadow-[0_20px_60px_rgba(16,24,40,0.16)]"
+            style={{ borderColor: "#F2D4CC" }}
+          >
+            <svg
+              className="mx-auto h-8 w-8 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={GREEN}
+              strokeWidth={2}
+              aria-hidden="true"
+            >
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+            <p className="mt-4 text-sm font-black" style={{ color: "#1A1410" }}>
+              A iniciar pagamento...
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
+              Não feches esta página.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div
-        className={`space-y-5 transition ${isInitialPaymentLoading ? "pointer-events-none select-none opacity-60 blur-[2px]" : ""}`}
-        aria-busy={isInitialPaymentLoading}
+        className={`space-y-5 transition ${isLoading ? "pointer-events-none select-none opacity-60 blur-[2px]" : ""}`}
+        aria-busy={isLoading}
       >
       <Link
         href="/orders"
@@ -703,6 +787,7 @@ export default function OrderPaymentPage() {
           </div>
         </div>
 
+        {/* Status card */}
         <div
           className="mt-6 rounded-[24px] border p-4 sm:p-5"
           style={{
@@ -717,20 +802,20 @@ export default function OrderPaymentPage() {
               style={{ background: paymentStateStyle.soft }}
               aria-hidden="true"
             >
-              {returnPhase === "confirming" ? (
+              {statusCard.showSpinner ? (
                 <svg className="h-6 w-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke={AMBER} strokeWidth={2}>
                   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
                 </svg>
-              ) : paymentState.icon}
+              ) : statusCard.icon}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-lg font-black sm:text-xl">{paymentState.title}</p>
+              <p className="text-lg font-black sm:text-xl">{statusCard.title}</p>
               <p className="mt-2 text-sm leading-6" style={{ color: "#374151" }}>
-                {paymentState.body}
+                {statusCard.body}
               </p>
-              {paymentState.detail ? (
+              {statusCard.detail ? (
                 <p className="mt-2 text-xs font-semibold leading-5" style={{ color: paymentStateStyle.color }}>
-                  {paymentState.detail}
+                  {statusCard.detail}
                 </p>
               ) : null}
             </div>
@@ -762,13 +847,15 @@ export default function OrderPaymentPage() {
             </div>
           ) : null}
 
-          {returnPhase !== "confirming" ? (
+          {/* Status card action buttons */}
+          {uiState !== "redirecting_to_paysuite" ? (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              {!isPaid ? (
+              {/* Verify button: shown in any non-terminal, non-pay-form state */}
+              {!isPaid && uiState !== "ready_to_pay" && uiState !== "retry_choose_method" && uiState !== "loading_order" && uiState !== "checking_payment" ? (
                 <button
                   type="button"
                   onClick={() => void performSync()}
-                  disabled={isInitialPaymentLoading || isSyncBusy}
+                  disabled={isSyncBusy}
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
                   style={{
                     background: isSyncBusy ? "#E5E7EB" : paymentStateStyle.soft,
@@ -787,11 +874,12 @@ export default function OrderPaymentPage() {
                 </button>
               ) : null}
 
+              {/* Retry / change method — only shown when payment has definitively failed or canRetry */}
               {canShowSafeRetry && !isPaid ? (
                 <button
                   type="button"
-                  onClick={() => { setShowRetryMethodSelector(false); setShowRetryWarningModal(true); }}
-                  disabled={isInitialPaymentLoading || isPaySuiteBusy}
+                  onClick={() => setUiState("retry_warning")}
+                  disabled={isPaySuiteBusy}
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
                   style={{ background: "#FFFFFF", borderColor: "#D1D5DB", color: "#374151" }}
                 >
@@ -799,7 +887,19 @@ export default function OrderPaymentPage() {
                 </button>
               ) : null}
 
-              {(returnPhase === "confirmed" || isPaid) ? (
+              {/* Back to pending from retry_choose_method */}
+              {uiState === "retry_choose_method" ? (
+                <button
+                  type="button"
+                  onClick={() => setUiState("returned_pending")}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
+                  style={{ background: "#FFFFFF", borderColor: "#D1D5DB", color: "#374151" }}
+                >
+                  ← Cancelar
+                </button>
+              ) : null}
+
+              {(uiState === "confirmed" || isPaid) ? (
                 <Link
                   href="/orders"
                   className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
@@ -809,7 +909,7 @@ export default function OrderPaymentPage() {
                 </Link>
               ) : null}
 
-              {returnPhase === "timed_out" ? (
+              {(uiState === "returned_pending" || uiState === "failed") ? (
                 <Link
                   href="/orders"
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
@@ -817,6 +917,17 @@ export default function OrderPaymentPage() {
                 >
                   Voltar aos meus pedidos
                 </Link>
+              ) : null}
+
+              {uiState === "error_recoverable" ? (
+                <button
+                  type="button"
+                  onClick={() => { setUiState("loading_order"); void loadOrder(); }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold"
+                  style={{ background: paymentStateStyle.soft, color: paymentStateStyle.color, border: `1px solid ${paymentStateStyle.border}` }}
+                >
+                  Tentar novamente
+                </button>
               ) : null}
             </div>
           ) : null}
@@ -868,7 +979,7 @@ export default function OrderPaymentPage() {
         ) : null}
 
 
-        {/* CAN PAY — PaySuite method selector + pay button */}
+        {/* PaySuite method selector + pay button: visible only in ready_to_pay or retry_choose_method */}
         {methodSelectorVisible ? (
           <div className="mt-6 space-y-5">
             <div
@@ -903,7 +1014,7 @@ export default function OrderPaymentPage() {
                       key={item.key}
                       type="button"
                       onClick={() => selectPaymentMethod(item.key)}
-                      disabled={isInitialPaymentLoading || isPaySuiteBusy}
+                      disabled={isPaySuiteBusy}
                       className="group flex min-h-[142px] flex-col justify-between rounded-[22px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(20,83,45,0.10)] disabled:hover:translate-y-0 disabled:hover:shadow-none"
                       style={{
                         borderColor: active ? GREEN : "#C7E7D3",
@@ -971,12 +1082,12 @@ export default function OrderPaymentPage() {
             <div className="hidden md:block">
               <button
                 type="button"
-                onClick={() => void (isRetryMethodSelector && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
-                disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
+                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-4 text-base font-black text-white"
                 style={{
                   background:
-                    isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
                       ? "#9CA3AF"
                       : GREEN,
                 }}
@@ -1006,12 +1117,12 @@ export default function OrderPaymentPage() {
             >
               <button
                 type="button"
-                onClick={() => void (isRetryMethodSelector && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
-                disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
+                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
                 style={{
                   background:
-                    isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
                       ? "#9CA3AF"
                       : GREEN,
                 }}
@@ -1024,7 +1135,8 @@ export default function OrderPaymentPage() {
       </section>
       </div>
 
-      {showRetryWarningModal ? (
+      {/* Warning modal — shown when uiState === "retry_warning" */}
+      {uiState === "retry_warning" ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
           role="dialog"
@@ -1049,7 +1161,7 @@ export default function OrderPaymentPage() {
             <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => { setShowRetryWarningModal(false); void performSync(); }}
+                onClick={() => { setUiState("returned_pending"); void performSync(); }}
                 className="w-full rounded-2xl px-4 py-3 text-sm font-black text-white"
                 style={{ background: GREEN }}
               >
@@ -1057,7 +1169,7 @@ export default function OrderPaymentPage() {
               </button>
               <button
                 type="button"
-                onClick={() => { setShowRetryWarningModal(false); setShowRetryMethodSelector(true); }}
+                onClick={() => setUiState("retry_choose_method")}
                 className="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
                 style={{ borderColor: "#D1D5DB", color: "#374151" }}
               >

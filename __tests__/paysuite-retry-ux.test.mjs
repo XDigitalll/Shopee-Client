@@ -50,8 +50,9 @@ describe("PaySuite retry UX contract", () => {
     assert.match(paymentPage, /NÃO cries outro pagamento/);
     assert.match(paymentPage, /Voltar e verificar pagamento/);
     assert.match(paymentPage, /Tenho certeza, quero escolher outro método/);
-    // The old direct retry button must not exist — retry is only reachable via the modal
-    assert.doesNotMatch(paymentPage, /handlePaySuiteRetry\(\)\s*\}\s*\}\s*>\s*\{isPaySuiteBusy/);
+    // The warning modal is the only path to the retry method selector.
+    assert.match(paymentPage, /retry_warning/);
+    assert.match(paymentPage, /retry_choose_method/);
   });
 
   it("method change is secondary action — primary is verify", () => {
@@ -59,20 +60,22 @@ describe("PaySuite retry UX contract", () => {
     assert.match(paymentPage, /Verificar pagamento/);
   });
 
-  it("method selector is gated by showRetryMethodSelector state after modal confirmation", () => {
-    assert.match(paymentPage, /showRetryMethodSelector/);
-    assert.match(paymentPage, /isRetryMethodSelector/);
+  it("method selector is gated by state machine — only visible in ready_to_pay or retry_choose_method", () => {
+    // Method selector is controlled by the state machine, not derived multi-flags.
     assert.match(paymentPage, /methodSelectorVisible/);
+    assert.match(paymentPage, /isRetryContext/);
+    // ready_to_pay and retry_choose_method are the only states where the selector appears.
+    assert.match(paymentPage, /uiState === "ready_to_pay".*verificationOk.*uiState === "retry_choose_method"/);
   });
 
   it("loading overlay shows safe message when returning from gateway", () => {
     assert.match(paymentPage, /Estamos a verificar se o pagamento foi concluído/);
     assert.match(paymentPage, /Não pagues novamente/);
-    assert.match(paymentPage, /returningFromPaySuite && isInitialSyncLoading/);
+    assert.match(paymentPage, /uiState === "checking_payment"/);
   });
 
   it("retry pay button routes to retry endpoint when canGenerateRetry, new payment otherwise", () => {
-    // The pay button inside the method selector calls the correct handler based on retry context
-    assert.match(paymentPage, /isRetryMethodSelector && canGenerateRetry \? handlePaySuiteRetry/);
+    // The pay button inside the method selector calls the correct handler based on retry context.
+    assert.match(paymentPage, /isRetryContext && canGenerateRetry \? handlePaySuiteRetry/);
   });
 });

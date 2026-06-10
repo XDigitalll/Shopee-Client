@@ -262,55 +262,77 @@ describe("duplicate payment blocking", () => {
   });
 });
 
-// ── canPay / canRetryAfterTimeout gate conditions ─────────────────────────
+// ── State machine initial-state computation ───────────────────────────────
 
-describe("payment form visibility gates", () => {
-  function computeCanPay({ orderStatus, paysuitePayment, returnPhase }) {
-    const hasActive = isActivePaySuitePayment(paysuitePayment);
-    return (
-      (orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED")
+describe("payment form visibility gates (state machine)", () => {
+  const TERMINAL_STATUSES = new Set(["FAILED", "CANCELLED", "AMOUNT_MISMATCH", "LATE_PAYMENT"]);
+
+  // Mirrors the initial-load state computation in loadOrder().
+  function computeInitialUiState({ orderStatus, paysuitePayment }) {
+    const active = isActivePaySuitePayment(paysuitePayment);
+    const processing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
+    const rejected = orderStatus === "PAYMENT_REJECTED";
+    const terminalGateway = TERMINAL_STATUSES.has((paysuitePayment?.status ?? "").toUpperCase());
+    if (rejected || terminalGateway) return "failed";
+    if (active || processing) return "returned_pending";
+    if (orderStatus === "PENDING_PAYMENT") return "ready_to_pay";
+    return "returned_pending";
+  }
+
+  // Method selector visibility: only in ready_to_pay (when verified) or retry_choose_method.
+  function methodSelectorVisible(uiState, verificationOk) {
+    return (uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method";
+  }
+
+  // Retry path available when payment definitively failed and user is verified.
+  function canShowSafeRetry({ uiState, verificationOk, hasActive, canGenerateRetry, explicitFailure, syncFailed }) {
+    return verificationOk
       && !hasActive
-      && returnPhase === "idle"
-    );
+      && (canGenerateRetry || explicitFailure || syncFailed)
+      && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
   }
 
-  function computeCanRetryAfterTimeout({ returnPhase, orderStatus, paysuitePayment }) {
-    const hasActive = isActivePaySuitePayment(paysuitePayment);
-    return returnPhase === "timed_out" && orderStatus === "PAYMENT_REJECTED" && !hasActive;
-  }
-
-  it("psr=1 confirming phase — canPay is false, form hidden", () => {
-    const canPay = computeCanPay({ orderStatus: "PENDING_PAYMENT", paysuitePayment: null, returnPhase: "confirming" });
-    assert.ok(!canPay, "form must be hidden during confirming phase");
+  it("psr=1 — entering checking_payment, method selector not shown", () => {
+    // On return from PaySuite, state starts as checking_payment — no method selector.
+    assert.ok(!methodSelectorVisible("checking_payment", true), "form must be hidden in checking_payment");
   });
 
-  it("psr=1 timed_out without failure — canPay is false, no pay button", () => {
-    const canPay = computeCanPay({ orderStatus: "PENDING_PAYMENT", paysuitePayment: null, returnPhase: "timed_out" });
-    assert.ok(!canPay, "pay button must not appear in timed_out without explicit failure");
+  it("returned_pending without failure — method selector hidden, no retry path", () => {
+    assert.ok(!methodSelectorVisible("returned_pending", true), "form must be hidden in returned_pending");
+    const retry = canShowSafeRetry({ uiState: "returned_pending", verificationOk: true, hasActive: false, canGenerateRetry: false, explicitFailure: false, syncFailed: false });
+    assert.ok(!retry, "must not show retry when payment has no evidence of failure");
   });
 
-  it("timed_out with PAYMENT_REJECTED — canRetryAfterTimeout is true", () => {
-    const canRetry = computeCanRetryAfterTimeout({ returnPhase: "timed_out", orderStatus: "PAYMENT_REJECTED", paysuitePayment: null });
-    assert.ok(canRetry, "retry allowed after timeout when backend reported failure");
+  it("returned_pending with PAYMENT_REJECTED — retry path available", () => {
+    const retry = canShowSafeRetry({ uiState: "returned_pending", verificationOk: true, hasActive: false, canGenerateRetry: false, explicitFailure: true, syncFailed: false });
+    assert.ok(retry, "retry allowed when backend reported explicit failure");
   });
 
-  it("timed_out with PENDING_PAYMENT (no explicit failure) — canRetryAfterTimeout is false", () => {
-    const canRetry = computeCanRetryAfterTimeout({ returnPhase: "timed_out", orderStatus: "PENDING_PAYMENT", paysuitePayment: null });
-    assert.ok(!canRetry, "must not allow pay again when backend has not reported failure");
+  it("returned_pending with PENDING_PAYMENT (no failure) — no retry path", () => {
+    const retry = canShowSafeRetry({ uiState: "returned_pending", verificationOk: true, hasActive: false, canGenerateRetry: false, explicitFailure: false, syncFailed: false });
+    assert.ok(!retry, "must not allow retry when no failure evidence");
   });
 
-  it("idle phase, PENDING_PAYMENT, no active payment — canPay is true", () => {
-    const canPay = computeCanPay({ orderStatus: "PENDING_PAYMENT", paysuitePayment: null, returnPhase: "idle" });
-    assert.ok(canPay, "form must be shown in idle phase with no active payment");
+  it("PENDING_PAYMENT, no active payment → initial state is ready_to_pay", () => {
+    const state = computeInitialUiState({ orderStatus: "PENDING_PAYMENT", paysuitePayment: null });
+    assert.equal(state, "ready_to_pay");
+    assert.ok(methodSelectorVisible(state, true), "method selector must be shown in ready_to_pay");
   });
 
-  it("idle phase, active PENDING PaySuite tx — canPay is false", () => {
-    const canPay = computeCanPay({
-      orderStatus: "PENDING_PAYMENT",
-      paysuitePayment: { status: "PENDING", providerReference: "REF-1" },
-      returnPhase: "idle",
-    });
-    assert.ok(!canPay, "form must be hidden when PaySuite tx is active");
+  it("PENDING_PAYMENT, active PaySuite tx → initial state is returned_pending", () => {
+    const state = computeInitialUiState({ orderStatus: "PENDING_PAYMENT", paysuitePayment: { status: "PENDING", providerReference: "REF-1" } });
+    assert.equal(state, "returned_pending");
+    assert.ok(!methodSelectorVisible(state, true), "method selector must be hidden in returned_pending");
+  });
+
+  it("PAYMENT_REJECTED → initial state is failed", () => {
+    const state = computeInitialUiState({ orderStatus: "PAYMENT_REJECTED", paysuitePayment: null });
+    assert.equal(state, "failed");
+  });
+
+  it("terminal gateway status → initial state is failed", () => {
+    const state = computeInitialUiState({ orderStatus: "PENDING_PAYMENT", paysuitePayment: { status: "FAILED", providerReference: "REF-1" } });
+    assert.equal(state, "failed");
   });
 });
 
@@ -319,17 +341,19 @@ describe("payment form visibility gates", () => {
 describe("full sync flow outcomes", () => {
   async function simulateSync(gatewayStatus) {
     const events = [];
-    let currentReturnPhase = "idle";
+    // State machine: starts in returned_pending for manual syncs, checking_payment for initial.
+    let currentUiState = "returned_pending";
     let currentFeedback = null;
 
     const outcome = classifySyncResult(gatewayStatus);
 
     if (outcome === "confirmed") {
       events.push("PAYMENT_SYNC_CONFIRMED");
-      currentReturnPhase = "confirmed";
+      currentUiState = "confirmed";
       currentFeedback = { type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." };
     } else if (outcome === "failed") {
       events.push("PAYMENT_SYNC_FAILED");
+      // uiState stays returned_pending (or transitions from checking_payment to returned_pending)
       currentFeedback = { type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." };
     } else {
       events.push("PAYMENT_SYNC_PENDING");
@@ -339,25 +363,25 @@ describe("full sync flow outcomes", () => {
       };
     }
 
-    return { events, returnPhase: currentReturnPhase, feedback: currentFeedback };
+    return { events, uiState: currentUiState, feedback: currentFeedback };
   }
 
-  it("completed status → phase=confirmed, order updated, feedback success", async () => {
-    const { events, returnPhase, feedback } = await simulateSync("completed");
+  it("completed status → uiState=confirmed, order updated, feedback success", async () => {
+    const { events, uiState, feedback } = await simulateSync("completed");
     assert.ok(events.includes("PAYMENT_SYNC_CONFIRMED"));
-    assert.equal(returnPhase, "confirmed", "must transition to confirmed phase");
+    assert.equal(uiState, "confirmed", "must transition to confirmed state");
     assert.equal(feedback.type, "success");
   });
 
-  it("success status → confirmed (completed redirects to /orders)", async () => {
-    const { returnPhase } = await simulateSync("SUCCESS");
-    assert.equal(returnPhase, "confirmed", "SUCCESS must confirm payment and trigger redirect");
+  it("success status → confirmed (triggers redirect to /orders)", async () => {
+    const { uiState } = await simulateSync("SUCCESS");
+    assert.equal(uiState, "confirmed", "SUCCESS must confirm payment and trigger redirect");
   });
 
-  it("pending status → phase stays idle, feedback warns not to pay again", async () => {
-    const { events, returnPhase, feedback } = await simulateSync("pending");
+  it("pending status → uiState stays returned_pending, feedback warns not to pay again", async () => {
+    const { events, uiState, feedback } = await simulateSync("pending");
     assert.ok(events.includes("PAYMENT_SYNC_PENDING"));
-    assert.equal(returnPhase, "idle", "pending must not change phase");
+    assert.equal(uiState, "returned_pending", "pending must not change to confirmed");
     assert.equal(feedback.type, "error");
     assert.ok(feedback.msg.includes("ainda em confirmação"));
   });
@@ -373,41 +397,44 @@ describe("full sync flow outcomes", () => {
     const gatewayStatus = "completed";
     const outcome = classifySyncResult(gatewayStatus);
     assert.equal(outcome, "confirmed");
-    // After confirmed, the page transitions to "confirmed" phase and polls loadOrder()
+    // After confirmed, the page transitions to "confirmed" state and polls loadOrder()
     // which picks up the new order status. This invariant ensures no SUCCESS + PENDING_PAYMENT.
-    const { returnPhase } = await simulateSync(gatewayStatus);
-    assert.equal(returnPhase, "confirmed", "confirmed sync must exit PENDING_PAYMENT state");
+    const { uiState } = await simulateSync(gatewayStatus);
+    assert.equal(uiState, "confirmed", "confirmed sync must exit PENDING_PAYMENT state");
   });
 });
 
 // ── Test 4: functional updater — stale closure cannot override "confirmed" ────
-// Mirrors: setReturnPhase(prev => prev === "confirming" ? "timed_out" : prev)
+// Mirrors: setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending")
 // The auto-sync useEffect captures performSync at mount (empty deps).
 // If the order is already confirmed via polling before the 2 s auto-sync fires,
-// a stale closure reading returnPhase="confirming" must NOT override "confirmed".
+// the functional updater receives the REAL prev ("confirmed"), not the stale closure value
+// ("checking_payment"), so it never overrides the confirmed state.
 
 describe("phase transition safety — functional updater prevents stale-closure race (test 4)", () => {
-  function applyFailedOutcome(currentPhase) {
-    return currentPhase === "confirming" ? "timed_out" : currentPhase;
+  // Mirrors performSync initial-outcome handling:
+  //   setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending")
+  function applyInitialSyncOutcome(currentState) {
+    return currentState === "confirmed" ? "confirmed" : "returned_pending";
   }
 
-  it("failed sync outcome with real phase=confirmed → phase stays confirmed", () => {
-    // Real phase is "confirmed"; stale closure would pass "confirming" as prev.
+  it("failed/pending sync outcome with real state=confirmed → state stays confirmed", () => {
+    // Real state is "confirmed"; stale closure would assume "checking_payment".
     // The functional updater receives the REAL prev, not the stale closure value.
-    assert.equal(applyFailedOutcome("confirmed"), "confirmed",
-      "failed sync must not override confirmed phase");
+    assert.equal(applyInitialSyncOutcome("confirmed"), "confirmed",
+      "failed sync must not override confirmed state");
   });
 
-  it("failed sync outcome with phase=confirming → transitions to timed_out", () => {
-    assert.equal(applyFailedOutcome("confirming"), "timed_out");
+  it("failed/pending sync outcome with state=checking_payment → transitions to returned_pending", () => {
+    assert.equal(applyInitialSyncOutcome("checking_payment"), "returned_pending");
   });
 
-  it("failed sync outcome with phase=timed_out → stays timed_out", () => {
-    assert.equal(applyFailedOutcome("timed_out"), "timed_out");
+  it("failed/pending sync outcome with state=returned_pending → stays returned_pending", () => {
+    assert.equal(applyInitialSyncOutcome("returned_pending"), "returned_pending");
   });
 
-  it("failed sync outcome with phase=idle (manual sync) → stays idle", () => {
-    assert.equal(applyFailedOutcome("idle"), "idle");
+  it("failed/pending sync outcome with state=loading_order (edge case) → returned_pending", () => {
+    assert.equal(applyInitialSyncOutcome("loading_order"), "returned_pending");
   });
 });
 
@@ -448,10 +475,10 @@ describe("PAYMENT_RETURN_CONFIRMED guard — fires once per mount (test 5)", () 
 });
 
 // ── Tests 6 & 7: source-code inspection — log placement ──────────────────────
-// These verify the countdown ticker contains PAYMENT_RETURN_TIMEOUT (and only that),
-// and that PAYMENT_SYNC_TIMEOUT is NOT present in the ticker (removed as duplicate).
+// These verify PAYMENT_RETURN_TIMEOUT is logged when the 90 s fast-poll window expires,
+// and that PAYMENT_SYNC_TIMEOUT does not appear in the return-window section.
 
-describe("log placement — PAYMENT_RETURN_TIMEOUT alone in ticker (tests 6 & 7)", () => {
+describe("log placement — PAYMENT_RETURN_TIMEOUT in return-window effect (tests 6 & 7)", () => {
   let source = "";
 
   before(async () => {
@@ -464,39 +491,37 @@ describe("log placement — PAYMENT_RETURN_TIMEOUT alone in ticker (tests 6 & 7)
     source = readFileSync(fileURLToPath(pageUrl), "utf8");
   });
 
-  it("countdown ticker contains PAYMENT_RETURN_TIMEOUT (test 6)", () => {
-    // Isolate the countdown ticker effect block.
+  it("return-window effect contains PAYMENT_RETURN_TIMEOUT (test 6)", () => {
+    // Isolate the return-window fast-poll timeout effect block.
     const block = source.match(
-      /Confirming window: countdown ticker[\s\S]*?clearInterval\(interval\);\s*\}/,
+      /Return window: fast-poll timeout[\s\S]*?clearTimeout\(timer\);\s*\}/,
     )?.[0] ?? "";
-    assert.ok(block.length > 0, "countdown block must be found in source");
+    assert.ok(block.length > 0, "return-window block must be found in source");
     assert.ok(
       block.includes("PAYMENT_RETURN_TIMEOUT"),
-      "ticker must log PAYMENT_RETURN_TIMEOUT on 90 s expiry",
+      "return-window effect must log PAYMENT_RETURN_TIMEOUT on 90 s expiry",
     );
   });
 
-  it("countdown ticker does NOT contain PAYMENT_SYNC_TIMEOUT (test 6)", () => {
+  it("return-window effect does NOT contain PAYMENT_SYNC_TIMEOUT (test 6)", () => {
     const block = source.match(
-      /Confirming window: countdown ticker[\s\S]*?clearInterval\(interval\);\s*\}/,
+      /Return window: fast-poll timeout[\s\S]*?clearTimeout\(timer\);\s*\}/,
     )?.[0] ?? "";
     assert.ok(
       !block.includes("PAYMENT_SYNC_TIMEOUT"),
-      "PAYMENT_SYNC_TIMEOUT must not be in the countdown ticker — it was removed as a duplicate",
+      "PAYMENT_SYNC_TIMEOUT must not be in the return-window effect",
     );
   });
 
-  it("PAYMENT_SYNC_TIMEOUT is not emitted anywhere in the countdown phase (test 7)", () => {
-    // The confirming-window code (ticker + auto-sync useEffect) must not contain
-    // PAYMENT_SYNC_TIMEOUT — that log belongs only to an actual sync network timeout.
-    // Extract from the "Confirming window" comment to the end of the auto-sync effect.
-    const confirmingSection = source.match(
-      /Confirming window: countdown ticker[\s\S]*?\/\/ Auto-redirect countdown after confirmed phase\./,
+  it("PAYMENT_SYNC_TIMEOUT is not emitted in the return-window or auto-sync section (test 7)", () => {
+    // Extract from the return-window comment to the end of the auto-sync effect.
+    const returnSection = source.match(
+      /Return window: fast-poll timeout[\s\S]*?\/\/ Auto-redirect countdown after confirmed state\./,
     )?.[0] ?? "";
-    assert.ok(confirmingSection.length > 0, "confirming section must be found");
+    assert.ok(returnSection.length > 0, "return-window section must be found");
     assert.ok(
-      !confirmingSection.includes("PAYMENT_SYNC_TIMEOUT"),
-      "PAYMENT_SYNC_TIMEOUT must not appear in the confirming-window section",
+      !returnSection.includes("PAYMENT_SYNC_TIMEOUT"),
+      "PAYMENT_SYNC_TIMEOUT must not appear in the return-window section",
     );
   });
 });
