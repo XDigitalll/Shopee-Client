@@ -185,6 +185,8 @@ export default function OrderPaymentPage() {
   const confirmingStartRef = useRef<number>(returningFromPaySuite ? Date.now() : 0);
   const [confirmingElapsed, setConfirmingElapsed] = useState(0);
   const [redirectCountdown, setRedirectCountdown] = useState(CONFIRMED_REDIRECT_DELAY_MS / 1000);
+  const [showRetryWarningModal, setShowRetryWarningModal] = useState(false);
+  const [showRetryMethodSelector, setShowRetryMethodSelector] = useState(false);
 
   const isPaySuiteBusy = paysuiteAction.isRunning;
   const isInitialPaymentLoading = isInitialOrderLoading || isInitialSyncLoading;
@@ -344,6 +346,10 @@ export default function OrderPaymentPage() {
     Math.ceil((RETURNING_POLL_DURATION_MS - confirmingElapsed) / 1000),
   );
   const canShowSafeRetry = verificationOk && (canGenerateRetry || canRetryAfterTimeout);
+  // Method selector is shown either for a fresh payment (canPay) or after the user confirmed
+  // they understand the risk of retrying (isRetryMethodSelector).
+  const isRetryMethodSelector = canShowSafeRetry && showRetryMethodSelector;
+  const methodSelectorVisible = canPay || isRetryMethodSelector;
   const paysuiteStatus = (paysuitePayment?.status ?? order?.payment?.status ?? "").toUpperCase();
   const paysuiteReference = paysuitePayment?.providerReference
     ?? paysuitePayment?.paymentReference
@@ -392,7 +398,7 @@ export default function OrderPaymentPage() {
         body: "Se o valor ja saiu da tua conta, nao pagues novamente. A confirmacao pode demorar alguns minutos.",
         detail: canShowSafeRetry
           ? "A ultima verificacao nao encontrou uma confirmacao activa para este pagamento."
-          : "Usa Verificar atualizacao para consultar novamente a PaySuite.",
+          : "Ainda nao conseguimos confirmar. Se o valor saiu da conta, aguarda 2 minutos e clica em Verificar pagamento.",
       };
     }
 
@@ -429,8 +435,8 @@ export default function OrderPaymentPage() {
   const paymentStateStyle = PAYMENT_STATE_STYLES[paymentState.tone];
   const payButtonLabel = isPaySuiteBusy
     ? "A iniciar pagamento..."
-    : canRetryAfterTimeout
-      ? `Gerar nova tentativa - ${formatMoney(officialAmount)}`
+    : isRetryMethodSelector && canGenerateRetry
+      ? `Gerar nova tentativa de pagamento — ${formatMoney(officialAmount)}`
       : `Pagar ${formatMoney(officialAmount)} agora`;
 
   function selectPaymentMethod(method: PaySuiteMethod) {
@@ -633,10 +639,14 @@ export default function OrderPaymentPage() {
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
             <p className="mt-4 text-sm font-black" style={{ color: "#1A1410" }}>
-              A carregar dados do pagamento...
+              {returningFromPaySuite && isInitialSyncLoading
+                ? "Estamos a verificar se o pagamento foi concluído."
+                : "A carregar dados do pagamento..."}
             </p>
             <p className="mt-1 text-sm" style={{ color: "#6B7280" }}>
-              Aguarde um instante.
+              {returningFromPaySuite && isInitialSyncLoading
+                ? "Não pagues novamente."
+                : "Aguarde um instante."}
             </p>
           </div>
         </div>
@@ -773,19 +783,19 @@ export default function OrderPaymentPage() {
                       </svg>
                       A verificar...
                     </>
-                  ) : "Verificar atualizacao"}
+                  ) : "Verificar pagamento"}
                 </button>
               ) : null}
 
-              {canGenerateRetry && verificationOk ? (
+              {canShowSafeRetry && !isPaid ? (
                 <button
                   type="button"
-                  onClick={() => void handlePaySuiteRetry()}
+                  onClick={() => { setShowRetryMethodSelector(false); setShowRetryWarningModal(true); }}
                   disabled={isInitialPaymentLoading || isPaySuiteBusy}
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
-                  style={{ background: isPaySuiteBusy ? "#9CA3AF" : GREEN }}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
+                  style={{ background: "#FFFFFF", borderColor: "#D1D5DB", color: "#374151" }}
                 >
-                  {isPaySuiteBusy ? "A gerar..." : "Gerar nova tentativa"}
+                  Alterar método de pagamento / tentar novamente
                 </button>
               ) : null}
 
@@ -859,7 +869,7 @@ export default function OrderPaymentPage() {
 
 
         {/* CAN PAY — PaySuite method selector + pay button */}
-        {(canPay || canRetryAfterTimeout) ? (
+        {methodSelectorVisible ? (
           <div className="mt-6 space-y-5">
             <div
               className="rounded-[24px] border p-5"
@@ -961,7 +971,7 @@ export default function OrderPaymentPage() {
             <div className="hidden md:block">
               <button
                 type="button"
-                onClick={() => void handlePaySuitePayment()}
+                onClick={() => void (isRetryMethodSelector && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
                 disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-4 text-base font-black text-white"
                 style={{
@@ -996,7 +1006,7 @@ export default function OrderPaymentPage() {
             >
               <button
                 type="button"
-                onClick={() => void handlePaySuitePayment()}
+                onClick={() => void (isRetryMethodSelector && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
                 disabled={isInitialPaymentLoading || isPaySuiteBusy || !officialAmount || officialAmount <= 0}
                 className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
                 style={{
@@ -1013,6 +1023,50 @@ export default function OrderPaymentPage() {
         ) : null}
       </section>
       </div>
+
+      {showRetryWarningModal ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="retry-warning-title"
+        >
+          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.20)]">
+            <p
+              id="retry-warning-title"
+              className="text-lg font-black"
+              style={{ color: "#991B1B" }}
+            >
+              Atenção antes de gerar novo pagamento
+            </p>
+            <p className="mt-3 text-sm leading-6" style={{ color: "#374151" }}>
+              Se o valor saiu da tua conta, <strong>NÃO cries outro pagamento.</strong>
+              <br />
+              Aguarda pelo menos 2 minutos e clica em <strong>&quot;Verificar pagamento&quot;</strong>.
+              <br />
+              Só continua se tens certeza de que nenhum valor saiu da tua conta.
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => { setShowRetryWarningModal(false); void performSync(); }}
+                className="w-full rounded-2xl px-4 py-3 text-sm font-black text-white"
+                style={{ background: GREEN }}
+              >
+                Voltar e verificar pagamento
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowRetryWarningModal(false); setShowRetryMethodSelector(true); }}
+                className="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
+                style={{ borderColor: "#D1D5DB", color: "#374151" }}
+              >
+                Tenho certeza, quero escolher outro método
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
