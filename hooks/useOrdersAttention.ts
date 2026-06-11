@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { apiFetch, CLIENT_DATA_CHANGED_EVENT } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
 
@@ -23,6 +24,8 @@ const EMPTY_SUMMARY: OrdersAttentionSummary = { attentionCount: 0, orders: [] };
 
 export function useOrdersAttention() {
   const { token } = useAuth();
+  const pathname = usePathname();
+  const isPaymentPage = /^\/orders\/[^/]+\/payment$/.test(pathname ?? "");
   const [summary, setSummary] = useState<OrdersAttentionSummary>(EMPTY_SUMMARY);
 
   const refresh = useCallback(async () => {
@@ -39,7 +42,7 @@ export function useOrdersAttention() {
   }, [refresh]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || isPaymentPage) return;
     const run = () => void refresh().catch(() => null);
     const onVisibility = () => {
       if (document.visibilityState === "visible") run();
@@ -54,7 +57,7 @@ export function useOrdersAttention() {
       window.removeEventListener(CLIENT_DATA_CHANGED_EVENT, run);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [refresh, token]);
+  }, [refresh, token, isPaymentPage]);
 
   return { summary, attentionCount: summary.attentionCount, refresh };
 }
