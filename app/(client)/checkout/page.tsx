@@ -19,6 +19,7 @@ import { useFormValidation } from "@/hooks/useFormValidation";
 
 const RED = "#E8431A";
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
+type CheckoutPaymentMethod = "PAYSUITE" | "CASH_ON_DELIVERY";
 
 const initialForm = {
   deliveryMethod: "DELIVERY",
@@ -147,6 +148,7 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponValidation | null>(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("PAYSUITE");
   const primaryPhoneRef = useRef<HTMLInputElement | null>(null);
   const alternativePhoneRef = useRef<HTMLInputElement | null>(null);
 
@@ -256,6 +258,13 @@ export default function CheckoutPage() {
   const paymentNameNeedsAttention = !isPaymentNameReady(form.fullName, form.primaryPhoneNumber);
   const phoneVerificationPending = customerProfile?.phoneVerified === false;
   const emailVerificationPending = customerProfile?.hasRealEmail === true && customerProfile?.emailVerified === false;
+  const cashOnDeliveryEligible = isDelivery && localItems.length > 0 && externalItems.length === 0;
+
+  useEffect(() => {
+    if (!cashOnDeliveryEligible && paymentMethod === "CASH_ON_DELIVERY") {
+      setPaymentMethod("PAYSUITE");
+    }
+  }, [cashOnDeliveryEligible, paymentMethod]);
 
   const saveProfileNameForPayment = async (fullName: string) => {
     if (!token || !customerProfile) {
@@ -375,6 +384,9 @@ export default function CheckoutPage() {
         method: "POST",
         body: JSON.stringify({
           ...sanitized,
+          paymentMethod: paymentMethod === "CASH_ON_DELIVERY" && cashOnDeliveryEligible
+            ? "CASH_ON_DELIVERY"
+            : "PAYSUITE",
           selectedItemIds: checkoutItems.map((item) => item.itemId),
           couponCode: coupon?.valid ? coupon.code : undefined,
         }),
@@ -420,13 +432,16 @@ export default function CheckoutPage() {
       const internalOrderForPayment = getInternalOrderForPayment(result);
 
       if (internalOrderForPayment?.id) {
+        const choseCashOnDelivery = paymentMethod === "CASH_ON_DELIVERY" && cashOnDeliveryEligible;
         setFeedback({
           type: "success",
-          msg: result.mixedCheckout && externalOrder
+          msg: choseCashOnDelivery
+            ? `Pedido ${orderDisplayCode(internalOrderForPayment)} reservado. Vais pagar na entrega.`
+            : result.mixedCheckout && externalOrder
             ? `Pedido ${orderDisplayCode(localOrder ?? internalOrderForPayment)} criado. Vais seguir para o pagamento.`
             : `Pedido ${orderDisplayCode(internalOrderForPayment)} criado. A abrir pagamento...`,
         });
-        router.push(`/orders/${internalOrderForPayment.id}/payment`);
+        router.push(choseCashOnDelivery ? "/orders" : `/orders/${internalOrderForPayment.id}/payment`);
         return;
       }
 
@@ -834,6 +849,46 @@ export default function CheckoutPage() {
                   </div>
                 ) : null}
               </div>
+            </div>
+
+            <div className="rounded-[22px] border bg-white p-4 shadow-sm sm:rounded-[28px] sm:p-5" style={{ borderColor: "#F2D4CC" }}>
+              <p className="text-sm font-black" style={{ color: "#1A1410" }}>Como queres pagar?</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm" style={{ borderColor: paymentMethod === "PAYSUITE" ? RED : "#F2D4CC", background: paymentMethod === "PAYSUITE" ? "#FFF5F1" : "#FFFDFC" }}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="PAYSUITE"
+                    checked={paymentMethod === "PAYSUITE"}
+                    onChange={() => setPaymentMethod("PAYSUITE")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <strong className="block" style={{ color: "#1A1410" }}>Pagar agora</strong>
+                    <span style={{ color: "#6B7280" }}>M-Pesa, e-Mola, Visa ou transferencia manual depois de criar o pedido.</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4 text-sm" style={{ borderColor: paymentMethod === "CASH_ON_DELIVERY" ? RED : "#F2D4CC", background: paymentMethod === "CASH_ON_DELIVERY" ? "#FFF5F1" : "#FFFDFC", opacity: cashOnDeliveryEligible ? 1 : 0.62 }}>
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="CASH_ON_DELIVERY"
+                    checked={paymentMethod === "CASH_ON_DELIVERY"}
+                    onChange={() => {
+                      if (cashOnDeliveryEligible) setPaymentMethod("CASH_ON_DELIVERY");
+                    }}
+                    disabled={!cashOnDeliveryEligible}
+                    className="mt-1"
+                  />
+                  <span>
+                    <strong className="block" style={{ color: "#1A1410" }}>Pagar na entrega</strong>
+                    <span style={{ color: "#6B7280" }}>Disponivel apenas para produtos locais com entrega ao domicilio.</span>
+                  </span>
+                </label>
+              </div>
+              <p className="mt-3 text-xs leading-5" style={{ color: "#9A3412" }}>
+                Disponivel apenas para produtos locais ou encomendas aprovadas pela equipa. Para produtos internacionais, pode ser necessario sinal para reservar e comprar o produto; nesse caso paga um sinal agora e o restante na entrega.
+              </p>
             </div>
 
             {/* ── Coupon ── */}

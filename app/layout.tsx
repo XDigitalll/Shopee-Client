@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   },
   description: "Plataforma moçambicana de compras internacionais assistidas.",
   keywords: ["importação Moçambique", "compras online Moçambique", "Amazon Moçambique", "Shein Moçambique", "M-Pesa compras"],
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.png",
+  },
   openGraph: {
     type: "website",
     locale: "pt_MZ",

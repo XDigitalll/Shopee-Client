@@ -259,6 +259,12 @@ export type Order = {
   assignedDeliveryFee?: number | null;
   deliveryCurrency?: string | null;
   deliveryPaymentMode?: string | null;
+  paymentMethod?: string | null;
+  codEnabled?: boolean;
+  depositRequired?: boolean;
+  depositAmount?: number | null;
+  remainingAmountOnDelivery?: number | null;
+  deliveryPaymentStatus?: "PENDING" | "RECEIVED" | "WAIVED" | string | null;
   urgentSurchargeAmount?: number;
   exchangeRate?: number;
   totalAmount?: number;
