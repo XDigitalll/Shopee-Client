@@ -48,7 +48,7 @@ describe("PaySuite retry UX contract", () => {
   it("shows warning modal before allowing retry — no direct retry button", () => {
     assert.match(paymentPage, /Atenção antes de gerar novo pagamento/);
     assert.match(paymentPage, /NÃO cries outro pagamento/);
-    assert.match(paymentPage, /Voltar e verificar pagamento/);
+    assert.match(paymentPage, /Voltar e verificar atualização/);
     assert.match(paymentPage, /Tenho certeza, quero escolher outro método/);
     // The warning modal is the only path to the retry method selector.
     assert.match(paymentPage, /retry_warning/);
@@ -57,7 +57,7 @@ describe("PaySuite retry UX contract", () => {
 
   it("method change is secondary action — primary is verify", () => {
     assert.match(paymentPage, /Alterar método de pagamento \/ tentar novamente/);
-    assert.match(paymentPage, /Verificar pagamento/);
+    assert.match(paymentPage, /Verificar atualização/);
   });
 
   it("method selector is gated by state machine — only visible in ready_to_pay or retry_choose_method", () => {
@@ -69,9 +69,9 @@ describe("PaySuite retry UX contract", () => {
   });
 
   it("loading overlay shows safe message when returning from gateway", () => {
-    assert.match(paymentPage, /Estamos a verificar se o pagamento foi concluído/);
-    assert.match(paymentPage, /Não pagues novamente/);
-    assert.match(paymentPage, /uiState === "checking_payment"/);
+    assert.match(paymentPage, /Estamos a confirmar o teu pagamento/);
+    assert.match(paymentPage, /Isto pode levar alguns segundos/);
+    assert.match(paymentPage, /uiState === "confirming"/);
   });
 
   it("retry pay button routes to retry endpoint when canGenerateRetry, new payment otherwise", () => {

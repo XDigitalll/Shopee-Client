@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 function classifySyncResult(status) {
   const s = (status ?? "").toLowerCase();
   if (["success", "completed", "paid", "confirmed"].includes(s)) return "confirmed";
-  if (["failed", "cancelled", "canceled", "expired", "rejected"].includes(s)) return "failed";
+  if (["failed", "cancelled", "expired", "amount_mismatch"].includes(s)) return "failed";
   return "pending";
 }
 
@@ -84,11 +84,16 @@ describe("classifySyncResult", () => {
     assert.equal(classifySyncResult("failed"), "failed");
   });
 
-  it("cancelled / canceled / expired / rejected → failed", () => {
+  it("cancelled / expired / amount_mismatch → failed", () => {
     assert.equal(classifySyncResult("cancelled"), "failed");
-    assert.equal(classifySyncResult("canceled"), "failed");
     assert.equal(classifySyncResult("expired"), "failed");
-    assert.equal(classifySyncResult("rejected"), "failed");
+    assert.equal(classifySyncResult("amount_mismatch"), "failed");
+  });
+
+  it("processing / rejected / canceled → pending", () => {
+    assert.equal(classifySyncResult("PROCESSING"), "pending");
+    assert.equal(classifySyncResult("rejected"), "pending");
+    assert.equal(classifySyncResult("canceled"), "pending");
   });
 });
 
@@ -265,17 +270,16 @@ describe("duplicate payment blocking", () => {
 // ── State machine initial-state computation ───────────────────────────────
 
 describe("payment form visibility gates (state machine)", () => {
-  const TERMINAL_STATUSES = new Set(["FAILED", "CANCELLED", "AMOUNT_MISMATCH", "LATE_PAYMENT"]);
+  const TERMINAL_STATUSES = new Set(["FAILED", "CANCELLED", "EXPIRED", "AMOUNT_MISMATCH"]);
 
   // Mirrors the initial-load state computation in loadOrder().
   function computeInitialUiState({ orderStatus, paysuitePayment }) {
     const active = isActivePaySuitePayment(paysuitePayment);
     const processing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
-    const rejected = orderStatus === "PAYMENT_REJECTED";
     const terminalGateway = TERMINAL_STATUSES.has((paysuitePayment?.status ?? "").toUpperCase());
-    if (rejected || terminalGateway) return "failed";
+    if (terminalGateway) return "failed";
     if (active || processing) return "returned_pending";
-    if (orderStatus === "PENDING_PAYMENT") return "ready_to_pay";
+    if (orderStatus === "PENDING_PAYMENT" || orderStatus === "PAYMENT_REJECTED") return "ready_to_pay";
     return "returned_pending";
   }
 
@@ -292,9 +296,9 @@ describe("payment form visibility gates (state machine)", () => {
       && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
   }
 
-  it("psr=1 — entering checking_payment, method selector not shown", () => {
-    // On return from PaySuite, state starts as checking_payment — no method selector.
-    assert.ok(!methodSelectorVisible("checking_payment", true), "form must be hidden in checking_payment");
+  it("psr=1 — entering confirming, method selector not shown", () => {
+    // On return from PaySuite, state starts as confirming — no method selector.
+    assert.ok(!methodSelectorVisible("confirming", true), "form must be hidden in confirming");
   });
 
   it("returned_pending without failure — method selector hidden, no retry path", () => {
@@ -303,9 +307,9 @@ describe("payment form visibility gates (state machine)", () => {
     assert.ok(!retry, "must not show retry when payment has no evidence of failure");
   });
 
-  it("returned_pending with PAYMENT_REJECTED — retry path available", () => {
-    const retry = canShowSafeRetry({ uiState: "returned_pending", verificationOk: true, hasActive: false, canGenerateRetry: false, explicitFailure: true, syncFailed: false });
-    assert.ok(retry, "retry allowed when backend reported explicit failure");
+  it("returned_pending with PAYMENT_REJECTED alone — no retry path", () => {
+    const retry = canShowSafeRetry({ uiState: "returned_pending", verificationOk: true, hasActive: false, canGenerateRetry: false, explicitFailure: false, syncFailed: false });
+    assert.ok(!retry, "must not retry from PAYMENT_REJECTED without terminal PaySuite evidence or canRetry");
   });
 
   it("returned_pending with PENDING_PAYMENT (no failure) — no retry path", () => {
@@ -325,9 +329,9 @@ describe("payment form visibility gates (state machine)", () => {
     assert.ok(!methodSelectorVisible(state, true), "method selector must be hidden in returned_pending");
   });
 
-  it("PAYMENT_REJECTED → initial state is failed", () => {
+  it("PAYMENT_REJECTED without terminal PaySuite evidence → initial state is ready_to_pay", () => {
     const state = computeInitialUiState({ orderStatus: "PAYMENT_REJECTED", paysuitePayment: null });
-    assert.equal(state, "failed");
+    assert.equal(state, "ready_to_pay");
   });
 
   it("terminal gateway status → initial state is failed", () => {
@@ -341,7 +345,7 @@ describe("payment form visibility gates (state machine)", () => {
 describe("full sync flow outcomes", () => {
   async function simulateSync(gatewayStatus) {
     const events = [];
-    // State machine: starts in returned_pending for manual syncs, checking_payment for initial.
+    // State machine: starts in returned_pending for manual syncs, confirming for initial return.
     let currentUiState = "returned_pending";
     let currentFeedback = null;
 
@@ -353,13 +357,13 @@ describe("full sync flow outcomes", () => {
       currentFeedback = { type: "success", msg: "Pagamento confirmado. O teu pedido foi actualizado." };
     } else if (outcome === "failed") {
       events.push("PAYMENT_SYNC_FAILED");
-      // uiState stays returned_pending (or transitions from checking_payment to returned_pending)
+      // uiState changes only on real terminal failure.
       currentFeedback = { type: "error", msg: "Este pagamento não foi concluído. Podes tentar novamente." };
     } else {
       events.push("PAYMENT_SYNC_PENDING");
       currentFeedback = {
-        type: "error",
-        msg: "Pagamento ainda em confirmação.",
+        type: "success",
+        msg: "Estamos a confirmar o teu pagamento. Isto pode levar alguns segundos.",
       };
     }
 
@@ -382,8 +386,8 @@ describe("full sync flow outcomes", () => {
     const { events, uiState, feedback } = await simulateSync("pending");
     assert.ok(events.includes("PAYMENT_SYNC_PENDING"));
     assert.equal(uiState, "returned_pending", "pending must not change to confirmed");
-    assert.equal(feedback.type, "error");
-    assert.ok(feedback.msg.includes("ainda em confirmação"));
+    assert.equal(feedback.type, "success");
+    assert.ok(feedback.msg.includes("confirmar o teu pagamento"));
   });
 
   it("failed status → logs PAYMENT_SYNC_FAILED, allows retry", async () => {
@@ -409,24 +413,30 @@ describe("full sync flow outcomes", () => {
 // The auto-sync useEffect captures performSync at mount (empty deps).
 // If the order is already confirmed via polling before the 2 s auto-sync fires,
 // the functional updater receives the REAL prev ("confirmed"), not the stale closure value
-// ("checking_payment"), so it never overrides the confirmed state.
+// ("confirming"), so it never overrides the confirmed state.
 
 describe("phase transition safety — functional updater prevents stale-closure race (test 4)", () => {
   // Mirrors performSync initial-outcome handling:
   //   setUiState(prev => prev === "confirmed" ? "confirmed" : "returned_pending")
-  function applyInitialSyncOutcome(currentState) {
-    return currentState === "confirmed" ? "confirmed" : "returned_pending";
+  function applyInitialSyncOutcome(currentState, fastPollActive = true) {
+    if (currentState === "confirmed") return "confirmed";
+    if (currentState === "confirming" && fastPollActive) return "confirming";
+    return "returned_pending";
   }
 
   it("failed/pending sync outcome with real state=confirmed → state stays confirmed", () => {
-    // Real state is "confirmed"; stale closure would assume "checking_payment".
+    // Real state is "confirmed"; stale closure would assume "confirming".
     // The functional updater receives the REAL prev, not the stale closure value.
     assert.equal(applyInitialSyncOutcome("confirmed"), "confirmed",
       "failed sync must not override confirmed state");
   });
 
-  it("failed/pending sync outcome with state=checking_payment → transitions to returned_pending", () => {
-    assert.equal(applyInitialSyncOutcome("checking_payment"), "returned_pending");
+  it("pending sync outcome with state=confirming during fast-poll → stays confirming", () => {
+    assert.equal(applyInitialSyncOutcome("confirming", true), "confirming");
+  });
+
+  it("pending sync outcome with state=confirming after timeout → transitions to returned_pending", () => {
+    assert.equal(applyInitialSyncOutcome("confirming", false), "returned_pending");
   });
 
   it("failed/pending sync outcome with state=returned_pending → stays returned_pending", () => {
