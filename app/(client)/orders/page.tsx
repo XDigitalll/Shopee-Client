@@ -943,6 +943,8 @@ export default function OrdersPage() {
     const requiresAction = Boolean(order.requiresAction);
     const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
+    const isCod = order.paymentMethod === "CASH_ON_DELIVERY";
+    const isInternalCod = !isExternal && isCod;
     const canConfirmDelivery = Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY";
     const canEditOrder = canEditExternalOrder(order);
     const editingExternal = externalEditOrderId === order.id;
@@ -1434,7 +1436,15 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY" || status === "DELIVERY_FAILED") && order.deliveryMethod !== "STORE_PICKUP" && (isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canChangeDeliveryAddress || order.canConfirmAddress) && (
+        {isInternalCod && (status === "READY_FOR_FULFILLMENT" || status === "PREPARING") && (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F0FDF4", borderColor: "#BBF7D0" }}>
+            <h3 className="text-base font-black" style={{ color: "#166534", fontFamily: "'Sora', sans-serif" }}>O teu pedido está a ser preparado</h3>
+            <p className="mt-1 text-sm" style={{ color: "#166534" }}>A equipa esta a preparar o teu pedido para entrega.</p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: "#166534" }}>Pagamento no ato de entrega — prepara o valor em dinheiro ou via M-Pesa.</p>
+          </div>
+        )}
+
+        {(status === "ARRIVED" || status === "READY_FOR_DELIVERY" || status === "DELIVERY_FAILED") && order.deliveryMethod !== "STORE_PICKUP" && (isInternalCod || isExternal || order.lastIssueType || order.requiresAddressSelection || order.requiresAddressCreation || canChangeDeliveryAddress || order.canConfirmAddress) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             {order.lastIssueType ? (
               <>
@@ -1442,6 +1452,22 @@ export default function OrdersPage() {
                 <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
                   Motivo: {deliveryIssueLabel(order)}. A encomenda voltou para a nossa sede e a equipa vai preparar uma nova tentativa.
                 </p>
+              </>
+            ) : isInternalCod ? (
+              <>
+                <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>O teu pedido está pronto para entrega</h3>
+                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                  A equipa de delivery vai organizar a entrega. Prepara o pagamento em dinheiro ou via M-Pesa para receber o pedido.
+                </p>
+                {(order.requiresAddressSelection || order.requiresAddressCreation || addressChangeOrderId === order.id) ? (
+                  renderAddressChoice(order)
+                ) : canChangeDeliveryAddress ? (
+                  <div className="mt-4">
+                    <button type="button" onClick={() => startAddressChange(order)} className="rounded-2xl border px-4 py-2.5 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                      Alterar morada
+                    </button>
+                  </div>
+                ) : null}
               </>
             ) : (
               <>
@@ -1479,7 +1505,12 @@ export default function OrdersPage() {
         {status === "OUT_FOR_DELIVERY" && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
             <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua encomenda está a caminho</h3>
-            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>A equipa de delivery está a caminho da tua morada com a tua encomenda.</p>
+            <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>
+              {isCod
+                ? "O estafeta está a caminho da tua morada. Prepara o pagamento em dinheiro ou via M-Pesa para receber o pedido."
+                : "A equipa de delivery está a caminho da tua morada com a tua encomenda."
+              }
+            </p>
             {(() => {
               const deliveryPrice = deliveryPriceInfo(order);
               return (
