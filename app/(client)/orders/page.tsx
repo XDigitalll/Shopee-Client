@@ -122,6 +122,7 @@ function customerStage(status: string) {
     ARRIVED: "AT_HQ",
     READY_FOR_DELIVERY: "ON_THE_WAY",
     OUT_FOR_DELIVERY: "ON_THE_WAY",
+    AWAITING_DELIVERY_PAYMENT: "ON_THE_WAY",
     DELIVERY_FAILED: "ON_THE_WAY",
     DELIVERED: "DELIVERED",
     CANCELLED: "CANCELLED",
@@ -1549,6 +1550,41 @@ export default function OrdersPage() {
               </div>
               );
             })()}
+          </div>
+        )}
+
+        {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
+            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>O teu pedido chegou. Finaliza o pagamento para receber.</h3>
+            <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+              O estafeta está no local. Paga agora para receber a tua encomenda.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a
+                href={`/orders/${order.id}/payment`}
+                className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                style={{ background: "#5B21B6" }}
+                onClick={() => void markOrderUpdatesSeen(order.id)}
+              >
+                Pagar agora
+              </a>
+              <a
+                href={`/orders/${order.id}/payment?method=comprovativo`}
+                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
+                style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}
+                onClick={() => void markOrderUpdatesSeen(order.id)}
+              >
+                Enviar comprovativo
+              </a>
+              <button
+                type="button"
+                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
+                style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}
+                onClick={() => void markOrderUpdatesSeen(order.id)}
+              >
+                Informar dinheiro
+              </button>
+            </div>
           </div>
         )}
 
