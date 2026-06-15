@@ -100,6 +100,21 @@ function effectiveOrderStatus(order: Pick<Order, "status" | "payment">) {
   return order.status === "PAYMENT_REJECTED" || order.status === "FAILED" ? "FAILED" : order.status;
 }
 
+const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
+  "CANCELLED",
+  "DELIVERED",
+  "REFUNDED",
+  "PAYMENT_CANCELLED",
+  "ORDER_CANCELLED_BY_CUSTOMER",
+]);
+
+function canShowPaymentAction(order: Order) {
+  const status = String(order.status ?? "").toUpperCase();
+  return !PAYMENT_BLOCKED_ORDER_STATUSES.has(status)
+    && (status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED")
+    && !order.payOnDelivery;
+}
+
 function customerStage(status: string) {
   const map: Record<string, "RECEIVED" | "PRICING" | "AWAITING_PAYMENT" | "CONFIRMED" | "PROCESSING" | "INTERNATIONAL_TRANSIT" | "AT_HQ" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED"> = {
     CREATED: "RECEIVED",
@@ -1553,7 +1568,7 @@ export default function OrdersPage() {
           </div>
         )}
 
-        {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && (
+        {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && !PAYMENT_BLOCKED_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>O teu pedido chegou. Finaliza o pagamento para receber.</h3>
             <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
@@ -1668,7 +1683,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {(order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Continuar pagamento"}</Link>}
+            {canShowPaymentAction(order) && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Continuar pagamento"}</Link>}
             {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
             {canConfirmDelivery && (
               <button

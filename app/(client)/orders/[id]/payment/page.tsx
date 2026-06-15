@@ -69,6 +69,7 @@ type PaySuiteInitResponse = {
 // retry_choose_method — user confirmed warning, method selector shown for retry
 // confirmed          — payment confirmed, auto-redirect countdown running
 // failed             — payment definitively failed (gateway terminal status)
+// blocked_cancelled  — order/payment is terminal and cannot be paid anymore
 // error_recoverable  — load error the user can recover by retrying
 type PaymentUiState =
   | "loading_order"
@@ -80,6 +81,7 @@ type PaymentUiState =
   | "retry_choose_method"
   | "confirmed"
   | "failed"
+  | "blocked_cancelled"
   | "error_recoverable";
 
 type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
@@ -107,6 +109,14 @@ const ACTIVE_PAYSUITE_STATUSES = new Set(["PENDING", "PROCESSING", "WAITING"]);
 
 // Terminal PaySuite statuses that are safe to show as a real failed payment.
 const TERMINAL_PAYMENT_STATUSES = new Set(["FAILED", "CANCELLED", "EXPIRED", "AMOUNT_MISMATCH"]);
+const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
+  "CANCELLED",
+  "DELIVERED",
+  "REFUNDED",
+  "PAYMENT_CANCELLED",
+  "ORDER_CANCELLED_BY_CUSTOMER",
+]);
+const NON_RETRYABLE_PAYMENT_STATUSES = new Set(["CANCELLED", "FAILED"]);
 
 const RETURNING_POLL_DURATION_MS = 90_000;
 const RETURNING_POLL_INTERVAL_MS = 3_000;
@@ -139,6 +149,30 @@ export function isActivePaySuitePayment(p: PaySuiteInitResponse | null): boolean
 // True when creating a new payment must be blocked.
 export function shouldBlockDuplicatePayment(p: PaySuiteInitResponse | null): boolean {
   return isActivePaySuitePayment(p);
+}
+
+function upperText(value: unknown) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function isCancelledLabel(value: unknown) {
+  const normalized = upperText(value);
+  return normalized === "CANCELADO" || normalized === "CANCELADA" || normalized === "CANCELLED";
+}
+
+function isPaymentBlockedOrder(order: Order | null): boolean {
+  if (!order) return false;
+  const extended = order as Order & { customerStatus?: string | null; customerDisplayStatus?: string | null };
+  return PAYMENT_BLOCKED_ORDER_STATUSES.has(upperText(order.status))
+    || isCancelledLabel(extended.customerStatus)
+    || isCancelledLabel(extended.customerDisplayStatus);
+}
+
+function isNonRetryablePaymentFailure(order: Order | null): boolean {
+  if (!order) return false;
+  const paymentStatus = upperText(order.payment?.status);
+  if (!NON_RETRYABLE_PAYMENT_STATUSES.has(paymentStatus)) return false;
+  return upperText(order.status) !== "PENDING_PAYMENT" && upperText(order.status) !== "PAYMENT_REJECTED";
 }
 
 function manualMethodLabel(method: string) {
@@ -448,6 +482,12 @@ export default function OrderPaymentPage() {
         });
       }
 
+      if (isPaymentBlockedOrder(currentOrder) || isNonRetryablePaymentFailure(currentOrder)) {
+        setPaysuitePayment(null);
+        setUiState("blocked_cancelled");
+        return;
+      }
+
       if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
         setUiState("confirmed");
         if (!confirmedLoggedRef.current) {
@@ -459,6 +499,7 @@ export default function OrderPaymentPage() {
 
       setUiState(prev => {
         if (prev === "confirmed") return prev; // never un-confirm
+        if (prev === "blocked_cancelled") return prev;
 
         if (!silent && prev === "loading_order") {
           // Initial load: compute first stable state.
@@ -548,7 +589,7 @@ export default function OrderPaymentPage() {
 
   // Adaptive polling — fast during the return window, slow otherwise.
   useEffect(() => {
-    if (!token || !orderId || uiState === "confirmed") return;
+    if (!token || !orderId || uiState === "confirmed" || uiState === "blocked_cancelled") return;
     if (isExternalOrder && !returningFromPaySuite) return;
     if (!fastPollActive && (uiState === "ready_to_pay" || uiState === "failed" || uiState === "error_recoverable")) return;
     const intervalMs = fastPollActive ? RETURNING_POLL_INTERVAL_MS : IDLE_POLL_INTERVAL_MS;
@@ -600,6 +641,10 @@ export default function OrderPaymentPage() {
 
   async function performSync({ auto = false, initial = false }: { auto?: boolean; initial?: boolean } = {}) {
     if (!auto && isLoading) return;
+    if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
+      setUiState("blocked_cancelled");
+      return;
+    }
     if (syncInFlightRef.current) return; // mutex — blocks parallel calls
     syncInFlightRef.current = true;
     setIsSyncBusy(true);
@@ -668,6 +713,10 @@ export default function OrderPaymentPage() {
   async function handlePaySuitePayment() {
     if (isLoading) return;
     if (isPaid || uiState === "confirmed") return;
+    if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
+      setUiState("blocked_cancelled");
+      return;
+    }
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessão expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -737,6 +786,10 @@ export default function OrderPaymentPage() {
   async function handlePaySuiteRetry() {
     if (isLoading) return;
     if (isPaid || uiState === "confirmed") return;
+    if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
+      setUiState("blocked_cancelled");
+      return;
+    }
     if (!isAuthenticated || !token) {
       setFeedback({ type: "error", msg: "A tua sessao expirou. Entra novamente para pagar." });
       await expireStoredSession();
@@ -849,6 +902,10 @@ export default function OrderPaymentPage() {
 
   async function handleManualPaymentSubmit() {
     if (manualSubmitInFlightRef.current || isManualSubmitting || isLoading) return;
+    if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
+      setUiState("blocked_cancelled");
+      return;
+    }
     manualSubmitInFlightRef.current = true;
     if (!isAuthenticated || !token) {
       manualSubmitInFlightRef.current = false;
@@ -911,6 +968,49 @@ export default function OrderPaymentPage() {
       manualSubmitInFlightRef.current = false;
       setIsManualSubmitting(false);
     }
+  }
+
+  if (uiState === "blocked_cancelled") {
+    const extended = order as (Order & { customerStatus?: string | null; customerDisplayStatus?: string | null }) | null;
+    const cancelled = upperText(order?.status) === "CANCELLED"
+      || isCancelledLabel(extended?.customerStatus)
+      || isCancelledLabel(extended?.customerDisplayStatus);
+    return (
+      <div className="mx-auto max-w-3xl pb-24 md:pb-0">
+        <Link
+          href="/orders"
+          className="inline-flex rounded-full border px-4 py-2 text-sm font-bold"
+          style={{ borderColor: "#F2D4CC", color: RED }}
+        >
+          Voltar aos meus pedidos
+        </Link>
+
+        <section
+          className="mt-5 rounded-[28px] border bg-white p-6 shadow-sm sm:p-8"
+          style={{ borderColor: "#F2D4CC" }}
+        >
+          <p className="text-sm font-semibold" style={{ color: RED }}>Pagamento indisponivel</p>
+          <h1
+            className="mt-2 text-3xl font-black"
+            style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}
+          >
+            {cancelled ? "Pedido cancelado" : "Pagamento indisponível"}
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
+            {cancelled
+              ? "Este pedido foi cancelado e já não permite pagamento."
+              : "Este pedido já não permite pagamento."}
+          </p>
+          <Link
+            href="/orders"
+            className="mt-6 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white"
+            style={{ background: RED }}
+          >
+            Voltar aos meus pedidos
+          </Link>
+        </section>
+      </div>
+    );
   }
 
   return (

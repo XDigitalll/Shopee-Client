@@ -48,6 +48,18 @@ type PublicQuote = {
   paymentUrl?: string | null;
 };
 
+const PAYMENT_BLOCKED_STATUSES = new Set([
+  "CANCELLED",
+  "DELIVERED",
+  "REFUNDED",
+  "PAYMENT_CANCELLED",
+  "ORDER_CANCELLED_BY_CUSTOMER",
+]);
+
+function isPaymentBlockedStatus(status?: string | null) {
+  return PAYMENT_BLOCKED_STATUSES.has(String(status ?? "").toUpperCase());
+}
+
 function row(label: string, value?: number | null) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-slate-100 py-3 last:border-b-0">
@@ -109,6 +121,10 @@ export default function PublicQuotePage() {
         { method: "POST" }
       );
       setQuote(updated);
+      if (isPaymentBlockedStatus(updated.status)) {
+        setError("Este pedido foi cancelado e já não permite pagamento.");
+        return;
+      }
       router.push(updated.paymentUrl || `/orders/${updated.orderId}/payment`);
     } catch (err) {
       setError(err instanceof ApiRequestError ? err.message : "Nao foi possivel aceitar a cotacao.");
@@ -136,7 +152,8 @@ export default function PublicQuotePage() {
   }
 
   const q = quote?.quote;
-  const accepted = quote?.quoteAcceptedAt || quote?.status === "PENDING_PAYMENT";
+  const paymentBlocked = isPaymentBlockedStatus(quote?.status);
+  const accepted = !paymentBlocked && (quote?.quoteAcceptedAt || quote?.status === "PENDING_PAYMENT");
   const rejected = quote?.quoteRejectedAt || quote?.status === "FAILED";
   const canDecide = quote?.status === "QUOTED" && !accepted && !rejected;
 
@@ -173,6 +190,7 @@ export default function PublicQuotePage() {
               </div>
 
               {accepted ? <p className="mt-5 rounded-md bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">Cotacao aceite. Podes continuar para pagamento.</p> : null}
+              {paymentBlocked ? <p className="mt-5 rounded-md bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">Pedido cancelado. Este pedido foi cancelado e já não permite pagamento.</p> : null}
               {rejected ? <p className="mt-5 rounded-md bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">Cotacao recusada{quote.quoteRejectedReason ? `: ${quote.quoteRejectedReason}` : "."}</p> : null}
               {error ? <p className="mt-5 rounded-md bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error}</p> : null}
             </div>

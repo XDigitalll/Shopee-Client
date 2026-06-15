@@ -271,9 +271,26 @@ describe("duplicate payment blocking", () => {
 
 describe("payment form visibility gates (state machine)", () => {
   const TERMINAL_STATUSES = new Set(["FAILED", "CANCELLED", "EXPIRED", "AMOUNT_MISMATCH"]);
+  const PAYMENT_BLOCKED_ORDER_STATUSES = new Set([
+    "CANCELLED",
+    "DELIVERED",
+    "REFUNDED",
+    "PAYMENT_CANCELLED",
+    "ORDER_CANCELLED_BY_CUSTOMER",
+  ]);
+  const NON_RETRYABLE_PAYMENT_STATUSES = new Set(["CANCELLED", "FAILED"]);
 
   // Mirrors the initial-load state computation in loadOrder().
   function computeInitialUiState({ orderStatus, paysuitePayment }) {
+    if (PAYMENT_BLOCKED_ORDER_STATUSES.has(String(orderStatus ?? "").toUpperCase())) {
+      return "blocked_cancelled";
+    }
+    const paymentStatus = String(paysuitePayment?.status ?? "").toUpperCase();
+    if (NON_RETRYABLE_PAYMENT_STATUSES.has(paymentStatus)
+        && orderStatus !== "PENDING_PAYMENT"
+        && orderStatus !== "PAYMENT_REJECTED") {
+      return "blocked_cancelled";
+    }
     const active = isActivePaySuitePayment(paysuitePayment);
     const processing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
     const terminalGateway = TERMINAL_STATUSES.has((paysuitePayment?.status ?? "").toUpperCase());
@@ -337,6 +354,17 @@ describe("payment form visibility gates (state machine)", () => {
   it("terminal gateway status → initial state is failed", () => {
     const state = computeInitialUiState({ orderStatus: "PENDING_PAYMENT", paysuitePayment: { status: "FAILED", providerReference: "REF-1" } });
     assert.equal(state, "failed");
+  });
+
+  it("CANCELLED order → initial state is blocked_cancelled", () => {
+    const state = computeInitialUiState({ orderStatus: "CANCELLED", paysuitePayment: { status: "CANCELLED", providerReference: "REF-1" } });
+    assert.equal(state, "blocked_cancelled");
+    assert.ok(!methodSelectorVisible(state, true), "method selector must be hidden for cancelled orders");
+  });
+
+  it("non-retryable FAILED payment outside payment states → blocked_cancelled", () => {
+    const state = computeInitialUiState({ orderStatus: "READY_FOR_FULFILLMENT", paysuitePayment: { status: "FAILED", providerReference: "REF-1" } });
+    assert.equal(state, "blocked_cancelled");
   });
 });
 

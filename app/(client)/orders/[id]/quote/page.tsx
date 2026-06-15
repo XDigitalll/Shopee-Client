@@ -87,7 +87,8 @@ export default function OrderQuotePage() {
   const inputClass = "w-full rounded-2xl border px-4 py-3 text-sm outline-none";
   const orderStatus = order?.status ?? "";
   const isPayOnDelivery = Boolean(order?.payOnDelivery) && order?.deliveryMethod === "DELIVERY";
-  const showPaymentSection = ["PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(orderStatus)
+  const paymentBlocked = ["CANCELLED", "DELIVERED", "REFUNDED", "PAYMENT_CANCELLED", "ORDER_CANCELLED_BY_CUSTOMER"].includes(orderStatus);
+  const showPaymentSection = !paymentBlocked && ["PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(orderStatus)
     || (orderStatus === "PAID" && !isPayOnDelivery);
   const q = order?.quote;
   const finalAmount = orderVisibleTotal(order);
