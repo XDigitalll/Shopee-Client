@@ -70,6 +70,7 @@ type PaySuiteInitResponse = {
 // confirmed          — payment confirmed, auto-redirect countdown running
 // failed             — payment definitively failed (gateway terminal status)
 // blocked_cancelled  — order/payment is terminal and cannot be paid anymore
+// cod_not_requested  — COD delivery payment is not released by the courier yet
 // error_recoverable  — load error the user can recover by retrying
 type PaymentUiState =
   | "loading_order"
@@ -82,6 +83,7 @@ type PaymentUiState =
   | "confirmed"
   | "failed"
   | "blocked_cancelled"
+  | "cod_not_requested"
   | "error_recoverable";
 
 type PaymentStateTone = "info" | "success" | "warning" | "danger" | "neutral";
@@ -173,6 +175,20 @@ function isNonRetryablePaymentFailure(order: Order | null): boolean {
   const paymentStatus = upperText(order.payment?.status);
   if (!NON_RETRYABLE_PAYMENT_STATUSES.has(paymentStatus)) return false;
   return upperText(order.status) !== "PENDING_PAYMENT" && upperText(order.status) !== "PAYMENT_REJECTED";
+}
+
+function isInternalCodOrder(order: Order | null): boolean {
+  return order?.type === "INTERNAL" && order.paymentMethod === "CASH_ON_DELIVERY";
+}
+
+function isCodDeliveryPaymentAwaiting(order: Order | null): boolean {
+  return isInternalCodOrder(order) && upperText(order?.status) === "AWAITING_DELIVERY_PAYMENT";
+}
+
+function isCodDeliveryPaymentNotRequested(order: Order | null): boolean {
+  return isInternalCodOrder(order)
+    && !isCodDeliveryPaymentAwaiting(order)
+    && !PAYMENT_BLOCKED_ORDER_STATUSES.has(upperText(order?.status));
 }
 
 function manualMethodLabel(method: string) {
@@ -488,6 +504,12 @@ export default function OrderPaymentPage() {
         return;
       }
 
+      if (isCodDeliveryPaymentNotRequested(currentOrder)) {
+        setPaysuitePayment(null);
+        setUiState("cod_not_requested");
+        return;
+      }
+
       if (currentOrder && PAID_STATUSES.has(currentOrder.status)) {
         setUiState("confirmed");
         if (!confirmedLoggedRef.current) {
@@ -514,6 +536,7 @@ export default function OrderPaymentPage() {
           const processing = status === "PAYMENT_SUBMITTED" || status === "PAYMENT_UNDER_REVIEW";
           const terminalGateway = TERMINAL_PAYMENT_STATUSES.has((pmt?.status ?? "").toUpperCase());
 
+          if (isCodDeliveryPaymentAwaiting(currentOrder)) return "ready_to_pay";
           if (terminalGateway) return "failed";
           if (active || processing) return "returned_pending";
           if (status === "PENDING_PAYMENT" || status === "PAYMENT_REJECTED") return "ready_to_pay";
@@ -531,6 +554,7 @@ export default function OrderPaymentPage() {
           const active = isActivePaySuitePayment(pmtPayload);
           const terminalGateway = TERMINAL_PAYMENT_STATUSES.has((pmt?.status ?? "").toUpperCase());
 
+          if (prev === "cod_not_requested" && isCodDeliveryPaymentAwaiting(currentOrder)) return "ready_to_pay";
           // Active payment found while user is on the pay form: hide it to prevent duplicate payment.
           if (prev === "ready_to_pay" && active) return "returned_pending";
           // Gateway now reports a terminal failure: escalate to failed.
@@ -641,6 +665,10 @@ export default function OrderPaymentPage() {
 
   async function performSync({ auto = false, initial = false }: { auto?: boolean; initial?: boolean } = {}) {
     if (!auto && isLoading) return;
+    if (isCodDeliveryPaymentNotRequested(order) || uiState === "cod_not_requested") {
+      setUiState("cod_not_requested");
+      return;
+    }
     if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
       setUiState("blocked_cancelled");
       return;
@@ -713,6 +741,10 @@ export default function OrderPaymentPage() {
   async function handlePaySuitePayment() {
     if (isLoading) return;
     if (isPaid || uiState === "confirmed") return;
+    if (isCodDeliveryPaymentNotRequested(order) || uiState === "cod_not_requested") {
+      setUiState("cod_not_requested");
+      return;
+    }
     if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
       setUiState("blocked_cancelled");
       return;
@@ -786,6 +818,10 @@ export default function OrderPaymentPage() {
   async function handlePaySuiteRetry() {
     if (isLoading) return;
     if (isPaid || uiState === "confirmed") return;
+    if (isCodDeliveryPaymentNotRequested(order) || uiState === "cod_not_requested") {
+      setUiState("cod_not_requested");
+      return;
+    }
     if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
       setUiState("blocked_cancelled");
       return;
@@ -902,6 +938,10 @@ export default function OrderPaymentPage() {
 
   async function handleManualPaymentSubmit() {
     if (manualSubmitInFlightRef.current || isManualSubmitting || isLoading) return;
+    if (isCodDeliveryPaymentNotRequested(order) || uiState === "cod_not_requested") {
+      setUiState("cod_not_requested");
+      return;
+    }
     if (isPaymentBlockedOrder(order) || uiState === "blocked_cancelled") {
       setUiState("blocked_cancelled");
       return;
@@ -968,6 +1008,43 @@ export default function OrderPaymentPage() {
       manualSubmitInFlightRef.current = false;
       setIsManualSubmitting(false);
     }
+  }
+
+  if (uiState === "cod_not_requested") {
+    return (
+      <div className="mx-auto max-w-3xl pb-24 md:pb-0">
+        <Link
+          href="/orders"
+          className="inline-flex rounded-full border px-4 py-2 text-sm font-bold"
+          style={{ borderColor: "#F2D4CC", color: RED }}
+        >
+          Voltar aos meus pedidos
+        </Link>
+
+        <section
+          className="mt-5 rounded-[28px] border bg-white p-6 shadow-sm sm:p-8"
+          style={{ borderColor: "#F2D4CC" }}
+        >
+          <p className="text-sm font-semibold" style={{ color: RED }}>Pagamento na entrega</p>
+          <h1
+            className="mt-2 text-3xl font-black"
+            style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}
+          >
+            Pagamento ainda não solicitado
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
+            O estafeta irá liberar o pagamento quando chegar ao local.
+          </p>
+          <Link
+            href="/orders"
+            className="mt-6 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white"
+            style={{ background: RED }}
+          >
+            Voltar aos meus pedidos
+          </Link>
+        </section>
+      </div>
+    );
   }
 
   if (uiState === "blocked_cancelled") {

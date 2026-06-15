@@ -961,7 +961,7 @@ export default function OrdersPage() {
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
     const isCod = order.paymentMethod === "CASH_ON_DELIVERY";
     const isInternalCod = !isExternal && isCod;
-    const canConfirmDelivery = Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY";
+    const canConfirmDelivery = !isInternalCod && (Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY");
     const canEditOrder = canEditExternalOrder(order);
     const editingExternal = externalEditOrderId === order.id;
     const externalDraft = externalEditDrafts[order.id] ?? emptyExternalEditDraft(order);
@@ -1523,7 +1523,7 @@ export default function OrdersPage() {
             <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>A tua encomenda está a caminho</h3>
             <p className="mt-1 text-sm" style={{ color: "#1D4ED8" }}>
               {isCod
-                ? "O estafeta está a caminho da tua morada. Prepara o pagamento em dinheiro ou via M-Pesa para receber o pedido."
+                ? "O estafeta irá solicitar o pagamento quando chegar ao local."
                 : "A equipa de delivery está a caminho da tua morada com a tua encomenda."
               }
             </p>
@@ -1583,22 +1583,6 @@ export default function OrdersPage() {
               >
                 Pagar agora
               </a>
-              <a
-                href={`/orders/${order.id}/payment?method=comprovativo`}
-                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
-                style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}
-                onClick={() => void markOrderUpdatesSeen(order.id)}
-              >
-                Enviar comprovativo
-              </a>
-              <button
-                type="button"
-                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
-                style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}
-                onClick={() => void markOrderUpdatesSeen(order.id)}
-              >
-                Informar dinheiro
-              </button>
             </div>
           </div>
         )}
