@@ -210,7 +210,7 @@ function settingCopyValue(setting: PublicPaymentSetting | null | undefined) {
   return setting?.accountNumber?.trim() || "";
 }
 
-function statusCopy(status?: string, adminMessage?: string) {
+function statusCopy(status?: string, adminMessage?: string, mode?: string | null) {
   const map: Record<string, { title: string; body: string; color: string; bg: string; border: string }> = {
     PENDING_PAYMENT: {
       title: "Pagamento pendente",
@@ -243,11 +243,18 @@ function statusCopy(status?: string, adminMessage?: string) {
       color: "#166534", bg: "#F0FDF4", border: "#86EFAC",
     },
   };
-  return map[status || ""] || {
+  const entry = map[status || ""] ?? {
     title: "Pagamento",
     body: "Acompanha aqui o estado do pagamento deste pedido.",
     color: "#4B5563", bg: "#F9FAFB", border: "#E5E7EB",
   };
+  if (status === "AWAITING_DELIVERY_PAYMENT" && mode === "paysuite") {
+    return { ...entry, body: "Finaliza o pagamento da taxa de entrega com PaySuite." };
+  }
+  if (status === "AWAITING_DELIVERY_PAYMENT" && mode === "manual") {
+    return { ...entry, body: "Envia o comprovativo de transferência para a equipa financeira validar." };
+  }
+  return entry;
 }
 
 async function fetchWithToken<T>(url: string, _token: string) {
@@ -270,6 +277,8 @@ export default function OrderPaymentPage() {
   const { token, isAuthenticated, user } = useAuth();
   const orderId = Number(params.id);
   const returningFromPaySuite = searchParams.get("psr") === "1";
+  const modeParam = searchParams.get("mode");
+  const deliveryMode = (modeParam === "paysuite" || modeParam === "manual") ? modeParam : null;
 
   const [order, setOrder] = useState<Order | null>(null);
   const [allOrders, setAllOrders] = useState<Order[]>([]);
@@ -316,11 +325,14 @@ export default function OrderPaymentPage() {
   );
 
   const deliveryCollectionActive = isCodDeliveryPaymentAwaiting(order);
+  const hasCodActivePaySuiteUrl = deliveryCollectionActive && deliveryMode === "paysuite"
+    && !!order?.hasActiveDeliveryPaymentAttempt
+    && !!order?.activeDeliveryPaymentUrl;
   const officialAmount = deliveryCollectionActive && Number(order?.remainingAmountOnDelivery ?? 0) > 0
     ? Number(order?.remainingAmountOnDelivery ?? 0)
     : orderVisibleTotal(order);
   const orderStatus = order?.status || "";
-  const visual = statusCopy(orderStatus, order?.adminMessageForClient);
+  const visual = statusCopy(orderStatus, order?.adminMessageForClient, deliveryMode);
   const isPaid = PAID_STATUSES.has(orderStatus);
   const isProcessing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
   const hasActivePaySuitePayment = isActivePaySuitePayment(paysuitePayment);
@@ -349,8 +361,8 @@ export default function OrderPaymentPage() {
     && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
 
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
-  const methodSelectorVisible = !isExternalOrder && ((uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method");
-  const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
+  const methodSelectorVisible = !isExternalOrder && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method");
+  const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
   const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
   // True when the method selector is for a retry/new-attempt (not a first payment).
   const isRetryContext = uiState === "retry_choose_method";
@@ -774,6 +786,10 @@ export default function OrderPaymentPage() {
       return;
     }
     if (shouldBlockDuplicatePayment(paysuitePayment)) {
+      if (hasCodActivePaySuiteUrl) {
+        window.location.assign(order.activeDeliveryPaymentUrl!);
+        return;
+      }
       setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
       devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
       return;
@@ -1540,6 +1556,24 @@ export default function OrderPaymentPage() {
           </div>
         ) : null}
 
+
+        {hasCodActivePaySuiteUrl ? (
+          <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#C7E7D3", background: "#F7FCF9" }}>
+            <p className="text-sm font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
+              Pagamento iniciado
+            </p>
+            <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>
+              Já existe uma tentativa de pagamento em curso. Continua o pagamento abaixo.
+            </p>
+            <a
+              href={order!.activeDeliveryPaymentUrl!}
+              className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white"
+              style={{ background: "#2E8B57" }}
+            >
+              Continuar pagamento
+            </a>
+          </div>
+        ) : null}
 
         {/* PaySuite method selector + pay button: visible only in ready_to_pay or retry_choose_method */}
         {methodSelectorVisible ? (

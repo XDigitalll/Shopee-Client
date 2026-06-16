@@ -1571,27 +1571,47 @@ export default function OrdersPage() {
         {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && !PAYMENT_BLOCKED_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
             <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento da entrega pendente</h3>
-            <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-              O estafeta está no local. Paga a taxa de entrega ou envia o comprovativo para receber a tua encomenda.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <a
-                href={`/orders/${order.id}/payment`}
-                className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                style={{ background: "#5B21B6" }}
-                onClick={() => void markOrderUpdatesSeen(order.id)}
-              >
-                Pagar taxa de entrega
-              </a>
-              <a
-                href={`/orders/${order.id}/payment#manual-transfer`}
-                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
-                style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
-                onClick={() => void markOrderUpdatesSeen(order.id)}
-              >
-                Enviar comprovativo
-              </a>
-            </div>
+            {order.deliveryCollectionMethod === "CASH_IN_HAND" ? (
+              <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                O estafeta fará a cobrança em dinheiro no acto da entrega.
+              </p>
+            ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
+              <>
+                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                  O estafeta enviou um link de pagamento. Paga a taxa de entrega para receber a tua encomenda.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <a
+                    href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                    className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                    style={{ background: "#5B21B6" }}
+                    onClick={() => void markOrderUpdatesSeen(order.id)}
+                  >
+                    Pagar taxa de entrega
+                  </a>
+                </div>
+              </>
+            ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (
+              <>
+                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                  Envia o comprovativo de transferência para a equipa financeira validar e receber a tua encomenda.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <a
+                    href={`/orders/${order.id}/payment?mode=manual&purpose=delivery`}
+                    className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
+                    style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
+                    onClick={() => void markOrderUpdatesSeen(order.id)}
+                  >
+                    Enviar comprovativo
+                  </a>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                O estafeta está no local. Aguarda instrução de como proceder com o pagamento da entrega.
+              </p>
+            )}
           </div>
         )}
 

@@ -265,6 +265,9 @@ export type Order = {
   depositAmount?: number | null;
   remainingAmountOnDelivery?: number | null;
   deliveryPaymentStatus?: "PENDING" | "RECEIVED" | "WAIVED" | string | null;
+  deliveryCollectionMethod?: "PAYSUITE" | "MANUAL_TRANSFER" | "CASH_IN_HAND" | string | null;
+  activeDeliveryPaymentUrl?: string | null;
+  hasActiveDeliveryPaymentAttempt?: boolean | null;
   urgentSurchargeAmount?: number;
   exchangeRate?: number;
   totalAmount?: number;
