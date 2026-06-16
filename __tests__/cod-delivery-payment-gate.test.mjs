@@ -25,16 +25,17 @@ describe("internal COD delivery payment gate", () => {
     );
   });
 
-  it("shows one Pagar agora CTA only after AWAITING_DELIVERY_PAYMENT", () => {
+  it("shows delivery payment CTAs only after AWAITING_DELIVERY_PAYMENT", () => {
     const ordersPage = read("app/(client)/orders/page.tsx");
     const awaitingBlock = ordersPage.slice(
       ordersPage.indexOf('status === "AWAITING_DELIVERY_PAYMENT"'),
       ordersPage.indexOf("{order.adminMessageForClient"),
     );
 
-    assert.match(awaitingBlock, /O teu pedido chegou\. Finaliza o pagamento para receber\./);
-    assert.match(awaitingBlock, /Pagar agora/);
-    assert.doesNotMatch(awaitingBlock, /Enviar comprovativo|Informar dinheiro/);
+    assert.match(awaitingBlock, /Pagamento da entrega pendente/);
+    assert.match(awaitingBlock, /Pagar taxa de entrega/);
+    assert.match(awaitingBlock, /Enviar comprovativo/);
+    assert.doesNotMatch(awaitingBlock, /Informar dinheiro/);
   });
 
   it("payment page blocks internal COD before delivery payment is requested", () => {

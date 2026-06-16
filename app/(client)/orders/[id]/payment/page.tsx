@@ -232,6 +232,11 @@ function statusCopy(status?: string, adminMessage?: string) {
       body: cleanDisplayText(adminMessage) || "O pagamento não foi processado. Escolhe o método e tenta novamente.",
       color: "#991B1B", bg: "#FFF5F5", border: "#FECACA",
     },
+    AWAITING_DELIVERY_PAYMENT: {
+      title: "Pagamento da entrega pendente",
+      body: "Paga a taxa de entrega ou envia o comprovativo de transferencia para a equipa financeira validar.",
+      color: "#5B21B6", bg: "#F5F3FF", border: "#DDD6FE",
+    },
     PAID: {
       title: "Pagamento confirmado",
       body: "O pagamento foi confirmado pelo gateway e o pedido está a avançar para a próxima etapa.",
@@ -310,7 +315,10 @@ export default function OrderPaymentPage() {
     [allOrders, order],
   );
 
-  const officialAmount = orderVisibleTotal(order);
+  const deliveryCollectionActive = isCodDeliveryPaymentAwaiting(order);
+  const officialAmount = deliveryCollectionActive && Number(order?.remainingAmountOnDelivery ?? 0) > 0
+    ? Number(order?.remainingAmountOnDelivery ?? 0)
+    : orderVisibleTotal(order);
   const orderStatus = order?.status || "";
   const visual = statusCopy(orderStatus, order?.adminMessageForClient);
   const isPaid = PAID_STATUSES.has(orderStatus);
@@ -342,7 +350,7 @@ export default function OrderPaymentPage() {
 
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
   const methodSelectorVisible = !isExternalOrder && ((uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method");
-  const manualPaymentVisible = isExternalOrder && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
+  const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
   const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
   // True when the method selector is for a retry/new-attempt (not a first payment).
   const isRetryContext = uiState === "retry_choose_method";
@@ -954,7 +962,7 @@ export default function OrderPaymentPage() {
       router.replace(`/login?redirect=${encodeURIComponent(`/orders/${orderId}/payment`)}`);
       return;
     }
-    if (!order || !isExternalOrder) {
+    if (!order || (!isExternalOrder && !deliveryCollectionActive)) {
       manualSubmitInFlightRef.current = false;
       return;
     }
@@ -1187,7 +1195,9 @@ export default function OrderPaymentPage() {
               Pedido {orderDisplayCode(order ?? { id: orderId })}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-7" style={{ color: "#6B7280" }}>
-              {isExternalOrder ? "Paga por transferencia bancaria, M-Pesa ou e-Mola e envia o comprovativo para confirmacao." : "Paga via M-Pesa, eMola ou Visa. A confirmacao e automatica quando o gateway processa o pagamento."}
+              {deliveryCollectionActive
+                ? "Paga a taxa de entrega via PaySuite ou envia comprovativo de transferencia. Este pagamento nao altera o checkout inicial."
+                : isExternalOrder ? "Paga por transferencia bancaria, M-Pesa ou e-Mola e envia o comprovativo para confirmacao." : "Paga via M-Pesa, eMola ou Visa. A confirmacao e automatica quando o gateway processa o pagamento."}
             </p>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6" style={{ color: "#15803D" }}>
               Em breve poderás consultar este pedido pelo WhatsApp. Por agora, acompanha o estado nesta página ou em Meus pedidos.
@@ -1371,7 +1381,7 @@ export default function OrderPaymentPage() {
 
 
         {manualPaymentVisible ? (
-          <div className="mt-6 space-y-5">
+          <div id="manual-transfer" className="mt-6 space-y-5">
             <div className="rounded-[24px] border p-5" style={{ borderColor: "#C7E7D3", background: "#F7FCF9" }}>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>

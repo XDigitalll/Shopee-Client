@@ -1570,9 +1570,9 @@ export default function OrdersPage() {
 
         {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && !PAYMENT_BLOCKED_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
-            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>O teu pedido chegou. Finaliza o pagamento para receber.</h3>
+            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento da entrega pendente</h3>
             <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-              O estafeta está no local. Paga agora para receber a tua encomenda.
+              O estafeta está no local. Paga a taxa de entrega ou envia o comprovativo para receber a tua encomenda.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <a
@@ -1581,7 +1581,15 @@ export default function OrdersPage() {
                 style={{ background: "#5B21B6" }}
                 onClick={() => void markOrderUpdatesSeen(order.id)}
               >
-                Pagar agora
+                Pagar taxa de entrega
+              </a>
+              <a
+                href={`/orders/${order.id}/payment#manual-transfer`}
+                className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
+                style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
+                onClick={() => void markOrderUpdatesSeen(order.id)}
+              >
+                Enviar comprovativo
               </a>
             </div>
           </div>
