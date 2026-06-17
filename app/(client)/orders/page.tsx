@@ -1570,7 +1570,7 @@ export default function OrdersPage() {
 
         {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && !PAYMENT_BLOCKED_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()) && (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
-            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento da entrega pendente</h3>
+            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento pendente na entrega</h3>
             {order.deliveryCollectionMethod === "CASH_IN_HAND" ? (
               <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
                 O estafeta fará a cobrança em dinheiro no acto da entrega.
@@ -1578,8 +1578,24 @@ export default function OrdersPage() {
             ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
               <>
                 <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                  O estafeta enviou um link de pagamento. Paga a taxa de entrega para receber a tua encomenda.
+                  O estafeta enviou um link de pagamento. Paga o valor pendente para receber a tua encomenda.
                 </p>
+                {order.remainingAmountOnDelivery != null && order.remainingAmountOnDelivery > 0 && (
+                  <div className="mt-3 rounded-[14px] px-3 py-2.5" style={{ background: "rgba(255,255,255,0.55)" }}>
+                    <p className="text-sm font-black" style={{ color: "#5B21B6" }}>
+                      Valor pendente: {formatMoney(order.remainingAmountOnDelivery)}
+                    </p>
+                    {order.deliveryFee != null && order.deliveryFee > 0 && (
+                      <div className="mt-1 space-y-0.5 text-xs" style={{ color: "#7C3AED" }}>
+                        <p>Produto: {formatMoney(Math.max(0, order.remainingAmountOnDelivery - order.deliveryFee))}</p>
+                        <p>Entrega: {formatMoney(order.deliveryFee)}</p>
+                      </div>
+                    )}
+                    <p className="mt-1 text-xs font-semibold" style={{ color: "#5B21B6" }}>
+                      Total a pagar agora: {formatMoney(order.remainingAmountOnDelivery)}
+                    </p>
+                  </div>
+                )}
                 <div className="mt-4 flex flex-wrap gap-3">
                   <a
                     href={order.activeDeliveryPaymentUrl ?? `/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
@@ -1587,7 +1603,7 @@ export default function OrdersPage() {
                     style={{ background: "#5B21B6" }}
                     onClick={() => void markOrderUpdatesSeen(order.id)}
                   >
-                    Pagar taxa de entrega
+                    Pagar valor pendente
                   </a>
                 </div>
               </>
@@ -1690,8 +1706,8 @@ export default function OrdersPage() {
 
         <div className="mt-5 flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" ? "Total pago" : "Valor do pedido"}</p>
-            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney(orderTotal(order))}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" ? "Total pago" : (isInternalCod && status === "AWAITING_DELIVERY_PAYMENT") ? "Valor pendente" : "Valor do pedido"}</p>
+            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney((isInternalCod && status === "AWAITING_DELIVERY_PAYMENT" && order.remainingAmountOnDelivery) ? order.remainingAmountOnDelivery : orderTotal(order))}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
