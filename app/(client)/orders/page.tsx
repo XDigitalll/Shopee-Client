@@ -1582,7 +1582,7 @@ export default function OrdersPage() {
                 </p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <a
-                    href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                    href={order.activeDeliveryPaymentUrl ?? `/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
                     className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
                     style={{ background: "#5B21B6" }}
                     onClick={() => void markOrderUpdatesSeen(order.id)}
