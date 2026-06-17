@@ -1562,10 +1562,13 @@ export default function OrderPaymentPage() {
         {hasCodActivePaySuiteUrl ? (
           <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#C7E7D3", background: "#F7FCF9" }}>
             <p className="text-sm font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
-              Pagamento iniciado
+              Pagamento em processamento
             </p>
             <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>
               Já existe uma tentativa de pagamento em curso. Continua o pagamento abaixo.
+            </p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: "#92400E" }}>
+              Se o valor já saiu da tua conta, não pagues novamente. Aguarda a confirmação.
             </p>
             <a
               href={order!.activeDeliveryPaymentUrl!}
