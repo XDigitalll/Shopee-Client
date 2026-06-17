@@ -1578,7 +1578,7 @@ export default function OrdersPage() {
             ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
               <>
                 <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                  O estafeta enviou um link de pagamento. Paga o valor pendente para receber a tua encomenda.
+                  O estafeta enviou um link de pagamento. Escolhe o método e paga o valor pendente para receber a tua encomenda.
                 </p>
                 {order.remainingAmountOnDelivery != null && order.remainingAmountOnDelivery > 0 && (
                   <div className="mt-3 rounded-[14px] px-3 py-2.5" style={{ background: "rgba(255,255,255,0.55)" }}>
@@ -1597,14 +1597,25 @@ export default function OrdersPage() {
                   </div>
                 )}
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <a
-                    href={order.activeDeliveryPaymentUrl ?? `/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
-                    className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                    style={{ background: "#5B21B6" }}
-                    onClick={() => void markOrderUpdatesSeen(order.id)}
-                  >
-                    Pagar valor pendente
-                  </a>
+                  {order.hasActiveDeliveryPaymentAttempt && order.activeDeliveryPaymentUrl ? (
+                    <a
+                      href={order.activeDeliveryPaymentUrl}
+                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                      style={{ background: "#5B21B6" }}
+                      onClick={() => void markOrderUpdatesSeen(order.id)}
+                    >
+                      Continuar pagamento
+                    </a>
+                  ) : (
+                    <a
+                      href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                      style={{ background: "#5B21B6" }}
+                      onClick={() => void markOrderUpdatesSeen(order.id)}
+                    >
+                      Escolher forma de pagamento
+                    </a>
+                  )}
                 </div>
               </>
             ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (

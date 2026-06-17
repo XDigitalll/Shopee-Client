@@ -233,8 +233,8 @@ function statusCopy(status?: string, adminMessage?: string, mode?: string | null
       color: "#991B1B", bg: "#FFF5F5", border: "#FECACA",
     },
     AWAITING_DELIVERY_PAYMENT: {
-      title: "Pagamento da entrega pendente",
-      body: "Paga a taxa de entrega ou envia o comprovativo de transferencia para a equipa financeira validar.",
+      title: "Pagamento pendente na entrega",
+      body: "O estafeta trouxe a tua encomenda. Paga o valor pendente para concluir a entrega.",
       color: "#5B21B6", bg: "#F5F3FF", border: "#DDD6FE",
     },
     PAID: {
@@ -249,7 +249,7 @@ function statusCopy(status?: string, adminMessage?: string, mode?: string | null
     color: "#4B5563", bg: "#F9FAFB", border: "#E5E7EB",
   };
   if (status === "AWAITING_DELIVERY_PAYMENT" && mode === "paysuite") {
-    return { ...entry, body: "Finaliza o pagamento da taxa de entrega com PaySuite." };
+    return { ...entry, body: "Escolhe o método de pagamento e paga o valor pendente para receber a tua encomenda." };
   }
   if (status === "AWAITING_DELIVERY_PAYMENT" && mode === "manual") {
     return { ...entry, body: "Envia o comprovativo de transferência para a equipa financeira validar." };
@@ -361,7 +361,7 @@ export default function OrderPaymentPage() {
     && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
 
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
-  const methodSelectorVisible = !isExternalOrder && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && verificationOk) || uiState === "retry_choose_method");
+  const methodSelectorVisible = !isExternalOrder && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
   const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
   const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
   // True when the method selector is for a retry/new-attempt (not a first payment).
@@ -776,7 +776,7 @@ export default function OrderPaymentPage() {
       return;
     }
     if (!order) return;
-    if (!verificationOk) {
+    if (!verificationOk && !deliveryCollectionActive) {
       setFeedback({ type: "error", msg: "Verifica o teu email ou telefone antes de confirmar pagamentos." });
       router.push("/profile");
       return;
@@ -805,11 +805,13 @@ export default function OrderPaymentPage() {
     const result = await paysuiteAction.run(async () => {
       try {
         const returnUrl = typeof window !== "undefined"
-          ? `${window.location.origin}/orders/${order.id}/payment?psr=1`
+          ? `${window.location.origin}/orders/${order.id}/payment?psr=1${deliveryCollectionActive ? "&purpose=delivery" : ""}`
           : undefined;
+        const payBody: Record<string, unknown> = { method: paysuiteMethod, returnUrl };
+        if (deliveryCollectionActive) payBody.purpose = "COD_COLLECTION";
         const response = await apiFetch<PaySuiteInitResponse>(`orders/${order.id}/payment/paysuite`, {
           method: "POST",
-          body: JSON.stringify({ method: paysuiteMethod, returnUrl }),
+          body: JSON.stringify(payBody),
         });
         setPaysuitePayment(response);
         emitClientDataChanged();
