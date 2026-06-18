@@ -78,4 +78,17 @@ describe("PaySuite retry UX contract", () => {
     // The pay button inside the method selector calls the correct handler based on retry context.
     assert.match(paymentPage, /isRetryContext && canGenerateRetry \? handlePaySuiteRetry/);
   });
+
+  it("lets customers choose another method when a PaySuite attempt is pending", () => {
+    assert.match(paymentPage, /"PROVIDER_CREATED"/);
+    assert.match(paymentPage, /activePaySuiteDecisionVisible/);
+    assert.match(paymentPage, /Já existe uma tentativa de pagamento em curso/);
+    assert.match(paymentPage, /Continuar com \{previousPaySuiteMethodLabel\}/);
+    assert.match(paymentPage, /Escolher outro método/);
+    assert.match(paymentPage, /function chooseAnotherPaySuiteMethod\(\)/);
+    assert.match(paymentPage, /setSelectedPaymentMethod\(null\)/);
+    assert.match(paymentPage, /setIsChoosingAnotherPaySuiteMethod\(true\)/);
+    assert.match(paymentPage, /shouldBlockDuplicatePayment\(paysuitePayment\) && !isChoosingAnotherPaySuiteMethod/);
+    assert.doesNotMatch(paymentPage, /window\.location\.assign\(order\.activeDeliveryPaymentUrl!\)/);
+  });
 });

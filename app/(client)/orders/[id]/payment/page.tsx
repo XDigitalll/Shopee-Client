@@ -47,6 +47,7 @@ type PaySuiteInitResponse = {
   orderId?: number;
   expectedAmount?: number;
   currency?: string;
+  method?: string;
   provider?: string;
   providerReference?: string;
   paymentReference?: string;
@@ -107,7 +108,7 @@ const PAID_STATUSES = new Set([
 ]);
 
 // Active PaySuite statuses — block creating a second payment while one exists.
-const ACTIVE_PAYSUITE_STATUSES = new Set(["PENDING", "PROCESSING", "WAITING"]);
+const ACTIVE_PAYSUITE_STATUSES = new Set(["PENDING", "PROVIDER_CREATED", "PROCESSING", "WAITING"]);
 
 // Terminal PaySuite statuses that are safe to show as a real failed payment.
 const TERMINAL_PAYMENT_STATUSES = new Set(["FAILED", "CANCELLED", "EXPIRED", "AMOUNT_MISMATCH"]);
@@ -215,6 +216,14 @@ function paysuiteMethodLabel(method: PaySuiteMethod) {
   return "Visa";
 }
 
+function paySuiteMethodFromValue(value: unknown): PaySuiteMethod | null {
+  const normalized = upperText(value).replace(/[\s_-]/g, "");
+  if (normalized === "MPESA") return "MPESA";
+  if (normalized === "EMOLA") return "EMOLA";
+  if (normalized === "CARD" || normalized === "VISA" || normalized === "VISACARD") return "CARD";
+  return null;
+}
+
 function settingValue(setting: PublicPaymentSetting | null | undefined) {
   if (!setting) return "";
   return [setting.bankName, setting.accountNumber, setting.accountHolder, setting.branch]
@@ -304,6 +313,7 @@ export default function OrderPaymentPage() {
   const paysuiteAction = useAsyncAction();
   const [paysuiteMethod, setPaysuiteMethod] = useState<PaySuiteMethod>("MPESA");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaySuiteMethod | null>(null);
+  const [isChoosingAnotherPaySuiteMethod, setIsChoosingAnotherPaySuiteMethod] = useState(false);
   const [paysuitePayment, setPaysuitePayment] = useState<PaySuiteInitResponse | null>(null);
   const [manualSettings, setManualSettings] = useState<PublicPaymentSetting[]>([]);
   const [manualMethod, setManualMethod] = useState<ManualPaymentMethod>("BANK_TRANSFER");
@@ -342,9 +352,6 @@ export default function OrderPaymentPage() {
   );
 
   const deliveryCollectionActive = isCodDeliveryPaymentAwaiting(order);
-  const hasCodActivePaySuiteUrl = deliveryCollectionActive && deliveryMode === "paysuite"
-    && !!order?.hasActiveDeliveryPaymentAttempt
-    && !!order?.activeDeliveryPaymentUrl;
   const deliveryBreakdown = deliveryCollectionBreakdown(order);
   const officialAmount = deliveryCollectionActive ? deliveryBreakdown.total : orderVisibleTotal(order);
   const orderStatus = order?.status || "";
@@ -352,6 +359,22 @@ export default function OrderPaymentPage() {
   const isPaid = PAID_STATUSES.has(orderStatus);
   const isProcessing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
   const hasActivePaySuitePayment = isActivePaySuitePayment(paysuitePayment);
+  const activePaySuiteCheckoutUrl = order?.activeDeliveryPaymentUrl
+    ?? paysuitePayment?.checkoutUrl
+    ?? order?.payment?.checkoutUrl
+    ?? null;
+  const previousPaySuiteMethod = paySuiteMethodFromValue(
+    paysuitePayment?.method ?? order?.payment?.method ?? order?.payment?.providerStatus,
+  );
+  const previousPaySuiteMethodLabel = previousPaySuiteMethod ? paysuiteMethodLabel(previousPaySuiteMethod) : null;
+  const hasActivePaySuiteCheckout = !!activePaySuiteCheckoutUrl
+    && (hasActivePaySuitePayment || !!order?.hasActiveDeliveryPaymentAttempt)
+    && !isPaid
+    && uiState !== "confirmed"
+    && uiState !== "blocked_cancelled";
+  const activePaySuiteDecisionVisible = hasActivePaySuiteCheckout
+    && !isChoosingAnotherPaySuiteMethod
+    && (uiState === "ready_to_pay" || uiState === "returned_pending");
 
   const verificationOk =
     user?.authProvider === "GOOGLE" ||
@@ -377,7 +400,7 @@ export default function OrderPaymentPage() {
     && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
 
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
-  const methodSelectorVisible = !isExternalOrder && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
+  const methodSelectorVisible = !isExternalOrder && !activePaySuiteDecisionVisible && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
   const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
   const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
   // True when the method selector is for a retry/new-attempt (not a first payment).
@@ -393,9 +416,15 @@ export default function OrderPaymentPage() {
     ?? order?.payment?.providerReference
     ?? null;
   const paysuiteTransactionId = order?.payment?.transactionId ?? null;
+  const paySuiteButtonDisabled = isPaySuiteBusy
+    || !officialAmount
+    || officialAmount <= 0
+    || (isChoosingAnotherPaySuiteMethod && selectedPaymentMethod === null);
 
   const payButtonLabel = isPaySuiteBusy
     ? "A iniciar pagamento..."
+    : isChoosingAnotherPaySuiteMethod && selectedPaymentMethod === null
+      ? "Escolhe um método de pagamento"
     : isRetryContext && canGenerateRetry
       ? `Gerar nova tentativa de pagamento — ${formatMoney(officialAmount)}`
       : `Pagar ${formatMoney(officialAmount)} agora`;
@@ -530,6 +559,7 @@ export default function OrderPaymentPage() {
       if (currentOrder?.payment?.provider?.toUpperCase() === "PAYSUITE") {
         setPaysuitePayment({
           status: currentOrder.payment.status,
+          method: currentOrder.payment.method,
           providerReference: currentOrder.payment.providerReference,
           checkoutUrl: currentOrder.payment.checkoutUrl,
           providerStatus: currentOrder.payment.providerStatus,
@@ -570,7 +600,7 @@ export default function OrderPaymentPage() {
           const pmt = currentOrder.payment;
           const pmtPayload: PaySuiteInitResponse | null =
             pmt?.provider?.toUpperCase() === "PAYSUITE"
-              ? { status: pmt.status, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
+              ? { status: pmt.status, method: pmt.method, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
               : null;
           const active = isActivePaySuitePayment(pmtPayload);
           const processing = status === "PAYMENT_SUBMITTED" || status === "PAYMENT_UNDER_REVIEW";
@@ -589,7 +619,7 @@ export default function OrderPaymentPage() {
           const pmt = currentOrder.payment;
           const pmtPayload: PaySuiteInitResponse | null =
             pmt?.provider?.toUpperCase() === "PAYSUITE"
-              ? { status: pmt.status, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
+              ? { status: pmt.status, method: pmt.method, providerReference: pmt.providerReference, checkoutUrl: pmt.checkoutUrl, canRetry: false }
               : null;
           const active = isActivePaySuitePayment(pmtPayload);
           const terminalGateway = TERMINAL_PAYMENT_STATUSES.has((pmt?.status ?? "").toUpperCase());
@@ -805,11 +835,11 @@ export default function OrderPaymentPage() {
       setFieldError("Nao existe valor pendente para cobrar neste pedido.");
       return;
     }
-    if (shouldBlockDuplicatePayment(paysuitePayment)) {
-      if (hasCodActivePaySuiteUrl) {
-        window.location.assign(order.activeDeliveryPaymentUrl!);
-        return;
-      }
+    if (isChoosingAnotherPaySuiteMethod && selectedPaymentMethod === null) {
+      setFieldError("Escolhe um método de pagamento antes de continuar.");
+      return;
+    }
+    if (shouldBlockDuplicatePayment(paysuitePayment) && !isChoosingAnotherPaySuiteMethod) {
       setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
       devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
       return;
@@ -834,6 +864,7 @@ export default function OrderPaymentPage() {
           body: JSON.stringify(payBody),
         });
         setPaysuitePayment(response);
+        setIsChoosingAnotherPaySuiteMethod(false);
         emitClientDataChanged();
         setFeedback({
           type: "success",
@@ -897,6 +928,7 @@ export default function OrderPaymentPage() {
         body: JSON.stringify({ method: paysuiteMethod, returnUrl }),
       });
       setPaysuitePayment(response);
+      setIsChoosingAnotherPaySuiteMethod(false);
       emitClientDataChanged();
       setFeedback({
         type: "success",
@@ -920,9 +952,21 @@ export default function OrderPaymentPage() {
   function selectPaymentMethod(method: PaySuiteMethod) {
     setPaysuiteMethod(method);
     setSelectedPaymentMethod(method);
+    setFieldError(null);
     if (window.matchMedia("(max-width: 767px)").matches) return;
     window.requestAnimationFrame(() => {
       payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  function chooseAnotherPaySuiteMethod() {
+    setSelectedPaymentMethod(null);
+    setFieldError(null);
+    setFeedback(null);
+    setIsChoosingAnotherPaySuiteMethod(true);
+    setUiState("ready_to_pay");
+    window.requestAnimationFrame(() => {
+      payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -1596,24 +1640,36 @@ export default function OrderPaymentPage() {
         ) : null}
 
 
-        {hasCodActivePaySuiteUrl ? (
+        {activePaySuiteDecisionVisible ? (
           <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#C7E7D3", background: "#F7FCF9" }}>
             <p className="text-sm font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
               Pagamento em processamento
             </p>
             <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>
-              Já existe uma tentativa de pagamento em curso. Continua o pagamento abaixo.
+              Já existe uma tentativa de pagamento em curso.
             </p>
             <p className="mt-2 text-sm font-semibold" style={{ color: "#92400E" }}>
               Se o valor já saiu da tua conta, não pagues novamente. Aguarda a confirmação.
             </p>
-            <a
-              href={order!.activeDeliveryPaymentUrl!}
-              className="mt-4 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-white"
-              style={{ background: "#2E8B57" }}
-            >
-              Continuar pagamento
-            </a>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              {previousPaySuiteMethodLabel ? (
+                <a
+                  href={activePaySuiteCheckoutUrl!}
+                  className="inline-flex justify-center rounded-2xl px-5 py-3 text-sm font-black text-white"
+                  style={{ background: "#2E8B57" }}
+                >
+                  Continuar com {previousPaySuiteMethodLabel}
+                </a>
+              ) : null}
+              <button
+                type="button"
+                onClick={chooseAnotherPaySuiteMethod}
+                className="inline-flex justify-center rounded-2xl border px-5 py-3 text-sm font-black"
+                style={{ borderColor: "#C7E7D3", color: "#14532D", background: "#FFFFFF" }}
+              >
+                {previousPaySuiteMethodLabel ? "Escolher outro método" : "Escolher método de pagamento"}
+              </button>
+            </div>
           </div>
         ) : null}
 
@@ -1733,11 +1789,11 @@ export default function OrderPaymentPage() {
               <button
                 type="button"
                 onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
-                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                disabled={paySuiteButtonDisabled}
                 className="w-full rounded-2xl px-5 py-4 text-base font-black text-white"
                 style={{
                   background:
-                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                    paySuiteButtonDisabled
                       ? "#9CA3AF"
                       : GREEN,
                 }}
@@ -1769,11 +1825,11 @@ export default function OrderPaymentPage() {
                 <button
                   type="button"
                   onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
-                  disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                  disabled={paySuiteButtonDisabled}
                   className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
                   style={{
                     background:
-                      isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                      paySuiteButtonDisabled
                         ? "#9CA3AF"
                         : GREEN,
                   }}
