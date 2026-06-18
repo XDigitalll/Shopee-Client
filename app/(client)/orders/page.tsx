@@ -1671,25 +1671,14 @@ export default function OrdersPage() {
                     Escolhe a forma de pagamento para concluir o valor pendente antes de receberes a encomenda.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {order.hasActiveDeliveryPaymentAttempt && order.activeDeliveryPaymentUrl ? (
-                      <a
-                        href={order.activeDeliveryPaymentUrl}
-                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                        style={{ background: "#5B21B6" }}
-                        onClick={() => void markOrderUpdatesSeen(order.id)}
-                      >
-                        Continuar pagamento
-                      </a>
-                    ) : (
-                      <a
-                        href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
-                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                        style={{ background: "#5B21B6" }}
-                        onClick={() => void markOrderUpdatesSeen(order.id)}
-                      >
-                        Escolher forma de pagamento
-                      </a>
-                    )}
+                    <Link
+                      href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                      style={{ background: "#5B21B6" }}
+                      onClick={() => void markOrderUpdatesSeen(order.id)}
+                    >
+                      Escolher forma de pagamento
+                    </Link>
                   </div>
                 </>
               ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (

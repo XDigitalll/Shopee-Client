@@ -42,6 +42,9 @@ describe("client delivery payment card", () => {
     assert.match(page, /Taxa de entrega/);
     assert.match(page, /Total a pagar agora/);
     assert.match(page, /Escolher forma de pagamento/);
+    assert.match(page, /href=\{`\/orders\/\$\{order\.id\}\/payment\?mode=paysuite&purpose=delivery`\}/);
+    assert.doesNotMatch(page, /href=\{order\.activeDeliveryPaymentUrl\}/);
+    assert.doesNotMatch(page, /Continuar pagamento\s*<\/(?:a|Link)>/);
     assert.doesNotMatch(page, /Math\.max\(0, order\.remainingAmountOnDelivery - order\.deliveryFee\)/);
   });
 });
