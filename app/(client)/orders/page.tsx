@@ -173,6 +173,34 @@ function orderTotal(order: Order) {
   return orderVisibleTotal(order);
 }
 
+function deliveryPaymentBreakdown(order: Order) {
+  const productPending = Math.max(0, Number(order.remainingAmountOnDelivery ?? 0));
+  const deliveryPending = Math.max(0, Number(order.deliveryFee ?? 0));
+  return {
+    productPending,
+    deliveryPending,
+    totalToPayNow: productPending + deliveryPending,
+  };
+}
+
+function hasDeliveryPaymentSucceeded(order: Order) {
+  const orderWithPayment = order as Order & {
+    paymentStatus?: string | null;
+    paysuitePaymentStatus?: string | null;
+    deliveryPaymentAttemptStatus?: string | null;
+    payment?: { status?: string | null } | null;
+  };
+  const statuses = [
+    order.deliveryPaymentStatus,
+    orderWithPayment.paymentStatus,
+    orderWithPayment.paysuitePaymentStatus,
+    orderWithPayment.deliveryPaymentAttemptStatus,
+    orderWithPayment.payment?.status,
+  ].map((value) => String(value ?? "").toUpperCase());
+
+  return statuses.some((value) => ["SUCCESS", "RECEIVED", "PAID", "CONFIRMED", "APPROVED", "WAIVED"].includes(value));
+}
+
 function orderItemChipKey(item: OrderItem, index: number) {
   return [
     "item",
@@ -822,8 +850,10 @@ export default function OrdersPage() {
 
   function buildVerticalTimeline(order: Order): { key: string; label: string; desc: string; done: boolean; current: boolean; failed: boolean; ts: string | null }[] {
     const backendSteps = order.trackingDetailSteps;
+    const status = String(order.status ?? "").toUpperCase();
+    const paymentReceived = status === "AWAITING_DELIVERY_PAYMENT" && hasDeliveryPaymentSucceeded(order);
     if (backendSteps && backendSteps.length > 0) {
-      return backendSteps.map((step: ClientTrackingStep) => ({
+      const steps = backendSteps.map((step: ClientTrackingStep) => ({
         key: step.key,
         label: step.label,
         desc: step.description ?? "",
@@ -832,6 +862,32 @@ export default function OrdersPage() {
         failed: step.state === "FAILED",
         ts: step.occurredAt ?? null,
       }));
+      if (!paymentReceived || steps.some((step) => step.key === "DELIVERY_PAYMENT_RECEIVED" || step.label === "Pagamento recebido")) {
+        return steps;
+      }
+      return [
+        ...steps.map((step) => ({ ...step, done: !step.failed, current: false })),
+        {
+          key: "DELIVERY_PAYMENT_RECEIVED",
+          label: "Pagamento recebido",
+          desc: "Confirmamos o pagamento pendente deste pedido.",
+          done: false,
+          current: true,
+          failed: false,
+          ts: null,
+        },
+      ];
+    }
+    if (paymentReceived) {
+      return [{
+        key: "DELIVERY_PAYMENT_RECEIVED",
+        label: "Pagamento recebido",
+        desc: "Confirmamos o pagamento pendente deste pedido.",
+        done: false,
+        current: true,
+        failed: false,
+        ts: null,
+      }];
     }
     return [];
   }
@@ -961,6 +1017,9 @@ export default function OrdersPage() {
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
     const isCod = order.paymentMethod === "CASH_ON_DELIVERY";
     const isInternalCod = !isExternal && isCod;
+    const deliveryPayment = deliveryPaymentBreakdown(order);
+    const deliveryPaymentReceived = hasDeliveryPaymentSucceeded(order);
+    const canCollectDeliveryPayment = deliveryPayment.totalToPayNow > 0 && !deliveryPaymentReceived;
     const canConfirmDelivery = !isInternalCod && (Boolean(order.canConfirmDelivery) || status === "OUT_FOR_DELIVERY");
     const canEditOrder = canEditExternalOrder(order);
     const editingExternal = externalEditOrderId === order.id;
@@ -1569,77 +1628,93 @@ export default function OrdersPage() {
         )}
 
         {status === "AWAITING_DELIVERY_PAYMENT" && isInternalCod && !PAYMENT_BLOCKED_ORDER_STATUSES.has(String(order.status ?? "").toUpperCase()) && (
-          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
-            <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento pendente na entrega</h3>
-            {order.deliveryCollectionMethod === "CASH_IN_HAND" ? (
-              <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                O estafeta fará a cobrança em dinheiro no acto da entrega.
+          deliveryPaymentReceived ? (
+            <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#ECFDF5", borderColor: "#BBF7D0" }}>
+              <h3 className="text-base font-black" style={{ color: "#166534", fontFamily: "'Sora', sans-serif" }}>Pagamento recebido</h3>
+              <p className="mt-1 text-sm" style={{ color: "#166534" }}>
+                Confirmamos o pagamento pendente deste pedido. A equipa ShopeeMz vai continuar a acompanhar a entrega.
               </p>
-            ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
-              <>
-                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                  O estafeta enviou um link de pagamento. Escolhe o método e paga o valor pendente para receber a tua encomenda.
+            </div>
+          ) : (
+            <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
+              <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Resumo do pagamento</h3>
+              <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
+                Este é o valor pendente real do pedido antes da entrega.
+              </p>
+              <div className="mt-3 rounded-[14px] px-3 py-2.5" style={{ background: "rgba(255,255,255,0.68)" }}>
+                <div className="space-y-1 text-xs font-semibold" style={{ color: "#7C3AED" }}>
+                  <p className="flex items-center justify-between gap-3">
+                    <span>Produto pendente</span>
+                    <span>{formatMoney(deliveryPayment.productPending)}</span>
+                  </p>
+                  <p className="flex items-center justify-between gap-3">
+                    <span>Taxa de entrega</span>
+                    <span>{formatMoney(deliveryPayment.deliveryPending)}</span>
+                  </p>
+                </div>
+                <p className="mt-2 flex items-center justify-between gap-3 border-t pt-2 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                  <span>Total a pagar agora</span>
+                  <span>{formatMoney(deliveryPayment.totalToPayNow)}</span>
                 </p>
-                {order.remainingAmountOnDelivery != null && order.remainingAmountOnDelivery > 0 && (
-                  <div className="mt-3 rounded-[14px] px-3 py-2.5" style={{ background: "rgba(255,255,255,0.55)" }}>
-                    <p className="text-sm font-black" style={{ color: "#5B21B6" }}>
-                      Valor pendente: {formatMoney(order.remainingAmountOnDelivery)}
-                    </p>
-                    {order.deliveryFee != null && order.deliveryFee > 0 && (
-                      <div className="mt-1 space-y-0.5 text-xs" style={{ color: "#7C3AED" }}>
-                        <p>Produto: {formatMoney(Math.max(0, order.remainingAmountOnDelivery - order.deliveryFee))}</p>
-                        <p>Entrega: {formatMoney(order.deliveryFee)}</p>
-                      </div>
+              </div>
+              {!canCollectDeliveryPayment ? (
+                <p className="mt-3 text-sm font-semibold" style={{ color: "#6B21A8" }}>
+                  Não existe valor pendente para cobrar neste pedido.
+                </p>
+              ) : order.deliveryCollectionMethod === "CASH_IN_HAND" ? (
+                <p className="mt-3 text-sm" style={{ color: "#5B21B6" }}>
+                  O estafeta fará a cobrança em dinheiro no acto da entrega.
+                </p>
+              ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
+                <>
+                  <p className="mt-3 text-sm" style={{ color: "#5B21B6" }}>
+                    Escolhe a forma de pagamento para concluir o valor pendente antes de receberes a encomenda.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    {order.hasActiveDeliveryPaymentAttempt && order.activeDeliveryPaymentUrl ? (
+                      <a
+                        href={order.activeDeliveryPaymentUrl}
+                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                        style={{ background: "#5B21B6" }}
+                        onClick={() => void markOrderUpdatesSeen(order.id)}
+                      >
+                        Continuar pagamento
+                      </a>
+                    ) : (
+                      <a
+                        href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                        style={{ background: "#5B21B6" }}
+                        onClick={() => void markOrderUpdatesSeen(order.id)}
+                      >
+                        Escolher forma de pagamento
+                      </a>
                     )}
-                    <p className="mt-1 text-xs font-semibold" style={{ color: "#5B21B6" }}>
-                      Total a pagar agora: {formatMoney(order.remainingAmountOnDelivery)}
-                    </p>
                   </div>
-                )}
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {order.hasActiveDeliveryPaymentAttempt && order.activeDeliveryPaymentUrl ? (
+                </>
+              ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (
+                <>
+                  <p className="mt-3 text-sm" style={{ color: "#5B21B6" }}>
+                    Envia o comprovativo de transferência para a equipa financeira validar e receber a tua encomenda.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
                     <a
-                      href={order.activeDeliveryPaymentUrl}
-                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                      style={{ background: "#5B21B6" }}
-                      onClick={() => void markOrderUpdatesSeen(order.id)}
-                    >
-                      Continuar pagamento
-                    </a>
-                  ) : (
-                    <a
-                      href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
-                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                      style={{ background: "#5B21B6" }}
+                      href={`/orders/${order.id}/payment?mode=manual&purpose=delivery`}
+                      className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
+                      style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
                       onClick={() => void markOrderUpdatesSeen(order.id)}
                     >
                       Escolher forma de pagamento
                     </a>
-                  )}
-                </div>
-              </>
-            ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (
-              <>
-                <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                  Envia o comprovativo de transferência para a equipa financeira validar e receber a tua encomenda.
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-sm" style={{ color: "#5B21B6" }}>
+                  O estafeta está no local. Aguarda instrução de como proceder com o pagamento da entrega.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <a
-                    href={`/orders/${order.id}/payment?mode=manual&purpose=delivery`}
-                    className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black"
-                    style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
-                    onClick={() => void markOrderUpdatesSeen(order.id)}
-                  >
-                    Enviar comprovativo
-                  </a>
-                </div>
-              </>
-            ) : (
-              <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
-                O estafeta está no local. Aguarda instrução de como proceder com o pagamento da entrega.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )
         )}
 
         {order.adminMessageForClient && (
@@ -1717,8 +1792,8 @@ export default function OrdersPage() {
 
         <div className="mt-5 flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" ? "Total pago" : (isInternalCod && status === "AWAITING_DELIVERY_PAYMENT") ? "Valor pendente" : "Valor do pedido"}</p>
-            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney((isInternalCod && status === "AWAITING_DELIVERY_PAYMENT" && order.remainingAmountOnDelivery) ? order.remainingAmountOnDelivery : orderTotal(order))}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" || deliveryPaymentReceived ? "Total pago" : (isInternalCod && status === "AWAITING_DELIVERY_PAYMENT") ? "Total pendente" : "Valor do pedido"}</p>
+            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney((isInternalCod && status === "AWAITING_DELIVERY_PAYMENT" && !deliveryPaymentReceived) ? deliveryPayment.totalToPayNow : orderTotal(order))}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
