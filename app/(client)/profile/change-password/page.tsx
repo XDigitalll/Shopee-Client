@@ -74,6 +74,7 @@ function ChangePasswordPageContent() {
     }
 
     setSaving(true);
+    const prevUpdatedAt = profile?.passwordUpdatedAt ?? null;
     try {
       await apiFetch<void>("users/me/password", {
         method: "PUT",
@@ -93,6 +94,24 @@ function ChangePasswordPageContent() {
       const refreshed = await apiFetch<CustomerProfile>("users/me", { token });
       setProfile(refreshed);
     } catch (error) {
+      // The backend sometimes returns 5xx after successfully writing the new password
+      // (e.g. email notification throws during response serialisation). Re-fetch the
+      // profile and compare passwordUpdatedAt to detect actual success.
+      try {
+        const refreshed = await apiFetch<CustomerProfile>("users/me", { token });
+        setProfile(refreshed);
+        if (refreshed.passwordUpdatedAt !== prevUpdatedAt) {
+          setFeedback(profile?.canSetLocalPassword
+            ? "Senha definida com sucesso. Agora ja podes entrar com Google ou com email e senha."
+            : "Senha alterada com sucesso.");
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          return;
+        }
+      } catch {
+        // ignore re-fetch failure — show original error below
+      }
       setDanger(error instanceof Error ? error.message : "Nao foi possivel atualizar a senha.");
     } finally {
       setSaving(false);

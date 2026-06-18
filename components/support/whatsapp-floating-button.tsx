@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { SUPPORT_WHATSAPP_ORDER_HELP_URL } from "@/lib/support-contacts";
 
-const HIDDEN_ROUTE_PREFIXES = ["/admin", "/admin-login", "/dashboard", "/login/admin"];
+const HIDDEN_ROUTE_PREFIXES = ["/admin", "/admin-login", "/dashboard", "/login/admin", "/profile/change-password"];
 
 export function shouldShowWhatsappFloatingButton(pathname: string | null): boolean {
   const currentPath = pathname || "/";
@@ -26,7 +26,7 @@ export function WhatsappFloatingButton() {
       rel="noopener noreferrer"
       aria-label="Falar com suporte no WhatsApp"
       title="Falar com suporte"
-      className="group fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] z-[80] flex items-center gap-2 rounded-full bg-[#25D366] p-2.5 text-white shadow-[0_12px_28px_rgba(37,211,102,0.32)] ring-1 ring-white/40 transition duration-200 hover:-translate-y-0.5 hover:bg-[#1FB855] hover:shadow-[0_18px_42px_rgba(37,211,102,0.45)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#25D366]/30 sm:right-6 sm:bottom-6 sm:p-3.5"
+      className="group fixed right-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[80] flex items-center gap-2 rounded-full bg-[#25D366] p-2.5 text-white shadow-[0_12px_28px_rgba(37,211,102,0.32)] ring-1 ring-white/40 transition duration-200 hover:-translate-y-0.5 hover:bg-[#1FB855] hover:shadow-[0_18px_42px_rgba(37,211,102,0.45)] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#25D366]/30 sm:right-6 sm:bottom-6 sm:p-3.5"
     >
       <span
         aria-hidden="true"

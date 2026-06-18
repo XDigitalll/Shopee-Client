@@ -23,6 +23,9 @@ const GREEN = "#2E8B57";
 const TEXT = "#1A1410";
 const MUTED = "#6B7280";
 
+// Pixels to clear above a section when scrolling to it (accounts for sticky header + possible warning banner)
+const HEADER_OFFSET = 108;
+
 const STEP_LABELS: Record<string, string> = {
   password: "Definir senha",
   name: "Nome completo",
@@ -260,9 +263,13 @@ function Field({
 function Toggle({
   checked,
   onChange,
+  disabled = false,
+  loading = false,
 }: {
   checked: boolean;
   onChange: () => void;
+  disabled?: boolean;
+  loading?: boolean;
 }) {
   return (
     <button
@@ -270,13 +277,20 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className="relative inline-flex h-8 w-14 items-center rounded-full transition"
+      disabled={disabled}
+      className="relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-60"
       style={{ background: checked ? RED : "#E5E7EB" }}
     >
-      <span
-        className="inline-block h-6 w-6 rounded-full bg-white shadow transition"
-        style={{ transform: checked ? "translateX(30px)" : "translateX(4px)" }}
-      />
+      {loading ? (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        </span>
+      ) : (
+        <span
+          className="inline-block h-6 w-6 rounded-full bg-white shadow transition-transform duration-200"
+          style={{ transform: checked ? "translateX(30px)" : "translateX(4px)" }}
+        />
+      )}
     </button>
   );
 }
@@ -361,6 +375,7 @@ export default function ProfilePage() {
   const [addressErrors, setAddressErrors] = useState<Partial<Record<string, string>>>({});
   const [addressTouched, setAddressTouched] = useState<Partial<Record<string, boolean>>>({});
   const [highlightVerification, setHighlightVerification] = useState(false);
+  const [savingToggleField, setSavingToggleField] = useState<string | null>(null);
 
   const personalRef = useRef<HTMLElement | null>(null);
   const addressesRef = useRef<HTMLElement | null>(null);
@@ -429,22 +444,55 @@ export default function ProfilePage() {
   }, [verifyCooldown]);
 
   useEffect(() => {
-    if (!profile || searchParams.get("focus") !== "verification") return;
+    if (!profile) return;
+    const focus = searchParams.get("focus");
 
-    setActive("security");
-    setHighlightVerification(true);
+    if (focus === "verification") {
+      setActive("security");
+      setHighlightVerification(true);
+      const scrollTimer = window.setTimeout(() => scrollToRef(securityRef), 150);
+      const highlightTimer = window.setTimeout(() => setHighlightVerification(false), 3000);
+      return () => {
+        window.clearTimeout(scrollTimer);
+        window.clearTimeout(highlightTimer);
+      };
+    }
+
+    if (!focus || focus === "verification") return;
 
     const scrollTimer = window.setTimeout(() => {
-      securityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 120);
-    const highlightTimer = window.setTimeout(() => {
-      setHighlightVerification(false);
-    }, 3000);
+      if (focus === "address") {
+        setActive("addresses");
+        scrollToRef(addressesRef);
+        setAddressFormOpen(true);
+      } else if (focus === "password" || focus === "security") {
+        setActive("security");
+        scrollToRef(securityRef);
+      } else if (focus === "preferences" || focus === "notifications") {
+        setActive("notifications");
+        scrollToRef(notificationsRef);
+      } else if (focus === "personal") {
+        setActive("personal");
+        scrollToRef(personalRef);
+      } else if (focus === "pending") {
+        const missingSteps = profile.accountMissingSteps ?? [];
+        if (missingSteps.includes("password")) {
+          setActive("security");
+          scrollToRef(securityRef);
+        } else if (missingSteps.length > 0) {
+          setActive("personal");
+          setIsEditingPersonal(true);
+          scrollToRef(personalRef);
+        } else if (!profile.hasDeliveryAddress) {
+          setActive("addresses");
+          scrollToRef(addressesRef);
+          setAddressFormOpen(true);
+        }
+      }
+    }, 150);
 
-    return () => {
-      window.clearTimeout(scrollTimer);
-      window.clearTimeout(highlightTimer);
-    };
+    return () => window.clearTimeout(scrollTimer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, searchParams]);
 
   const fullName = useMemo(() => {
@@ -452,16 +500,21 @@ export default function ProfilePage() {
     return names || profile?.displayName || userLabel || "Cliente";
   }, [personalForm.firstName, personalForm.lastName, profile?.displayName, userLabel]);
 
+  const scrollToRef = (ref: React.RefObject<HTMLElement | null>) => {
+    if (!ref.current) return;
+    const y = ref.current.getBoundingClientRect().top + window.scrollY - HEADER_OFFSET;
+    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  };
+
   const goToSection = (section: SectionKey) => {
     setActive(section);
-    const target = {
+    const ref = {
       personal: personalRef,
       addresses: addressesRef,
       notifications: notificationsRef,
       security: securityRef,
     }[section];
-
-    target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToRef(ref);
   };
 
   const validatePersonalForm = (): Partial<Record<keyof PersonalForm, string>> => {
@@ -610,6 +663,8 @@ export default function ProfilePage() {
           ? "Email atualizado. Enviamos um link de verificação para o novo endereço."
           : "Dados pessoais atualizados com sucesso."
       );
+      // After collapsing the edit form, keep the section in view instead of drifting to footer
+      window.setTimeout(() => scrollToRef(personalRef), 60);
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel guardar os dados pessoais.");
     } finally {
@@ -618,10 +673,14 @@ export default function ProfilePage() {
   };
 
   const handleNotificationToggle = async (field: "notifyOrderUpdates" | "notifyQuoteReady" | "notifyPromotions" | "notifySms") => {
-    if (!token || !profile) return;
+    if (!token || !profile || savingToggleField) return;
 
+    const savedY = window.scrollY;
     const nextProfile = { ...profile, [field]: !profile[field] };
+    setSavingToggleField(field);
     setProfile(nextProfile);
+    // Restore scroll after optimistic re-render to prevent layout jump
+    requestAnimationFrame(() => { window.scrollTo({ top: savedY }); });
 
     try {
       const payload = await apiFetch<CustomerProfile>("users/me/notifications", {
@@ -638,6 +697,9 @@ export default function ProfilePage() {
     } catch (error) {
       setProfile(profile);
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel atualizar as notificacoes.");
+    } finally {
+      setSavingToggleField(null);
+      requestAnimationFrame(() => { window.scrollTo({ top: savedY }); });
     }
   };
 
@@ -685,6 +747,8 @@ export default function ProfilePage() {
       setAddressTouched({});
       setAddressFormOpen(false);
       setFeedback(addressForm.id ? "Morada atualizada com sucesso." : "Nova morada adicionada com sucesso.");
+      // Scroll back to the addresses section to prevent drift to footer
+      window.setTimeout(() => scrollToRef(addressesRef), 60);
     } catch (error) {
       setDangerFeedback(error instanceof Error ? error.message : "Nao foi possivel guardar a morada.");
     } finally {
@@ -931,8 +995,8 @@ export default function ProfilePage() {
           <section className="rounded-[28px] border bg-white p-3 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
             <SidebarButton active={active === "personal"} icon={<ProfileIcon />} label="Dados pessoais" onClick={() => goToSection("personal")} />
             <SidebarButton active={active === "addresses"} icon={<LocationIcon />} label="Moradas" onClick={() => goToSection("addresses")} />
-            <SidebarButton active={active === "notifications"} icon={<BellIcon />} label="Notificacoes" onClick={() => goToSection("notifications")} />
             <SidebarButton active={active === "security"} icon={<ShieldIcon />} label="Seguranca" onClick={() => goToSection("security")} />
+            <SidebarButton active={active === "notifications"} icon={<BellIcon />} label="Preferencias" onClick={() => goToSection("notifications")} />
             <SidebarButton icon={<OrdersIcon />} label="Os meus pedidos" onClick={() => router.push("/orders")} />
             <SidebarButton danger icon={<LogoutIcon />} label="Terminar sessao" onClick={() => setConfirmLogoutOpen(true)} />
           </section>
@@ -956,7 +1020,18 @@ export default function ProfilePage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setIsEditingPersonal(true); goToSection("personal"); }}
+                  onClick={() => {
+                    const missingSteps = profile.accountMissingSteps ?? [];
+                    if (missingSteps.includes("password")) {
+                      goToSection("security");
+                    } else if (!profile.hasDeliveryAddress && missingSteps.length === 0) {
+                      goToSection("addresses");
+                      setAddressFormOpen(true);
+                    } else {
+                      setIsEditingPersonal(true);
+                      goToSection("personal");
+                    }
+                  }}
                   className="shrink-0 rounded-2xl px-5 py-3 text-sm font-black text-white transition hover:opacity-90"
                   style={{ background: RED }}
                 >
@@ -985,13 +1060,22 @@ export default function ProfilePage() {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold" style={{ color: MUTED }}>Falta:</span>
                   {profile.accountMissingSteps?.map((step) => (
-                    <span
+                    <button
                       key={step}
-                      className="rounded-full px-3 py-1 text-xs font-bold"
+                      type="button"
+                      onClick={() => {
+                        if (step === "password") {
+                          goToSection("security");
+                        } else {
+                          setIsEditingPersonal(true);
+                          goToSection("personal");
+                        }
+                      }}
+                      className="rounded-full px-3 py-1 text-xs font-bold transition hover:opacity-80"
                       style={{ background: "#FFE5DD", color: RED_DARK }}
                     >
                       {STEP_LABELS[step] ?? step}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -1050,7 +1134,7 @@ export default function ProfilePage() {
             </section>
           )}
 
-          <section ref={personalRef} className="rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+          <section ref={personalRef} className="scroll-mt-28 sm:scroll-mt-20 rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold" style={{ color: RED }}>Dados pessoais</p>
@@ -1281,7 +1365,7 @@ export default function ProfilePage() {
             </div>
           </section>
 
-          <section ref={addressesRef} className="rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+          <section ref={addressesRef} className="scroll-mt-28 sm:scroll-mt-20 rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold" style={{ color: RED }}>Moradas</p>
@@ -1472,34 +1556,10 @@ export default function ProfilePage() {
             ) : null}
           </section>
 
-          <section ref={notificationsRef} className="rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: RED }}>Notificacoes</p>
-              <h2 className="mt-1 text-2xl font-black" style={{ color: TEXT, fontFamily: "'Sora', sans-serif" }}>Preferencias</h2>
-            </div>
-
-            <div className="mt-6 grid gap-4">
-              {[
-                { key: "notifyOrderUpdates", title: "Actualizacoes de pedidos", copy: "Receber avisos sobre cada fase da encomenda." },
-                { key: "notifyQuoteReady", title: "Cotacoes recebidas", copy: "Ser notificado quando uma cotacao estiver pronta." },
-                { key: "notifyPromotions", title: "Promocoes e descontos", copy: "Receber campanhas, novidades e oportunidades especiais." },
-                { key: "notifySms", title: "Notificacoes por SMS", copy: "Usar o numero principal para atualizacoes importantes." },
-              ].map((item) => (
-                <div key={item.key} className="flex items-center justify-between gap-4 rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
-                  <div>
-                    <p className="text-sm font-bold" style={{ color: TEXT }}>{item.title}</p>
-                    <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>{item.copy}</p>
-                  </div>
-                  <Toggle checked={Boolean(profile?.[item.key as keyof CustomerProfile])} onChange={() => handleNotificationToggle(item.key as "notifyOrderUpdates" | "notifyQuoteReady" | "notifyPromotions" | "notifySms")} />
-                </div>
-              ))}
-            </div>
-          </section>
-
           <section
             id="account-verification"
             ref={securityRef}
-            className="rounded-[28px] border bg-white p-6 shadow-sm transition-all duration-500"
+            className="scroll-mt-28 sm:scroll-mt-20 rounded-[28px] border bg-white p-6 shadow-sm transition-all duration-500"
             style={{
               borderColor: highlightVerification ? RED : "#F2D4CC",
               boxShadow: highlightVerification
@@ -1739,6 +1799,35 @@ export default function ProfilePage() {
                   Terminar todas
                 </button>
               </div>
+            </div>
+          </section>
+
+          <section ref={notificationsRef} className="scroll-mt-28 sm:scroll-mt-20 rounded-[28px] border bg-white p-6 shadow-sm" style={{ borderColor: "#F2D4CC" }}>
+            <div>
+              <p className="text-sm font-semibold" style={{ color: RED }}>Preferencias</p>
+              <h2 className="mt-1 text-2xl font-black" style={{ color: TEXT, fontFamily: "'Sora', sans-serif" }}>Notificacoes</h2>
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              {[
+                { key: "notifyOrderUpdates", title: "Actualizacoes de pedidos", copy: "Receber avisos sobre cada fase da encomenda." },
+                { key: "notifyQuoteReady", title: "Cotacoes recebidas", copy: "Ser notificado quando uma cotacao estiver pronta." },
+                { key: "notifyPromotions", title: "Promocoes e descontos", copy: "Receber campanhas, novidades e oportunidades especiais." },
+                { key: "notifySms", title: "Notificacoes por SMS", copy: "Usar o numero principal para atualizacoes importantes." },
+              ].map((item) => (
+                <div key={item.key} className="flex items-center justify-between gap-4 rounded-[24px] border p-4" style={{ borderColor: "#F2D4CC", background: "#FFFDFC" }}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold" style={{ color: TEXT }}>{item.title}</p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: MUTED }}>{item.copy}</p>
+                  </div>
+                  <Toggle
+                    checked={Boolean(profile?.[item.key as keyof CustomerProfile])}
+                    onChange={() => handleNotificationToggle(item.key as "notifyOrderUpdates" | "notifyQuoteReady" | "notifyPromotions" | "notifySms")}
+                    disabled={savingToggleField !== null}
+                    loading={savingToggleField === item.key}
+                  />
+                </div>
+              ))}
             </div>
           </section>
         </main>

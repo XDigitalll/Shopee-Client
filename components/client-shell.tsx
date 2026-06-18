@@ -248,7 +248,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                 </Link>
                 {hasProfileWarning && (
                   <Link
-                    href="/profile?focus=verification"
+                    href="/profile?focus=pending"
                     className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:opacity-90"
                     style={{ background: "rgba(255,255,255,0.18)", color: "white" }}
                     title="Perfil incompleto"
@@ -330,7 +330,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
               ) : null}
               {hasProfileWarning ? (
                 <Link
-                  href="/profile?focus=verification"
+                  href="/profile?focus=pending"
                   onClick={() => setMenuOpen(false)}
                   className="inline-flex min-h-9 min-w-[132px] flex-1 items-center justify-center rounded-full px-3 py-2 text-center text-[12px] font-black leading-tight text-white shadow-sm"
                   style={{ background: "rgba(255,255,255,0.18)" }}
