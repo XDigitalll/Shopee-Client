@@ -849,6 +849,7 @@ export default function OrderPaymentPage() {
     setFeedback(null);
     const prevState = uiState;
     setUiState("redirecting_to_paysuite");
+    devLog("PAYSUITE_CREATE_PAYMENT_REQUEST", { orderId: order.id, method: paysuiteMethod });
 
     let capturedErrorMsg: string | null = null;
 
@@ -950,6 +951,13 @@ export default function OrderPaymentPage() {
   }
 
   function selectPaymentMethod(method: PaySuiteMethod) {
+    if (isChoosingAnotherPaySuiteMethod && previousPaySuiteMethod && previousPaySuiteMethod !== method) {
+      devLog("PAYSUITE_METHOD_SWITCH_REQUEST", {
+        orderId,
+        oldMethod: previousPaySuiteMethod,
+        newMethod: method,
+      });
+    }
     setPaysuiteMethod(method);
     setSelectedPaymentMethod(method);
     setFieldError(null);
@@ -961,6 +969,14 @@ export default function OrderPaymentPage() {
 
   function chooseAnotherPaySuiteMethod() {
     setSelectedPaymentMethod(null);
+    setPaysuitePayment((current) => current ? {
+      ...current,
+      providerReference: undefined,
+      paymentReference: undefined,
+      checkoutUrl: undefined,
+      providerStatus: undefined,
+      status: undefined,
+    } : current);
     setFieldError(null);
     setFeedback(null);
     setIsChoosingAnotherPaySuiteMethod(true);

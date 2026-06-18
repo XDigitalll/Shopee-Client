@@ -87,8 +87,14 @@ describe("PaySuite retry UX contract", () => {
     assert.match(paymentPage, /Escolher outro método/);
     assert.match(paymentPage, /function chooseAnotherPaySuiteMethod\(\)/);
     assert.match(paymentPage, /setSelectedPaymentMethod\(null\)/);
+    assert.match(paymentPage, /providerReference: undefined/);
+    assert.match(paymentPage, /checkoutUrl: undefined/);
+    assert.match(paymentPage, /paymentReference: undefined/);
     assert.match(paymentPage, /setIsChoosingAnotherPaySuiteMethod\(true\)/);
     assert.match(paymentPage, /shouldBlockDuplicatePayment\(paysuitePayment\) && !isChoosingAnotherPaySuiteMethod/);
+    assert.match(paymentPage, /PAYSUITE_METHOD_SWITCH_REQUEST/);
+    assert.match(paymentPage, /PAYSUITE_CREATE_PAYMENT_REQUEST/);
+    assert.match(paymentPage, /method: paysuiteMethod/);
     assert.doesNotMatch(paymentPage, /window\.location\.assign\(order\.activeDeliveryPaymentUrl!\)/);
   });
 });
