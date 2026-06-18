@@ -191,6 +191,16 @@ function isCodDeliveryPaymentNotRequested(order: Order | null): boolean {
     && !PAYMENT_BLOCKED_ORDER_STATUSES.has(upperText(order?.status));
 }
 
+function deliveryCollectionBreakdown(order: Order | null) {
+  const productPending = Math.max(0, Number(order?.remainingAmountOnDelivery ?? 0));
+  const deliveryFee = Math.max(0, Number(order?.deliveryFee ?? 0));
+  return {
+    productPending,
+    deliveryFee,
+    total: productPending + deliveryFee,
+  };
+}
+
 function manualMethodLabel(method: string) {
   if (method === "BANK_TRANSFER") return "Transferencia bancaria";
   if (method === "MPESA") return "M-Pesa";
@@ -335,9 +345,8 @@ export default function OrderPaymentPage() {
   const hasCodActivePaySuiteUrl = deliveryCollectionActive && deliveryMode === "paysuite"
     && !!order?.hasActiveDeliveryPaymentAttempt
     && !!order?.activeDeliveryPaymentUrl;
-  const officialAmount = deliveryCollectionActive && Number(order?.remainingAmountOnDelivery ?? 0) > 0
-    ? Number(order?.remainingAmountOnDelivery ?? 0)
-    : orderVisibleTotal(order);
+  const deliveryBreakdown = deliveryCollectionBreakdown(order);
+  const officialAmount = deliveryCollectionActive ? deliveryBreakdown.total : orderVisibleTotal(order);
   const orderStatus = order?.status || "";
   const visual = statusCopy(orderStatus, order?.adminMessageForClient, deliveryMode);
   const isPaid = PAID_STATUSES.has(orderStatus);
@@ -793,7 +802,7 @@ export default function OrderPaymentPage() {
       return;
     }
     if (!officialAmount || officialAmount <= 0) {
-      setFieldError("O valor oficial do pedido ainda não está disponível. Actualiza a página e tenta novamente.");
+      setFieldError("Nao existe valor pendente para cobrar neste pedido.");
       return;
     }
     if (shouldBlockDuplicatePayment(paysuitePayment)) {
@@ -1004,7 +1013,7 @@ export default function OrderPaymentPage() {
     }
     if (!officialAmount || officialAmount <= 0) {
       manualSubmitInFlightRef.current = false;
-      setFieldError("O valor oficial do pedido ainda nao esta disponivel. Actualiza a pagina e tenta novamente.");
+      setFieldError("Nao existe valor pendente para cobrar neste pedido.");
       return;
     }
     if (!manualProofFile) {
@@ -1246,6 +1255,22 @@ export default function OrderPaymentPage() {
             >
               {formatMoney(officialAmount)}
             </p>
+            {deliveryCollectionActive ? (
+              <div className="mt-4 space-y-2 border-t pt-3 text-sm" style={{ borderColor: "#F2D4CC", color: "#6B7280" }}>
+                <div className="flex justify-between gap-4">
+                  <span>Produto pendente</span>
+                  <strong style={{ color: "#1A1410" }}>{formatMoney(deliveryBreakdown.productPending)}</strong>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span>Taxa de entrega</span>
+                  <strong style={{ color: "#1A1410" }}>{formatMoney(deliveryBreakdown.deliveryFee)}</strong>
+                </div>
+                <div className="flex justify-between gap-4 rounded-2xl px-3 py-2" style={{ background: "#FFFFFF", color: "#1A1410" }}>
+                  <span className="font-black">Total a pagar</span>
+                  <strong style={{ color: RED }}>{formatMoney(deliveryBreakdown.total)}</strong>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
