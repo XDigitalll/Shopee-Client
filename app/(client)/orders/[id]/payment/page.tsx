@@ -199,6 +199,12 @@ function manualMethodLabel(method: string) {
   return method;
 }
 
+function paysuiteMethodLabel(method: PaySuiteMethod) {
+  if (method === "MPESA") return "M-Pesa";
+  if (method === "EMOLA") return "e-Mola";
+  return "Visa";
+}
+
 function settingValue(setting: PublicPaymentSetting | null | undefined) {
   if (!setting) return "";
   return [setting.bankName, setting.accountNumber, setting.accountHolder, setting.branch]
@@ -287,6 +293,7 @@ export default function OrderPaymentPage() {
   const payActionAnchorRef = useRef<HTMLDivElement | null>(null);
   const paysuiteAction = useAsyncAction();
   const [paysuiteMethod, setPaysuiteMethod] = useState<PaySuiteMethod>("MPESA");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaySuiteMethod | null>(null);
   const [paysuitePayment, setPaysuitePayment] = useState<PaySuiteInitResponse | null>(null);
   const [manualSettings, setManualSettings] = useState<PublicPaymentSetting[]>([]);
   const [manualMethod, setManualMethod] = useState<ManualPaymentMethod>("BANK_TRANSFER");
@@ -385,6 +392,10 @@ export default function OrderPaymentPage() {
       : `Pagar ${formatMoney(officialAmount)} agora`;
 
   // Status card content — single source of truth, derived from uiState.
+  const mobilePayButtonLabel = selectedPaymentMethod
+    ? `Continuar com ${paysuiteMethodLabel(selectedPaymentMethod)}`
+    : "";
+
   const statusCard = (() => {
     if (uiState === "confirmed" || isPaid) {
       return {
@@ -899,6 +910,7 @@ export default function OrderPaymentPage() {
 
   function selectPaymentMethod(method: PaySuiteMethod) {
     setPaysuiteMethod(method);
+    setSelectedPaymentMethod(method);
     if (window.matchMedia("(max-width: 767px)").matches) return;
     window.requestAnimationFrame(() => {
       payActionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1607,9 +1619,21 @@ export default function OrderPaymentPage() {
                 </span>
               </div>
 
+              {!selectedPaymentMethod ? (
+                <div
+                  className="mt-4 rounded-2xl border px-4 py-3 text-sm md:hidden"
+                  style={{ borderColor: "#BBF7D0", background: "#F0FDF4", color: "#166534" }}
+                >
+                  <p className="font-black">Formas de pagamento disponiveis abaixo</p>
+                  <p className="mt-1 text-xs font-semibold" style={{ color: "#4B5563" }}>
+                    Escolhe uma forma de pagamento abaixo
+                  </p>
+                </div>
+              ) : null}
+
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {PAYSUITE_METHODS.map((item) => {
-                  const active = paysuiteMethod === item.key;
+                  const active = selectedPaymentMethod === item.key;
                   return (
                     <button
                       key={item.key}
@@ -1712,25 +1736,27 @@ export default function OrderPaymentPage() {
             </div>
 
             {/* Pay button — mobile sticky */}
-            <div
-              className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden"
-              style={{ borderColor: "#F2D4CC" }}
-            >
-              <button
-                type="button"
-                onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
-                disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
-                className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
-                style={{
-                  background:
-                    isPaySuiteBusy || !officialAmount || officialAmount <= 0
-                      ? "#9CA3AF"
-                      : GREEN,
-                }}
+            {selectedPaymentMethod !== null ? (
+              <div
+                className="fixed inset-x-0 bottom-0 z-20 border-t bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur md:hidden"
+                style={{ borderColor: "#F2D4CC" }}
               >
-                {payButtonLabel}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => void (isRetryContext && canGenerateRetry ? handlePaySuiteRetry() : handlePaySuitePayment())}
+                  disabled={isPaySuiteBusy || !officialAmount || officialAmount <= 0}
+                  className="w-full rounded-2xl px-5 py-3.5 text-sm font-black text-white"
+                  style={{
+                    background:
+                      isPaySuiteBusy || !officialAmount || officialAmount <= 0
+                        ? "#9CA3AF"
+                        : GREEN,
+                  }}
+                >
+                  {mobilePayButtonLabel}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>
