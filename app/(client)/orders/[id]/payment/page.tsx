@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { apiFetch, emitClientDataChanged } from "@/lib/api-client";
+import { ApiRequestError, apiFetch, emitClientDataChanged } from "@/lib/api-client";
 import { formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
@@ -852,6 +852,7 @@ export default function OrderPaymentPage() {
     devLog("PAYSUITE_CREATE_PAYMENT_REQUEST", { orderId: order.id, method: paysuiteMethod });
 
     let capturedErrorMsg: string | null = null;
+    let capturedFeedbackType: "success" | "error" = "error";
 
     const result = await paysuiteAction.run(async () => {
       try {
@@ -880,6 +881,10 @@ export default function OrderPaymentPage() {
           err,
           "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
         ).message;
+        if (isChoosingAnotherPaySuiteMethod && err instanceof ApiRequestError && err.status === 409) {
+          capturedFeedbackType = "success";
+          capturedErrorMsg = "A atualizar mÃ©todo de pagamento... Tenta novamente dentro de alguns segundos.";
+        }
         throw err;
       }
     });
@@ -887,7 +892,7 @@ export default function OrderPaymentPage() {
     if (!result) {
       setUiState(prevState);
       setFeedback({
-        type: "error",
+        type: capturedFeedbackType,
         msg: capturedErrorMsg ?? "Não foi possível iniciar o pagamento. Tenta novamente em alguns minutos.",
       });
     }
