@@ -1637,7 +1637,7 @@ export default function OrdersPage() {
             </div>
           ) : (
             <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F5F3FF", borderColor: "#DDD6FE" }}>
-              <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Resumo do pagamento</h3>
+              <h3 className="text-base font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>Pagamento pendente na entrega</h3>
               <p className="mt-1 text-sm" style={{ color: "#5B21B6" }}>
                 Este é o valor pendente real do pedido antes da entrega.
               </p>
@@ -1668,17 +1668,44 @@ export default function OrdersPage() {
               ) : order.deliveryCollectionMethod === "PAYSUITE" ? (
                 <>
                   <p className="mt-3 text-sm" style={{ color: "#5B21B6" }}>
-                    Escolhe a forma de pagamento para concluir o valor pendente antes de receberes a encomenda.
+                    Escolhe o método de pagamento e paga o valor pendente para receber a tua encomenda.
                   </p>
+                  <div className="mt-3 rounded-[14px] px-3 py-2.5" style={{ background: "rgba(255,255,255,0.68)" }}>
+                    <div className="space-y-1 text-xs font-semibold" style={{ color: "#7C3AED" }}>
+                      <p className="flex items-center justify-between gap-3">
+                        <span>Produto:</span>
+                        <span>{formatMoney(Math.max(0, Number(order.remainingAmountOnDelivery ?? 0)))}</span>
+                      </p>
+                      <p className="flex items-center justify-between gap-3">
+                        <span>Entrega:</span>
+                        <span>{formatMoney(Math.max(0, Number(order.deliveryFee ?? 0)))}</span>
+                      </p>
+                    </div>
+                    <p className="mt-2 flex items-center justify-between gap-3 border-t pt-2 text-sm font-black" style={{ borderColor: "#DDD6FE", color: "#5B21B6" }}>
+                      <span>Total a pagar agora</span>
+                      <span>{formatMoney(Math.max(0, Number(order.remainingAmountOnDelivery ?? 0)) + Math.max(0, Number(order.deliveryFee ?? 0)))}</span>
+                    </p>
+                  </div>
                   <div className="mt-4 flex flex-wrap gap-3">
-                    <Link
-                      href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
-                      className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
-                      style={{ background: "#5B21B6" }}
-                      onClick={() => void markOrderUpdatesSeen(order.id)}
-                    >
-                      Escolher forma de pagamento
-                    </Link>
+                    {order.hasActiveDeliveryPaymentAttempt && order.activeDeliveryPaymentUrl ? (
+                      <a
+                        href={order.activeDeliveryPaymentUrl}
+                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                        style={{ background: "#5B21B6" }}
+                        onClick={() => void markOrderUpdatesSeen(order.id)}
+                      >
+                        Continuar pagamento
+                      </a>
+                    ) : (
+                      <Link
+                        href={`/orders/${order.id}/payment?mode=paysuite&purpose=delivery`}
+                        className="inline-flex rounded-2xl px-4 py-2.5 text-sm font-black text-white"
+                        style={{ background: "#5B21B6" }}
+                        onClick={() => void markOrderUpdatesSeen(order.id)}
+                      >
+                        Escolher forma de pagamento
+                      </Link>
+                    )}
                   </div>
                 </>
               ) : order.deliveryCollectionMethod === "MANUAL_TRANSFER" ? (
@@ -1693,7 +1720,7 @@ export default function OrdersPage() {
                       style={{ borderColor: "#A78BFA", color: "#5B21B6" }}
                       onClick={() => void markOrderUpdatesSeen(order.id)}
                     >
-                      Escolher forma de pagamento
+                      Enviar comprovativo
                     </a>
                   </div>
                 </>
@@ -1781,8 +1808,8 @@ export default function OrdersPage() {
 
         <div className="mt-5 flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderColor: "#F2D4CC" }}>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" || deliveryPaymentReceived ? "Total pago" : (isInternalCod && status === "AWAITING_DELIVERY_PAYMENT") ? "Total pendente" : "Valor do pedido"}</p>
-            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney((isInternalCod && status === "AWAITING_DELIVERY_PAYMENT" && !deliveryPaymentReceived) ? deliveryPayment.totalToPayNow : orderTotal(order))}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "#9CA3AF" }}>{status === "DELIVERED" || deliveryPaymentReceived ? "Total pago" : (isInternalCod && status === "AWAITING_DELIVERY_PAYMENT") ? "Valor pendente" : "Valor do pedido"}</p>
+            <p className="mt-1 text-2xl font-black" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>{formatMoney((isInternalCod && status === "AWAITING_DELIVERY_PAYMENT" && !deliveryPaymentReceived) ? Math.max(0, Number(order.remainingAmountOnDelivery ?? 0)) + Math.max(0, Number(order.deliveryFee ?? 0)) : orderTotal(order))}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -1877,7 +1904,7 @@ export default function OrdersPage() {
           <div className="rounded-[28px] border-2 border-dashed bg-white px-6 py-16 text-center" style={{ borderColor: "#F2D4CC" }}>
             <div className="mx-auto flex w-fit items-center justify-center rounded-full bg-[#FFF8F5] p-4"><EmptyIcon /></div>
             <h2 className="mt-4 text-xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>Nenhum pedido encontrado</h2>
-            <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Troca o filtro acima ou inicia uma nova compra internacional.</p>
+            <p className="mt-2 text-sm" style={{ color: "#6B7280" }}>Troca o filtro acima ou faz uma nova encomenda.</p>
           </div>
         ) : (
           orderGroups.map((group) => {

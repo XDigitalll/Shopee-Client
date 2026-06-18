@@ -399,8 +399,12 @@ export default function OrderPaymentPage() {
     && (canGenerateRetry || explicitFailure || syncConfirmedFailure)
     && (uiState === "returned_pending" || uiState === "failed" || uiState === "retry_warning");
 
+  const hasCodActivePaySuiteUrl = deliveryMode === "paysuite"
+    && !!order?.hasActiveDeliveryPaymentAttempt
+    && !!order?.activeDeliveryPaymentUrl;
+
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
-  const methodSelectorVisible = !isExternalOrder && !activePaySuiteDecisionVisible && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
+  const methodSelectorVisible = !isExternalOrder && !activePaySuiteDecisionVisible && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
   const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
   const needsVerificationForPayment = uiState === "ready_to_pay" && !verificationOk;
   // True when the method selector is for a retry/new-attempt (not a first payment).
@@ -839,10 +843,16 @@ export default function OrderPaymentPage() {
       setFieldError("Escolhe um método de pagamento antes de continuar.");
       return;
     }
-    if (shouldBlockDuplicatePayment(paysuitePayment) && !isChoosingAnotherPaySuiteMethod) {
-      setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
-      devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
-      return;
+    if (shouldBlockDuplicatePayment(paysuitePayment)) {
+      if (hasCodActivePaySuiteUrl && order.activeDeliveryPaymentUrl) {
+        window.location.assign(order.activeDeliveryPaymentUrl);
+        return;
+      }
+      if (!isChoosingAnotherPaySuiteMethod) {
+        setFeedback({ type: "error", msg: "Já existe uma tentativa de pagamento em curso. Aguarda a confirmação." });
+        devLog("[PAYMENT_DUPLICATE_ATTEMPT_BLOCKED]", { orderId });
+        return;
+      }
     }
 
     setFieldError(null);
@@ -1690,6 +1700,29 @@ export default function OrderPaymentPage() {
               >
                 {previousPaySuiteMethodLabel ? "Escolher outro método" : "Escolher método de pagamento"}
               </button>
+            </div>
+          </div>
+        ) : null}
+
+        {hasCodActivePaySuiteUrl ? (
+          <div className="mt-6 rounded-[24px] border p-5" style={{ borderColor: "#DDD6FE", background: "#F5F3FF" }}>
+            <p className="text-sm font-black" style={{ color: "#5B21B6", fontFamily: "'Sora', sans-serif" }}>
+              Pagamento em processamento
+            </p>
+            <p className="mt-1 text-sm leading-6" style={{ color: "#4B5563" }}>
+              Já existe uma tentativa de pagamento em curso. Continua o pagamento abaixo.
+            </p>
+            <p className="mt-2 text-sm font-semibold" style={{ color: "#92400E" }}>
+              Se o valor já saiu da tua conta, não pagues novamente. Aguarda a confirmação.
+            </p>
+            <div className="mt-4">
+              <a
+                href={order.activeDeliveryPaymentUrl!}
+                className="inline-flex justify-center rounded-2xl px-5 py-3 text-sm font-black text-white"
+                style={{ background: "#5B21B6" }}
+              >
+                Continuar pagamento
+              </a>
             </div>
           </div>
         ) : null}
