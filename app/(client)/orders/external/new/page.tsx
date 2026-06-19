@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 import { ClientActionFeedback, ClientFeedbackDock } from "@/components/client-feedback-state";
@@ -20,6 +21,7 @@ const MAX_SCREENSHOT_SIZE = 10 * 1024 * 1024;
 const MAX_SCREENSHOTS = 3;
 const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const TEMPORARY_ACCESS_PREFILL_KEY = "shopeemz_temporary_access_prefill";
 const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
 const SPAM_WORDS = new Set(["oi", "olá", "ola", "ok", "sim", "nao", "não", "produto", "quero", "item", "123", "teste", "test", "ajuda", "help", "info", "hi", "hey", "bom", "obrigado"]);
 const MIN_DESC_CHARS = 10;
@@ -176,6 +178,7 @@ function buildTemporaryAccessDocument(order: SuccessOrderState) {
 
 export default function NewExternalOrderPage() {
   const { token, userLabel, userEmail, userPhone, accountCompletionPercentage, hasProfileWarning } = useAuth();
+  const router = useRouter();
   const isLoggedIn = Boolean(token);
 
   const [productLink, setProductLink] = useState("");
@@ -364,6 +367,32 @@ export default function NewExternalOrderPage() {
     } catch {
       setFeedback({ type: "info", msg: `Guarda esta referência: ${reference}` });
     }
+  }
+
+  async function copyTemporaryPassword(password: string) {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard unavailable");
+      }
+      await navigator.clipboard.writeText(password);
+      setFeedback({ type: "success", msg: "Senha temporária copiada." });
+    } catch {
+      setFeedback({ type: "info", msg: `Senha temporária: ${password}` });
+    }
+  }
+
+  function goToTemporaryAccessLogin(order: SuccessOrderState) {
+    if (order.loginIdentifier && order.temporaryPassword) {
+      window.sessionStorage.setItem(
+        TEMPORARY_ACCESS_PREFILL_KEY,
+        JSON.stringify({
+          loginIdentifier: order.loginIdentifier,
+          temporaryPassword: order.temporaryPassword,
+          createdAt: Date.now(),
+        }),
+      );
+    }
+    router.push("/login?tab=login&redirect=%2Forders&reason=temporary-access");
   }
 
   function saveTemporaryAccessPdf(order: SuccessOrderState) {
@@ -557,6 +586,7 @@ export default function NewExternalOrderPage() {
                   ? "O teu pedido já entrou para análise."
                   : "Já encontrámos uma conta associada a este telefone."}
             </h2>
+            {!(successOrder.firstGuestOrder && successOrder.temporaryPassword) ? (
             <p className="mt-4 whitespace-pre-line text-base font-semibold leading-8" style={{ color: MUTED }}>
               {successOrder.authenticatedOrder
                 ? "A nossa equipa vai analisar o preço, disponibilidade e prazo. Podes acompanhar tudo na página de pedidos."
@@ -564,29 +594,87 @@ export default function NewExternalOrderPage() {
                   ? successOrder.message
                   : "Recebemos o teu pedido. Entra para acompanhares todos os teus pedidos ou recupera o acesso se precisares."}
             </p>
+            ) : null}
 
             {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
-              <div className="mt-5 rounded-2xl border-2 p-5 space-y-3" style={{ borderColor: RED, background: SOFT }}>
-                <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
-                  Acesso temporário criado
-                </p>
-                <div className="grid gap-2 text-sm font-bold" style={{ color: TEXT }}>
-                  <div className="flex items-center gap-3">
-                    <span style={{ color: MUTED }}>Telefone:</span>
-                    <code className="rounded-lg px-2 py-1 font-mono text-sm" style={{ background: "#fff", color: TEXT }}>
-                      {successOrder.loginIdentifier}
-                    </code>
+              <div className="mt-5 overflow-hidden rounded-[26px] border-2 shadow-sm" style={{ borderColor: RED, background: "#fff" }}>
+                <div className="p-5 sm:p-6" style={{ background: "linear-gradient(135deg, #FFF0EC 0%, #FFFFFF 70%)" }}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+                    Acesso temporário criado
+                  </p>
+                  <h3 className="mt-2 font-[family-name:var(--font-sora)] text-2xl font-black leading-tight" style={{ color: TEXT }}>
+                    Tens de entrar na tua conta temporária para acompanhar o pedido
+                  </h3>
+                  <p className="mt-3 text-sm font-semibold leading-6" style={{ color: MUTED }}>
+                    Criámos uma conta automática para ti. Usa o teu telefone e a senha temporária abaixo para fazer login e ver a cotação, pagamentos e estado do pedido.
+                  </p>
+
+                  <div className="mt-5 grid gap-3">
+                    <div className="rounded-2xl border px-4 py-3" style={{ borderColor: BORDER, background: "#fff" }}>
+                      <span className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Telefone</span>
+                      <div className="mt-1 break-all font-[family-name:var(--font-sora)] text-xl font-black sm:text-2xl" style={{ color: TEXT }}>
+                        {successOrder.loginIdentifier || submittedOrderSummary?.phone || "-"}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border px-4 py-3" style={{ borderColor: "#F7B7A6", background: "#FFF8F5" }}>
+                      <span className="text-xs font-black uppercase tracking-[0.14em]" style={{ color: MUTED }}>Senha temporária</span>
+                      <div className="mt-1 break-all font-[family-name:var(--font-sora)] text-2xl font-black sm:text-3xl" style={{ color: RED }}>
+                        {successOrder.temporaryPassword}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span style={{ color: MUTED }}>Senha temporária:</span>
-                    <code className="rounded-lg px-2 py-1 font-mono text-sm font-black" style={{ background: "#fff", color: RED }}>
-                      {successOrder.temporaryPassword}
-                    </code>
+
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => goToTemporaryAccessLogin(successOrder)}
+                      className="rounded-2xl px-5 py-3.5 text-center text-sm font-black text-white shadow-sm transition hover:opacity-95"
+                      style={{ background: RED }}
+                    >
+                      Entrar agora com estes dados
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void copyTemporaryPassword(successOrder.temporaryPassword!)}
+                      className="rounded-2xl border px-5 py-3.5 text-sm font-black"
+                      style={{ borderColor: BORDER, color: RED, background: "white" }}
+                    >
+                      Copiar senha temporária
+                    </button>
                   </div>
+
+                  <p className="mt-4 rounded-2xl border px-4 py-3 text-xs font-bold leading-5" style={{ borderColor: "#F7B7A6", background: "#FFF8F5", color: "#9A3412" }}>
+                    Guarda estes dados. Se fechares esta página sem guardar, entra em contacto connosco para recuperar o acesso.
+                  </p>
                 </div>
-                <p className="text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                  Guarda estes dados. Por segurança, deverás trocar a senha no primeiro acesso.
-                </p>
+              </div>
+            ) : null}
+
+            {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
+              <div className="mt-6 grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
+                <section className="rounded-2xl border p-4 sm:p-5" style={{ borderColor: BORDER, background: "#FFFDFC" }}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Como acompanhar</p>
+                  <ol className="mt-4 space-y-3 text-sm font-bold" style={{ color: TEXT }}>
+                    <li className="flex gap-3">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white" style={{ background: RED }}>1</span>
+                      <span>Clica em "Entrar agora"</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white" style={{ background: RED }}>2</span>
+                      <span>Usa o telefone mostrado acima</span>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white" style={{ background: RED }}>3</span>
+                      <span>Cola a senha temporária e troca por uma senha tua</span>
+                    </li>
+                  </ol>
+                </section>
+                <section className="rounded-2xl border p-4 sm:p-5" style={{ borderColor: BORDER, background: "#F8FAFC" }}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: TEXT }}>WhatsApp em breve</p>
+                  <p className="mt-3 text-sm font-semibold leading-6" style={{ color: MUTED }}>
+                    Consulta pelo WhatsApp estará disponível em breve. Por agora, acompanha o pedido entrando no site com estes dados.
+                  </p>
+                </section>
               </div>
             ) : null}
 
@@ -656,16 +744,6 @@ export default function NewExternalOrderPage() {
             ) : null}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
-                <Link
-                  href="/login?tab=login"
-                  className="rounded-2xl px-5 py-3 text-center text-sm font-black text-white sm:col-span-2"
-                  style={{ background: RED }}
-                >
-                  Entrar e trocar senha
-                </Link>
-              ) : null}
-
               {successOrder.accountAlreadyExists && !successOrder.temporaryPassword ? (
                 <>
                   <Link

@@ -82,7 +82,10 @@ function ChevronIcon({ direction }: { direction: "left" | "right" }) {
 
 function canAddToCart(product: Product) {
   if (product.madeToOrder) return true;
-  return typeof product.stock !== "number" || product.stock > 0;
+  if (product.hasVariants) return product.available !== false && Number(product.stockAvailable ?? product.stock ?? 0) > 0;
+  return typeof product.stockAvailable === "number"
+    ? product.stockAvailable > 0
+    : typeof product.stock !== "number" || product.stock > 0;
 }
 
 function discountPct(product: Product) {
@@ -109,7 +112,7 @@ function hasAny(value: string, words: string[]) {
 }
 
 function productMerchScore(product: Product) {
-  const stock = typeof product.stock === "number" ? product.stock : 0;
+  const stock = typeof product.stockAvailable === "number" ? product.stockAvailable : typeof product.stock === "number" ? product.stock : 0;
   const discount = discountPct(product);
   const rating = Number(product.rating ?? 0);
   const available = canAddToCart(product) ? 1000 : -1000;
@@ -250,7 +253,7 @@ function ProductCard({
 
         {!product.madeToOrder && (
           <p className="text-xs" style={{ color: canAdd ? "#6B7280" : "#EF4444" }}>
-            {canAdd ? `${product.stock ?? 0} em stock` : "Sem stock"}
+            {canAdd ? `${product.stockAvailable ?? product.stock ?? 0} em stock` : "Sem stock"}
           </p>
         )}
 

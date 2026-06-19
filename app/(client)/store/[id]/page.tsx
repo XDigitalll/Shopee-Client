@@ -378,6 +378,7 @@ export default function ProductDetailPage() {
   const selectedVariant = useMemo(() => {
     const variants = (product?.variants || []).filter((v) => v.active !== false);
     if (!variants.length) return undefined;
+    const firstAvailable = variants.find((v) => Number(v.stockAvailable ?? v.stock ?? 0) > 0) ?? variants[0];
 
     // New attribute-based selection
     if (product?.hasVariants && Object.keys(selectedAttrValues).length > 0) {
@@ -385,7 +386,7 @@ export default function ProductDetailPage() {
         const attrs = v.attributes ?? {};
         return Object.entries(selectedAttrValues).every(([key, val]) => attrs[key] === val);
       });
-      return match ?? variants[0];
+      return match ?? firstAvailable;
     }
 
     // Legacy color/size fallback
@@ -394,7 +395,7 @@ export default function ProductDetailPage() {
       const cOk = selectedColor ? v.color === selectedColor : true;
       return sOk && cOk;
     });
-    return match ?? variants[0];
+    return match ?? firstAvailable;
   }, [product, selectedColor, selectedSize, selectedAttrValues]);
 
   const images = useMemo(() => {
@@ -424,7 +425,11 @@ export default function ProductDetailPage() {
   const price = Number(selectedVariant?.effectivePrice ?? selectedVariant?.finalPrice ?? product?.finalPrice ?? 0);
   const originalPrice = Number(product?.originalPrice || 0);
   const discountPct = originalPrice > price && price > 0 ? Math.round((1 - price / originalPrice) * 100) : 0;
-  const stock = typeof selectedVariant?.stock === "number" ? selectedVariant.stock : product?.stock;
+  const stock = typeof selectedVariant?.stockAvailable === "number"
+    ? selectedVariant.stockAvailable
+    : typeof selectedVariant?.stock === "number"
+      ? selectedVariant.stock
+      : product?.stockAvailable ?? product?.stock;
   const variantRequired = product?.hasVariants && !selectedVariant;
   const isExternalProduct = product?.madeToOrder || product?.source === "EXTERNAL";
   const canAdd = !variantRequired && (isExternalProduct || typeof stock !== "number" || stock > 0);

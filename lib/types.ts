@@ -26,6 +26,9 @@ export type Product = {
   sourceStore?: string;
   externalLink?: string;
   stock?: number;
+  stockPhysical?: number;
+  stockReserved?: number;
+  stockAvailable?: number;
   images?: string[];
   externalProductId?: string;
   status?: string;
@@ -60,6 +63,9 @@ export type ProductVariant = {
   marginPercentage?: number;
   effectivePrice?: number;
   stock?: number;
+  stockPhysical?: number;
+  stockReserved?: number;
+  stockAvailable?: number;
   active?: boolean;
   mainImageUrl?: string;
   displayOrder?: number;

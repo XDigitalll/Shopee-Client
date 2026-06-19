@@ -837,7 +837,11 @@ type ProductCardProps = {
 };
 
 function canAddToCart(product: Product) {
-  return product.madeToOrder || typeof product.stock !== "number" || product.stock > 0;
+  if (product.madeToOrder) return true;
+  if (product.hasVariants) return product.available !== false && Number(product.stockAvailable ?? product.stock ?? 0) > 0;
+  return typeof product.stockAvailable === "number"
+    ? product.stockAvailable > 0
+    : typeof product.stock !== "number" || product.stock > 0;
 }
 
 function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: ProductCardProps) {
@@ -1001,7 +1005,7 @@ function productGroup(product: Product) {
 }
 
 function productScore(product: Product) {
-  const stock = typeof product.stock === "number" ? product.stock : 0;
+  const stock = typeof product.stockAvailable === "number" ? product.stockAvailable : typeof product.stock === "number" ? product.stock : 0;
   const final = Number(product.finalPrice ?? 0);
   const original = Number(product.originalPrice ?? 0);
   const discount = original > final && original > 0 ? Math.round((1 - final / original) * 100) : 0;

@@ -37,6 +37,7 @@ const BENEFITS = [
 
 const STORES = ["Shein", "Temu", "Amazon", "AliExpress", "Zara"];
 const BACKEND_PUBLIC_URL = getBackendPublicUrl();
+const TEMPORARY_ACCESS_PREFILL_KEY = "shopeemz_temporary_access_prefill";
 
 function getBackendPublicUrl() {
   const backendUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
@@ -99,6 +100,7 @@ function LoginPageContent() {
     : "/";
   const initialTab = searchParams.get("tab") === "register" ? "register" : "login";
   const trackingPrompt = searchParams.get("reason") === "track-orders";
+  const temporaryAccessPrompt = searchParams.get("reason") === "temporary-access";
 
   const [activeTab, setActiveTab] = useState<AuthTab>(initialTab);
   const [loginEmail, setLoginEmail] = useState("");
@@ -156,6 +158,28 @@ function LoginPageContent() {
       setLoginError("A sua sessao expirou. Entre novamente para continuar.");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!temporaryAccessPrompt) return;
+    try {
+      const raw = window.sessionStorage.getItem(TEMPORARY_ACCESS_PREFILL_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        loginIdentifier?: string;
+        temporaryPassword?: string;
+        createdAt?: number;
+      };
+      window.sessionStorage.removeItem(TEMPORARY_ACCESS_PREFILL_KEY);
+      const isFresh = typeof parsed.createdAt === "number" && Date.now() - parsed.createdAt < 15 * 60 * 1000;
+      if (!isFresh) return;
+      if (parsed.loginIdentifier) setLoginEmail(parsed.loginIdentifier);
+      if (parsed.temporaryPassword) setLoginPassword(parsed.temporaryPassword);
+      setActiveTab("login");
+      setLoginError("");
+    } catch {
+      window.sessionStorage.removeItem(TEMPORARY_ACCESS_PREFILL_KEY);
+    }
+  }, [temporaryAccessPrompt]);
 
   const handleLoginSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -476,6 +500,12 @@ function LoginPageContent() {
                 {trackingPrompt ? (
                   <div className="mb-5 rounded-2xl border border-[#F2D4CC] bg-[#FFF4EF] px-4 py-3 text-sm font-semibold leading-6 text-[#6D3325]">
                     Para acompanhar todos os teus pedidos, entra na tua conta. Se foi o teu primeiro pedido, a nossa equipa também vai contactar-te pelo telefone informado.
+                  </div>
+                ) : null}
+
+                {temporaryAccessPrompt ? (
+                  <div className="mb-5 rounded-2xl border border-[#F2D4CC] bg-[#FFF4EF] px-4 py-3 text-sm font-semibold leading-6 text-[#6D3325]">
+                    Entra com o telefone e a senha temporária do teu primeiro pedido. Depois do login, troca por uma senha tua para proteger a conta.
                   </div>
                 ) : null}
 
