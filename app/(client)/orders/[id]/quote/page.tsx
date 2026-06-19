@@ -52,6 +52,14 @@ function QuoteRow({
   );
 }
 
+function customsLabel(quote: Order["quote"] | null | undefined) {
+  if (quote?.customsType === "FIXED") {
+    return "Alfandega fixa";
+  }
+  const value = quote?.customsValue ?? quote?.customsPercent;
+  return value != null ? `Alfandega (${value}%)` : "Alfandega";
+}
+
 export default function OrderQuotePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -213,7 +221,7 @@ export default function OrderQuotePage() {
                 <QuoteRow label={shippingOriginLabel ? `Transporte ${routeName} (${shippingOriginLabel})` : `Transporte ${routeName}`} value={q.shippingAmountMzn} />
                 <QuoteRow label="Subtotal base" value={q.subtotalMzn} muted />
                 {(q.riskReserveAmountMzn ?? 0) > 0 ? <QuoteRow label="Reserva de risco" value={q.riskReserveAmountMzn} /> : null}
-                {(q.customsAmountMzn ?? q.operationalCostAmountMzn ?? 0) > 0 ? <QuoteRow label={`Alfandega${q.customsPercent != null ? ` (${q.customsPercent}%)` : ""}`} value={q.customsAmountMzn ?? q.operationalCostAmountMzn} /> : null}
+                {(q.customsAmountMzn ?? q.operationalCostAmountMzn ?? 0) > 0 ? <QuoteRow label={customsLabel(q)} value={q.customsAmountMzn ?? q.operationalCostAmountMzn} /> : null}
                 <QuoteRow label={`Servico ShopeeMz${q.sitePercent != null ? ` (${q.sitePercent}%)` : ""}`} value={q.siteFeeAmountMzn} />
                 {(q.localDeliveryAmountMzn ?? 0) > 0 ? <QuoteRow label="Entrega local" value={q.localDeliveryAmountMzn} /> : null}
                 <QuoteRow label="Total final" value={q.finalAmountWithDeliveryMzn || q.finalAmountMzn} highlight />

@@ -26,10 +26,20 @@ type CustomerQuote = {
   estimatedDays?: string | null;
   productAmountOrigin?: number | null;
   shippingAmountOrigin?: number | null;
+  customsType?: "PERCENT" | "FIXED" | string | null;
+  customsValue?: number | null;
   customsPercent?: number | null;
   riskPercent?: number | null;
   sitePercent?: number | null;
 };
+
+function customsLabel(quote: CustomerQuote | undefined | null) {
+  if (quote?.customsType === "FIXED") {
+    return "Alfandega fixa";
+  }
+  const value = quote?.customsValue ?? quote?.customsPercent;
+  return value != null ? `Alfandega (${value}%)` : "Alfandega";
+}
 
 type PublicQuote = {
   orderId: number;
@@ -236,7 +246,7 @@ export default function PublicQuotePage() {
                     {row(q?.productAmountOrigin && q?.currency ? `Produto (${q.productAmountOrigin} ${q.currency})` : "Produto convertido", q?.productAmountMzn)}
                     {row(q?.shippingAmountOrigin && q?.currency ? `Transporte ${q?.routeName || "Africa do Sul -> Maputo"} (${q.shippingAmountOrigin} ${q.currency})` : `Transporte ${q?.routeName || "Africa do Sul -> Maputo"}`, q?.shippingAmountMzn)}
                     {row(q?.riskPercent != null ? `Reserva de risco (${q.riskPercent}%)` : "Reserva de risco", q?.riskReserveAmountMzn)}
-                    {row(q?.customsPercent != null ? `Alfandega (${q.customsPercent}%)` : "Taxa operacional", q?.customsAmountMzn ?? q?.operationalCostAmountMzn)}
+                    {row(customsLabel(q), q?.customsAmountMzn ?? q?.operationalCostAmountMzn)}
                     {row(q?.sitePercent != null ? `Servico ShopeeMz (${q.sitePercent}%)` : "Taxa do site", q?.siteFeeAmountMzn)}
                     {row("Entrega local", q?.localDeliveryAmountMzn)}
                   </div>

@@ -143,6 +143,8 @@ export type Quote = {
   estimatedDays?: string;
   productAmountOrigin?: number;
   shippingAmountOrigin?: number;
+  customsType?: "PERCENT" | "FIXED" | string;
+  customsValue?: number;
   customsPercent?: number;
   riskPercent?: number;
   sitePercent?: number;
