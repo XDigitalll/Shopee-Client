@@ -182,6 +182,7 @@ export type Payment = {
   providerStatus?: string;
   checkoutUrl?: string;
   expectedAmount?: number;
+  receiptUrl?: string | null;
 };
 
 export type OrderItem = {

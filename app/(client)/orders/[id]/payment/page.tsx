@@ -357,6 +357,16 @@ export default function OrderPaymentPage() {
   const orderStatus = order?.status || "";
   const visual = statusCopy(orderStatus, order?.adminMessageForClient, deliveryMode);
   const isPaid = PAID_STATUSES.has(orderStatus);
+
+  // Quick-access buttons
+  const QUOTE_EXISTS_STATUSES = new Set([
+    "QUOTED", "PENDING_PAYMENT", "PAYMENT_REJECTED", "PAID",
+    "TO_PURCHASE", "PURCHASED", "ORDERED", "IN_TRANSIT",
+    "ARRIVED", "READY_FOR_DELIVERY", "OUT_FOR_DELIVERY",
+  ]);
+  const showViewQuote = order != null && QUOTE_EXISTS_STATUSES.has(orderStatus);
+  const showViewReceipt = orderStatus === "DELIVERED" && isPaid;
+  const receiptUrl = order?.payment?.receiptUrl ?? null;
   const isProcessing = orderStatus === "PAYMENT_SUBMITTED" || orderStatus === "PAYMENT_UNDER_REVIEW";
   const hasActivePaySuitePayment = isActivePaySuitePayment(paysuitePayment);
   const activePaySuiteCheckoutUrl = order?.activeDeliveryPaymentUrl
@@ -414,10 +424,19 @@ export default function OrderPaymentPage() {
   // True when the method selector is for a retry/new-attempt (not a first payment).
   const isRetryContext = uiState === "retry_choose_method";
 
-  const activeManualSetting = manualSettings.find((setting) => setting.method === manualMethod) ?? null;
   const sortedManualSettings = manualSettings
-    .filter((setting) => ["BANK_TRANSFER", "MPESA", "EMOLA", "VISA_MANUAL"].includes(String(setting.method)))
+    .filter((setting) => {
+      const m = String(setting.method);
+      if (!["BANK_TRANSFER", "MPESA", "EMOLA", "VISA_MANUAL"].includes(m)) return false;
+      // External (link) orders must not offer Visa — only M-Pesa, e-Mola, bank transfer
+      if (isExternalOrder && m === "VISA_MANUAL") return false;
+      return true;
+    })
     .sort((left, right) => Number(left.priority ?? 99) - Number(right.priority ?? 99));
+  // Normalise selected method: if Visa was previously selected but is now excluded, fall back gracefully.
+  const effectiveManualMethod: ManualPaymentMethod =
+    isExternalOrder && manualMethod === "VISA_MANUAL" ? "BANK_TRANSFER" : manualMethod;
+  const activeManualSetting = manualSettings.find((setting) => setting.method === effectiveManualMethod) ?? null;
   const paysuiteStatus = (paysuitePayment?.status ?? order?.payment?.status ?? "").toUpperCase();
   const paysuiteReference = paysuitePayment?.providerReference
     ?? paysuitePayment?.paymentReference
@@ -531,13 +550,25 @@ export default function OrderPaymentPage() {
       };
     }
 
+    // External orders: green "Proposta aceite" card — no PaySuite references ever.
+    if (isExternalOrder && uiState === "ready_to_pay") {
+      return {
+        tone: "success" as PaymentStateTone,
+        icon: "✅",
+        showSpinner: false,
+        title: "Proposta aceite",
+        body: "Escolhe M-Pesa, e-Mola ou transferencia bancaria e envia o comprovativo para confirmacao.",
+        detail: null,
+      };
+    }
+
     // ready_to_pay (and loading states — covered by overlay)
     return {
       tone: "info" as PaymentStateTone,
       icon: "⏳",
       showSpinner: false,
       title: visual.title === "Pagamento pendente" ? "Pronto para iniciar o pagamento" : visual.title,
-      body: isExternalOrder ? "Escolhe uma forma de pagamento, faz a transferencia e envia o comprovativo para confirmacao." : visual.body,
+      body: visual.body,
       detail: null,
     };
   })();
@@ -1106,7 +1137,7 @@ export default function OrderPaymentPage() {
     setFeedback(null);
     try {
       const formData = new FormData();
-      formData.append("paymentMethod", manualMethod);
+      formData.append("paymentMethod", effectiveManualMethod);
       formData.append("amount", String(officialAmount));
       formData.append("currency", "MZN");
       if (manualReference.trim()) {
@@ -1416,6 +1447,17 @@ export default function OrderPaymentPage() {
           {/* Status card action buttons */}
           {uiState !== "redirecting_to_paysuite" ? (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {/* Quick-access: Ver cotação */}
+              {showViewQuote ? (
+                <Link
+                  href={`/orders/${orderId}/quote`}
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
+                  style={{ background: "#FFFFFF", borderColor: "#D1D5DB", color: "#374151" }}
+                >
+                  Ver cotação
+                </Link>
+              ) : null}
+
               {/* Verify button: shown in any non-terminal, non-pay-form state */}
               {isPaySuiteFlow && !isPaid && uiState !== "ready_to_pay" && uiState !== "retry_choose_method" && uiState !== "loading_order" && uiState !== "confirming" ? (
                 <button
@@ -1475,6 +1517,30 @@ export default function OrderPaymentPage() {
                 </Link>
               ) : null}
 
+              {/* Quick-access: Ver recibo — only when delivered + payment approved */}
+              {showViewReceipt ? (
+                receiptUrl ? (
+                  <a
+                    href={receiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2 text-sm font-black text-white"
+                    style={{ background: GREEN }}
+                  >
+                    Ver recibo
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setFeedback({ type: "success", msg: "O recibo ainda está a ser preparado. Contacta o suporte se precisares com urgência." })}
+                    className="inline-flex min-h-11 items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold"
+                    style={{ background: "#FFFFFF", borderColor: "#86EFAC", color: "#166534" }}
+                  >
+                    Ver recibo
+                  </button>
+                )
+              ) : null}
+
               {(uiState === "returned_pending" || uiState === "failed") ? (
                 <Link
                   href="/orders"
@@ -1532,9 +1598,14 @@ export default function OrderPaymentPage() {
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {(sortedManualSettings.length ? sortedManualSettings : MANUAL_METHODS).map((item) => {
+                {(sortedManualSettings.length
+                  ? sortedManualSettings
+                  : isExternalOrder
+                    ? MANUAL_METHODS.filter((m) => m.key !== "VISA_MANUAL")
+                    : MANUAL_METHODS
+                ).map((item) => {
                   const key = String("method" in item ? item.method : item.key) as ManualPaymentMethod;
-                  const active = manualMethod === key;
+                  const active = effectiveManualMethod === key;
                   const label = "label" in item ? item.label : manualMethodLabel(key);
                   return (
                     <button
@@ -1562,7 +1633,7 @@ export default function OrderPaymentPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase" style={{ color: "#6B7280" }}>Dados para pagamento</p>
-                    <p className="mt-2 text-sm font-black" style={{ color: "#1F2937" }}>{manualMethodLabel(manualMethod)}</p>
+                    <p className="mt-2 text-sm font-black" style={{ color: "#1F2937" }}>{manualMethodLabel(effectiveManualMethod)}</p>
                     {activeManualSetting ? (
                       <div className="mt-2 space-y-1 text-sm" style={{ color: "#374151" }}>
                         {activeManualSetting.bankName ? <p>Banco: <strong>{activeManualSetting.bankName}</strong></p> : null}
