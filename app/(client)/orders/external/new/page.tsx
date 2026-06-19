@@ -199,6 +199,7 @@ export default function NewExternalOrderPage() {
   const phoneInputRef = useRef<HTMLInputElement | null>(null);
   const termsRef = useRef<HTMLLabelElement | null>(null);
   const screenshotInputRef = useRef<HTMLInputElement | null>(null);
+  const temporaryAccessRef = useRef<HTMLDivElement | null>(null);
   const parsedInput = extractExternalOrderInput(productLink);
 
   useEffect(() => {
@@ -228,6 +229,21 @@ export default function NewExternalOrderPage() {
       previews.forEach((preview) => URL.revokeObjectURL(preview));
     };
   }, [screenshots]);
+
+  useEffect(() => {
+    if (!successOrder?.firstGuestOrder || !successOrder.temporaryPassword) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      temporaryAccessRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [successOrder?.firstGuestOrder, successOrder?.id, successOrder?.temporaryPassword]);
 
   function normalizePhone(value: string) {
     let digits = value.replace(/\D/g, "");
@@ -597,13 +613,17 @@ export default function NewExternalOrderPage() {
             ) : null}
 
             {successOrder.firstGuestOrder && successOrder.temporaryPassword ? (
-              <div className="mt-5 overflow-hidden rounded-[26px] border-2 shadow-sm" style={{ borderColor: RED, background: "#fff" }}>
+              <div
+                ref={temporaryAccessRef}
+                className="mt-5 overflow-hidden rounded-[26px] border-2 shadow-sm"
+                style={{ borderColor: RED, background: "#fff", scrollMarginTop: "120px" }}
+              >
                 <div className="p-5 sm:p-6" style={{ background: "linear-gradient(135deg, #FFF0EC 0%, #FFFFFF 70%)" }}>
                   <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
                     Acesso temporário criado
                   </p>
                   <h3 className="mt-2 font-[family-name:var(--font-sora)] text-2xl font-black leading-tight" style={{ color: TEXT }}>
-                    Tens de entrar na tua conta temporária para acompanhar o pedido
+                    Para acompanhar o pedido, entra com estes dados
                   </h3>
                   <p className="mt-3 text-sm font-semibold leading-6" style={{ color: MUTED }}>
                     Criámos uma conta automática para ti. Usa o teu telefone e a senha temporária abaixo para fazer login e ver a cotação, pagamentos e estado do pedido.
