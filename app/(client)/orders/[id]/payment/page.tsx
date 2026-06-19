@@ -405,6 +405,8 @@ export default function OrderPaymentPage() {
 
   // True when the active payment flow is PaySuite (not manual transfer or COD manual).
   const isPaySuiteFlow = !isExternalOrder && (!deliveryCollectionActive || deliveryMode === "paysuite");
+  // True when the flow requires manual payment (external orders always use manual).
+  const isManualPaymentFlow = isExternalOrder || deliveryMode === "manual";
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
   const methodSelectorVisible = !isExternalOrder && !activePaySuiteDecisionVisible && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
   const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
