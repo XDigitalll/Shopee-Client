@@ -403,6 +403,8 @@ export default function OrderPaymentPage() {
     && !!order?.hasActiveDeliveryPaymentAttempt
     && !!order?.activeDeliveryPaymentUrl;
 
+  // True when the active payment flow is PaySuite (not manual transfer or COD manual).
+  const isPaySuiteFlow = !isExternalOrder && (!deliveryCollectionActive || deliveryMode === "paysuite");
   // Method selector is shown only in these two states — eliminates all flicker from derived booleans.
   const methodSelectorVisible = !isExternalOrder && !activePaySuiteDecisionVisible && !hasCodActivePaySuiteUrl && deliveryMode !== "manual" && ((uiState === "ready_to_pay" && (verificationOk || deliveryCollectionActive)) || uiState === "retry_choose_method");
   const manualPaymentVisible = (isExternalOrder || deliveryCollectionActive) && deliveryMode !== "paysuite" && verificationOk && !isPaid && (uiState === "ready_to_pay" || uiState === "failed");
@@ -1383,7 +1385,7 @@ export default function OrderPaymentPage() {
             </div>
           </div>
 
-          {(!isExternalOrder && (paysuiteReference || paysuiteTransactionId || paysuiteStatus)) ? (
+          {(isPaySuiteFlow && (paysuiteReference || paysuiteTransactionId || paysuiteStatus)) ? (
             <div
               className="mt-4 grid gap-2 rounded-2xl border bg-white/70 p-3 text-xs sm:grid-cols-3"
               style={{ borderColor: paymentStateStyle.border }}
@@ -1413,7 +1415,7 @@ export default function OrderPaymentPage() {
           {uiState !== "redirecting_to_paysuite" ? (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               {/* Verify button: shown in any non-terminal, non-pay-form state */}
-              {!isExternalOrder && !isPaid && uiState !== "ready_to_pay" && uiState !== "retry_choose_method" && uiState !== "loading_order" && uiState !== "confirming" ? (
+              {isPaySuiteFlow && !isPaid && uiState !== "ready_to_pay" && uiState !== "retry_choose_method" && uiState !== "loading_order" && uiState !== "confirming" ? (
                 <button
                   type="button"
                   onClick={() => void performSync()}

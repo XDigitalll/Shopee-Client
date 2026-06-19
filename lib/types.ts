@@ -137,8 +137,18 @@ export type Quote = {
   active: boolean;
   currency?: string;
   exchangeRate?: number;
+  routeName?: string;
+  origin?: string;
+  destination?: string;
+  estimatedDays?: string;
+  productAmountOrigin?: number;
+  shippingAmountOrigin?: number;
+  customsPercent?: number;
+  riskPercent?: number;
+  sitePercent?: number;
   productAmountMzn?: number;
   shippingAmountMzn?: number;
+  customsAmountMzn?: number;
   riskReserveAmountMzn?: number;
   operationalCostAmountMzn?: number;
   urgentChargeAmountMzn?: number;

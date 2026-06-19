@@ -44,6 +44,9 @@ export function normalizeClientError(
   }
 
   if (status === 409 || /409|conflict|já exist|ja exist|duplicad/.test(lower)) {
+    if (message && !isUnsafeMessage(message)) {
+      return { kind: "validation", message };
+    }
     return { kind: "validation", message: "Operação em conflito. Verifica os dados e tenta novamente." };
   }
 

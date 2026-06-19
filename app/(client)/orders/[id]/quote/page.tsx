@@ -92,6 +92,13 @@ export default function OrderQuotePage() {
     || (orderStatus === "PAID" && !isPayOnDelivery);
   const q = order?.quote;
   const finalAmount = orderVisibleTotal(order);
+  const routeName = q?.routeName || "Africa do Sul -> Maputo";
+  const productOriginLabel = q?.productAmountOrigin != null && q?.currency
+    ? `${Number(q.productAmountOrigin).toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${q.currency}`
+    : null;
+  const shippingOriginLabel = q?.shippingAmountOrigin != null && q?.currency
+    ? `${Number(q.shippingAmountOrigin).toLocaleString("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${q.currency}`
+    : null;
   const needsAccountVerification =
     feedback?.type === "error" &&
     /verifi|telefone|whatsapp|email|conta estiver pendente|codigo/i.test(feedback.msg);
@@ -202,15 +209,18 @@ export default function OrderQuotePage() {
               ) : null}
 
               <div className="space-y-1">
-                <QuoteRow label="Produto" value={q.productAmountMzn} />
-                <QuoteRow label="Envio África do Sul → Maputo" value={q.shippingAmountMzn} />
+                <QuoteRow label={productOriginLabel ? `Produto (${productOriginLabel})` : "Produto"} value={q.productAmountMzn} />
+                <QuoteRow label={shippingOriginLabel ? `Transporte ${routeName} (${shippingOriginLabel})` : `Transporte ${routeName}`} value={q.shippingAmountMzn} />
                 <QuoteRow label="Subtotal base" value={q.subtotalMzn} muted />
                 {(q.riskReserveAmountMzn ?? 0) > 0 ? <QuoteRow label="Reserva de risco" value={q.riskReserveAmountMzn} /> : null}
-                {(q.operationalCostAmountMzn ?? 0) > 0 ? <QuoteRow label="Taxa das alfândegas sul-africana" value={q.operationalCostAmountMzn} /> : null}
-                <QuoteRow label="Taxa de servico XDigital" value={q.siteFeeAmountMzn} />
+                {(q.customsAmountMzn ?? q.operationalCostAmountMzn ?? 0) > 0 ? <QuoteRow label={`Alfandega${q.customsPercent != null ? ` (${q.customsPercent}%)` : ""}`} value={q.customsAmountMzn ?? q.operationalCostAmountMzn} /> : null}
+                <QuoteRow label={`Servico ShopeeMz${q.sitePercent != null ? ` (${q.sitePercent}%)` : ""}`} value={q.siteFeeAmountMzn} />
                 {(q.localDeliveryAmountMzn ?? 0) > 0 ? <QuoteRow label="Entrega local" value={q.localDeliveryAmountMzn} /> : null}
                 <QuoteRow label="Total final" value={q.finalAmountWithDeliveryMzn || q.finalAmountMzn} highlight />
               </div>
+              <p className="mt-4 text-xs font-semibold" style={{ color: "#9CA3AF" }}>
+                Esta cotacao usa a taxa activa guardada no momento em que foi criada{q.estimatedDays ? `. Prazo estimado: ${q.estimatedDays}.` : "."}
+              </p>
             </div>
 
             <div className="space-y-4">

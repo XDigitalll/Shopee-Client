@@ -12,6 +12,7 @@ const SUPPORT_WHATSAPP = "https://wa.me/258842161000";
 type CustomerQuote = {
   productAmountMzn?: number | null;
   shippingAmountMzn?: number | null;
+  customsAmountMzn?: number | null;
   riskReserveAmountMzn?: number | null;
   operationalCostAmountMzn?: number | null;
   siteFeeAmountMzn?: number | null;
@@ -21,6 +22,13 @@ type CustomerQuote = {
   currency?: string | null;
   exchangeRate?: number | null;
   quotedAt?: string | null;
+  routeName?: string | null;
+  estimatedDays?: string | null;
+  productAmountOrigin?: number | null;
+  shippingAmountOrigin?: number | null;
+  customsPercent?: number | null;
+  riskPercent?: number | null;
+  sitePercent?: number | null;
 };
 
 type PublicQuote = {
@@ -225,11 +233,11 @@ export default function PublicQuotePage() {
                 <div className="rounded-lg bg-white p-5 shadow-sm sm:p-6">
                   <h2 className="text-lg font-black text-slate-950">Breakdown</h2>
                   <div className="mt-3">
-                    {row("Produto convertido", q?.productAmountMzn)}
-                    {row("Envio Africa do Sul -> Maputo", q?.shippingAmountMzn)}
-                    {row("Reserva de risco", q?.riskReserveAmountMzn)}
-                    {row("Taxa operacional", q?.operationalCostAmountMzn)}
-                    {row("Taxa do site", q?.siteFeeAmountMzn)}
+                    {row(q?.productAmountOrigin && q?.currency ? `Produto (${q.productAmountOrigin} ${q.currency})` : "Produto convertido", q?.productAmountMzn)}
+                    {row(q?.shippingAmountOrigin && q?.currency ? `Transporte ${q?.routeName || "Africa do Sul -> Maputo"} (${q.shippingAmountOrigin} ${q.currency})` : `Transporte ${q?.routeName || "Africa do Sul -> Maputo"}`, q?.shippingAmountMzn)}
+                    {row(q?.riskPercent != null ? `Reserva de risco (${q.riskPercent}%)` : "Reserva de risco", q?.riskReserveAmountMzn)}
+                    {row(q?.customsPercent != null ? `Alfandega (${q.customsPercent}%)` : "Taxa operacional", q?.customsAmountMzn ?? q?.operationalCostAmountMzn)}
+                    {row(q?.sitePercent != null ? `Servico ShopeeMz (${q.sitePercent}%)` : "Taxa do site", q?.siteFeeAmountMzn)}
                     {row("Entrega local", q?.localDeliveryAmountMzn)}
                   </div>
                   <div className="mt-5 rounded-md bg-slate-950 px-4 py-3 text-white">
@@ -240,7 +248,7 @@ export default function PublicQuotePage() {
                   </div>
                   <div className="mt-4 space-y-2 text-sm font-semibold text-slate-600">
                     <p>Validade: {formatDate(quote.quoteTokenExpiresAt)}</p>
-                    {quote.estimatedDeliveryTime ? <p>Prazo estimado: {quote.estimatedDeliveryTime} dias</p> : null}
+                    {q?.estimatedDays ? <p>Prazo estimado: {q.estimatedDays}</p> : quote.estimatedDeliveryTime ? <p>Prazo estimado: {quote.estimatedDeliveryTime} dias</p> : null}
                     {q?.currency || q?.exchangeRate ? <p>Moeda: {q.currency || "ZAR"} · Cambio: {Number(q.exchangeRate || 0).toFixed(2)} MZN</p> : null}
                   </div>
                 </div>
