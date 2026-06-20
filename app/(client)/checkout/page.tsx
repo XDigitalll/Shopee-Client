@@ -18,7 +18,14 @@ import { validateName, validatePhone, validatePhoneOptional, validateEmailOption
 import { useFormValidation } from "@/hooks/useFormValidation";
 
 const RED = "#E8431A";
+const ORANGE = "#F97316";
 const CHECKOUT_SELECTION_KEY = "shopeex-checkout-selection";
+
+function Req() {
+  return (
+    <span aria-label="obrigatório" title="Campo obrigatório" style={{ color: ORANGE, marginLeft: 4, fontSize: "0.65rem", verticalAlign: "middle" }}>●</span>
+  );
+}
 type CheckoutPaymentMethod = "PAYSUITE" | "CASH_ON_DELIVERY";
 
 const initialForm = {
@@ -648,10 +655,57 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
+              {/* Método de entrega — cards */}
+              <div className="mb-5">
+                <p className="mb-2 text-sm font-semibold" style={{ color: "#1A1410" }}>
+                  Como queres receber?<Req />
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm((c) => ({ ...c, deliveryMethod: "DELIVERY" }))}
+                    className="flex flex-col items-start gap-1 rounded-2xl border p-4 text-left transition"
+                    style={{
+                      borderColor: form.deliveryMethod === "DELIVERY" ? RED : "#F2D4CC",
+                      background: form.deliveryMethod === "DELIVERY" ? "#FFF5F1" : "#FFFDFC",
+                    }}
+                  >
+                    <span className="text-xl">🏠</span>
+                    <strong className="mt-1 block text-sm" style={{ color: "#1A1410" }}>Entrega ao domicílio</strong>
+                    <span className="text-xs leading-5" style={{ color: "#6B7280" }}>Receberes em casa. Preenches a morada abaixo.</span>
+                    {form.deliveryMethod === "DELIVERY" ? (
+                      <span className="mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: RED }}>Selecionado</span>
+                    ) : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((c) => ({ ...c, deliveryMethod: "STORE_PICKUP" }))}
+                    className="flex flex-col items-start gap-1 rounded-2xl border p-4 text-left transition"
+                    style={{
+                      borderColor: form.deliveryMethod === "STORE_PICKUP" ? RED : "#F2D4CC",
+                      background: form.deliveryMethod === "STORE_PICKUP" ? "#FFF5F1" : "#FFFDFC",
+                    }}
+                  >
+                    <span className="text-xl">🏪</span>
+                    <strong className="mt-1 block text-sm" style={{ color: "#1A1410" }}>Levantar na loja</strong>
+                    <span className="text-xs leading-5" style={{ color: "#6B7280" }}>Vens buscar ao nosso espaço. Não precisas de morada.</span>
+                    {form.deliveryMethod === "STORE_PICKUP" ? (
+                      <span className="mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: RED }}>Selecionado</span>
+                    ) : null}
+                  </button>
+                </div>
+              </div>
+
+              <p className="mb-4 text-xs" style={{ color: "#6B7280" }}>
+                <span style={{ color: ORANGE, fontWeight: 600 }}>●</span> Campo obrigatório
+              </p>
+
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Nome completo */}
                 <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-fullName">Nome completo</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-fullName">
+                    Nome completo<Req />
+                  </label>
                   <input
                     id="co-fullName"
                     required
@@ -659,17 +713,22 @@ export default function CheckoutPage() {
                     onChange={(e) => setForm((c) => ({ ...c, fullName: e.target.value }))}
                     onBlur={(e) => { fv.touch("fullName"); setForm((c) => ({ ...c, fullName: cleanName(e.target.value) })); }}
                     className={fieldClass}
+                    placeholder="Ex: João Machava"
                     style={getFieldStyle(Boolean(fv.errors.fullName))}
                     aria-invalid={Boolean(fv.errors.fullName)}
-                    aria-describedby={fv.errors.fullName ? "co-fullName-err" : undefined}
+                    aria-describedby="co-fullName-hint"
                     ref={fv.registerRef("fullName")}
                   />
-                  {fv.errors.fullName ? <p id="co-fullName-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.fullName}</p> : null}
+                  <p id="co-fullName-hint" className="mt-1.5 text-xs" style={{ color: fv.errors.fullName ? "#B42318" : "#6B7280" }}>
+                    {fv.errors.fullName ?? "Nome e apelido reais — como no bilhete de identidade."}
+                  </p>
                 </div>
 
                 {/* Telefone principal */}
                 <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-phone1">Telefone principal</label>
+                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-phone1">
+                    Telefone principal<Req />
+                  </label>
                   <input
                     id="co-phone1"
                     required
@@ -685,7 +744,7 @@ export default function CheckoutPage() {
                     inputMode="tel"
                   />
                   <p id="co-phone1-hint" className="mt-1.5 text-xs" style={{ color: primaryPhoneError ? "#B42318" : "#6B7280" }}>
-                    {primaryPhoneError ?? "Formato: +2588xxxxxxxx"}
+                    {primaryPhoneError ?? "Número M-Pesa ou e-Mola — formato +2588xxxxxxxx."}
                   </p>
                 </div>
 
@@ -706,7 +765,7 @@ export default function CheckoutPage() {
                     inputMode="tel"
                   />
                   <p id="co-phone2-hint" className="mt-1.5 text-xs" style={{ color: alternativePhoneError ? "#B42318" : "#6B7280" }}>
-                    {alternativePhoneError ?? "Opcional — usa +2588xxxxxxxx"}
+                    {alternativePhoneError ?? "Opcional — segundo número para contacto em caso de falha."}
                   </p>
                 </div>
 
@@ -722,111 +781,155 @@ export default function CheckoutPage() {
                     {userEmail || "Email não adicionado"}
                   </div>
                   <p className="mt-1.5 text-xs" style={{ color: "#6B7280" }}>
-                    O email da conta não é alterado no checkout. Podes adicionar ou verificar email no perfil.
+                    O email da conta. Para alterar, vai ao{" "}
+                    <a href="/profile" className="underline" style={{ color: "#0284C7" }}>teu perfil</a>.
                   </p>
                 </div>
 
-                {/* Método de entrega */}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-delivery">Receber como</label>
-                  <select id="co-delivery" value={form.deliveryMethod} onChange={(e) => setForm((c) => ({ ...c, deliveryMethod: e.target.value }))} className={fieldClass} style={getFieldStyle()}>
-                    <option value="DELIVERY">Entrega ao domicílio</option>
-                    <option value="STORE_PICKUP">Levantar na loja</option>
-                  </select>
-                </div>
-
                 {/* Cidade */}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-city">Cidade</label>
-                  <input
-                    id="co-city"
-                    value={form.city}
-                    onChange={(e) => setForm((c) => ({ ...c, city: e.target.value }))}
-                    onBlur={(e) => { fv.touch("city"); setForm((c) => ({ ...c, city: cleanCity(e.target.value) })); }}
-                    className={fieldClass}
-                    style={getFieldStyle(Boolean(fv.errors.city))}
-                    required={isDelivery}
-                    aria-invalid={Boolean(fv.errors.city)}
-                    aria-describedby={fv.errors.city ? "co-city-err" : undefined}
-                    ref={fv.registerRef("city")}
-                  />
-                  {fv.errors.city ? <p id="co-city-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.city}</p> : null}
-                </div>
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-city">
+                      Cidade<Req />
+                    </label>
+                    <input
+                      id="co-city"
+                      value={form.city}
+                      onChange={(e) => setForm((c) => ({ ...c, city: e.target.value }))}
+                      onBlur={(e) => { fv.touch("city"); setForm((c) => ({ ...c, city: cleanCity(e.target.value) })); }}
+                      className={fieldClass}
+                      placeholder="Ex: Maputo"
+                      style={getFieldStyle(Boolean(fv.errors.city))}
+                      required={isDelivery}
+                      aria-invalid={Boolean(fv.errors.city)}
+                      aria-describedby="co-city-hint"
+                      ref={fv.registerRef("city")}
+                    />
+                    <p id="co-city-hint" className="mt-1.5 text-xs" style={{ color: fv.errors.city ? "#B42318" : "#6B7280" }}>
+                      {fv.errors.city ?? "Ex: Maputo, Matola, Beira, Nampula."}
+                    </p>
+                  </div>
+                ) : <div />}
 
                 {/* Bairro */}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-neighborhood">Bairro</label>
-                  <input
-                    id="co-neighborhood"
-                    value={form.neighborhood}
-                    onChange={(e) => setForm((c) => ({ ...c, neighborhood: e.target.value }))}
-                    onBlur={(e) => { fv.touch("neighborhood"); setForm((c) => ({ ...c, neighborhood: cleanAddress(e.target.value) })); }}
-                    className={fieldClass}
-                    style={getFieldStyle(Boolean(fv.errors.neighborhood))}
-                    required={isDelivery}
-                    aria-invalid={Boolean(fv.errors.neighborhood)}
-                    aria-describedby={fv.errors.neighborhood ? "co-neighborhood-err" : undefined}
-                    ref={fv.registerRef("neighborhood")}
-                  />
-                  {fv.errors.neighborhood ? <p id="co-neighborhood-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.neighborhood}</p> : null}
-                </div>
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-neighborhood">
+                      Bairro<Req />
+                    </label>
+                    <input
+                      id="co-neighborhood"
+                      value={form.neighborhood}
+                      onChange={(e) => setForm((c) => ({ ...c, neighborhood: e.target.value }))}
+                      onBlur={(e) => { fv.touch("neighborhood"); setForm((c) => ({ ...c, neighborhood: cleanAddress(e.target.value) })); }}
+                      className={fieldClass}
+                      placeholder="Ex: Polana, Sommerschield"
+                      style={getFieldStyle(Boolean(fv.errors.neighborhood))}
+                      required={isDelivery}
+                      aria-invalid={Boolean(fv.errors.neighborhood)}
+                      aria-describedby="co-neighborhood-hint"
+                      ref={fv.registerRef("neighborhood")}
+                    />
+                    <p id="co-neighborhood-hint" className="mt-1.5 text-xs" style={{ color: fv.errors.neighborhood ? "#B42318" : "#6B7280" }}>
+                      {fv.errors.neighborhood ?? "Ex: Polana, Sommerschield, Alto-Maé, Hulene, Zimpeto."}
+                    </p>
+                  </div>
+                ) : null}
 
                 {/* Rua */}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-street">Rua / Avenida</label>
-                  <input
-                    id="co-street"
-                    value={form.street}
-                    onChange={(e) => setForm((c) => ({ ...c, street: e.target.value }))}
-                    onBlur={(e) => { fv.touch("street"); setForm((c) => ({ ...c, street: cleanAddress(e.target.value) })); }}
-                    className={fieldClass}
-                    style={getFieldStyle(Boolean(fv.errors.street))}
-                    required={isDelivery}
-                    aria-invalid={Boolean(fv.errors.street)}
-                    aria-describedby={fv.errors.street ? "co-street-err" : undefined}
-                    ref={fv.registerRef("street")}
-                  />
-                  {fv.errors.street ? <p id="co-street-err" className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.street}</p> : null}
-                </div>
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-street">
+                      Rua / Avenida<Req />
+                    </label>
+                    <input
+                      id="co-street"
+                      value={form.street}
+                      onChange={(e) => setForm((c) => ({ ...c, street: e.target.value }))}
+                      onBlur={(e) => { fv.touch("street"); setForm((c) => ({ ...c, street: cleanAddress(e.target.value) })); }}
+                      className={fieldClass}
+                      placeholder="Ex: Av. Julius Nyerere"
+                      style={getFieldStyle(Boolean(fv.errors.street))}
+                      required={isDelivery}
+                      aria-invalid={Boolean(fv.errors.street)}
+                      aria-describedby="co-street-hint"
+                      ref={fv.registerRef("street")}
+                    />
+                    <p id="co-street-hint" className="mt-1.5 text-xs" style={{ color: fv.errors.street ? "#B42318" : "#6B7280" }}>
+                      {fv.errors.street ?? "Ex: Av. Julius Nyerere, Rua dos Desportistas, Av. Eduardo Mondlane."}
+                    </p>
+                  </div>
+                ) : null}
 
                 {/* Casa / Número */}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-house">Casa / Número</label>
-                  <input id="co-house" value={form.houseNumber} onChange={(e) => setForm((c) => ({ ...c, houseNumber: e.target.value }))} className={fieldClass} style={getFieldStyle()} />
-                </div>
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-house">Casa / Número</label>
+                    <input
+                      id="co-house"
+                      value={form.houseNumber}
+                      onChange={(e) => setForm((c) => ({ ...c, houseNumber: e.target.value }))}
+                      placeholder="Ex: 1234 ou Apto 3B"
+                      className={fieldClass}
+                      style={getFieldStyle()}
+                    />
+                    <p className="mt-1.5 text-xs" style={{ color: "#6B7280" }}>Opcional — número da porta, casa ou apartamento.</p>
+                  </div>
+                ) : null}
               </div>
               <div className="mt-4 grid gap-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-ref">Referência</label>
-                  <textarea id="co-ref" value={form.deliveryReference} onChange={(e) => setForm((c) => ({ ...c, deliveryReference: e.target.value }))} className={fieldClass} style={{ ...getFieldStyle(), minHeight: 96 }} required={isDelivery} />
-                </div>
-                <div>
-                  <GoogleMapsLocationField
-                    id="co-maps"
-                    label="Google Maps"
-                    value={form.googleMapsLink}
-                    onChange={(value) => setForm((c) => ({ ...c, googleMapsLink: value }))}
-                    onBlur={() => fv.touch("googleMapsLink")}
-                    inputClassName={fieldClass}
-                    inputStyle={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
-                    error={fv.errors.googleMapsLink}
-                    hint="Opcional. A morada manual e o principal; o link do Google Maps apenas ajuda a entrega."
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold" htmlFor="co-notes">Notas</label>
-                  <textarea
-                    id="co-notes"
-                    value={form.customerNotes}
-                    onChange={(e) => setForm((c) => ({ ...c, customerNotes: e.target.value }))}
-                    onBlur={() => fv.touch("customerNotes")}
-                    className={fieldClass}
-                    style={{ ...getFieldStyle(Boolean(fv.errors.customerNotes)), minHeight: 110 }}
-                    placeholder="Instruções para a entrega, horários ou observações."
-                    ref={fv.registerRef("customerNotes")}
-                  />
-                  {fv.errors.customerNotes ? <p className="mt-1.5 text-xs font-medium" style={{ color: "#B42318" }}>{fv.errors.customerNotes}</p> : null}
-                </div>
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-ref">
+                      Ponto de referência<Req />
+                    </label>
+                    <textarea
+                      id="co-ref"
+                      value={form.deliveryReference}
+                      onChange={(e) => setForm((c) => ({ ...c, deliveryReference: e.target.value }))}
+                      className={fieldClass}
+                      placeholder="Ex: em frente ao supermercado Shoprite, portão vermelho, prédio com grade preta..."
+                      style={{ ...getFieldStyle(), minHeight: 96 }}
+                      required={isDelivery}
+                    />
+                    <p className="mt-1.5 text-xs" style={{ color: "#6B7280" }}>
+                      Descreve um marco próximo que ajude o estafeta a encontrar a tua casa — supermercado, escola, cor do portão, etc.
+                    </p>
+                  </div>
+                ) : null}
+                {isDelivery ? (
+                  <div>
+                    <GoogleMapsLocationField
+                      id="co-maps"
+                      label="Google Maps"
+                      value={form.googleMapsLink}
+                      onChange={(value) => setForm((c) => ({ ...c, googleMapsLink: value }))}
+                      onBlur={() => fv.touch("googleMapsLink")}
+                      inputClassName={fieldClass}
+                      inputStyle={getFieldStyle(Boolean(fv.errors.googleMapsLink))}
+                      error={fv.errors.googleMapsLink}
+                      hint="Opcional — abre o Google Maps, pesquisa a tua casa e copia o link. Ajuda o estafeta a navegar com precisão."
+                    />
+                  </div>
+                ) : null}
+                {isDelivery ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold" htmlFor="co-notes">Notas para a entrega</label>
+                    <textarea
+                      id="co-notes"
+                      value={form.customerNotes}
+                      onChange={(e) => setForm((c) => ({ ...c, customerNotes: e.target.value }))}
+                      onBlur={() => fv.touch("customerNotes")}
+                      className={fieldClass}
+                      style={{ ...getFieldStyle(Boolean(fv.errors.customerNotes)), minHeight: 110 }}
+                      placeholder="Ex: disponível a partir das 14h, toca à campainha 2 vezes, ligar antes de chegar..."
+                      ref={fv.registerRef("customerNotes")}
+                    />
+                    <p className="mt-1.5 text-xs" style={{ color: fv.errors.customerNotes ? "#B42318" : "#6B7280" }}>
+                      {fv.errors.customerNotes ?? "Opcional — horários preferidos, instruções especiais ou qualquer detalhe útil para a entrega."}
+                    </p>
+                  </div>
+                ) : null}
                 {form.deliveryMethod === "DELIVERY" ? (
                   <label className="inline-flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: "#F2D4CC", background: "#FFFDFC", color: "#1A1410" }}>
                     <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
