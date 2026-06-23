@@ -26,6 +26,14 @@ const DELIVERY_ISSUE_LABELS: Record<string, string> = {
   PEDIDO_DANIFICADO: "Pedido danificado",
   IMPOSSIVEL_ENTREGAR: "Entrega impossivel",
 };
+const CLIENT_CANCEL_ALLOWED_STATUSES = new Set([
+  "CREATED",
+  "UNDER_REVIEW",
+  "QUOTED",
+  "PENDING_PAYMENT",
+  "PAYMENT_REJECTED",
+]);
+const CUSTOMER_CANCEL_BLOCKED_MESSAGE = "Este pedido já está em processamento e não pode ser cancelado pelo site. Contacta o suporte.";
 
 type FilterKey = (typeof FILTERS)[number]["key"];
 type OrderGroup = {
@@ -316,7 +324,7 @@ function lockedEditMessage(status: string) {
 }
 
 function canCustomerCancel(status: string) {
-  return ["CREATED", "PENDING_PAYMENT", "PAYMENT_REJECTED"].includes(status);
+  return CLIENT_CANCEL_ALLOWED_STATUSES.has(status);
 }
 
 function isInProcessingCannotCancel(status: string) {
@@ -431,6 +439,8 @@ export default function OrdersPage() {
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
   const [locatingOrderId, setLocatingOrderId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ kind: "cancel" | "cancel_order" | "received"; orderId: number } | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
   const [selectedAddressByOrder, setSelectedAddressByOrder] = useState<Record<number, number>>({});
   const [addressDrafts, setAddressDrafts] = useState<Record<number, AddressDraftState>>({});
   const [addressCreateOrderId, setAddressCreateOrderId] = useState<number | null>(null);
@@ -804,14 +814,36 @@ export default function OrdersPage() {
     }
   };
 
-  const handleCancel = async (orderId: number) => {
+  const closeConfirmAction = () => {
+    setConfirmAction(null);
+    setCancelReason("");
+    setCancelReasonError("");
+  };
+
+  const openCancelOrderDialog = (orderId: number) => {
+    setCancelReason("");
+    setCancelReasonError("");
+    setConfirmAction({ kind: "cancel_order", orderId });
+  };
+
+  const handleCancel = async (orderId: number, reason?: string) => {
     if (!token) return;
     const orderLabel = orderDisplayCode(orders.find((order) => order.id === orderId));
     setBusyOrderId(orderId);
     try {
-      await apiFetch(`orders/${orderId}/cancel`, { method: "PUT", token });
-      setFeedback({ type: "success", msg: `Pedido ${orderLabel} cancelado com sucesso.` });
-      await loadOrders();
+      if (reason !== undefined) {
+        const updated = await apiFetch<Order>(`orders/${orderId}/cancel`, {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({ reason }),
+        });
+        replaceOrder(updated);
+        setFeedback({ type: "success", msg: "Pedido cancelado com sucesso." });
+      } else {
+        await apiFetch(`orders/${orderId}/cancel`, { method: "PUT", token });
+        setFeedback({ type: "success", msg: `Pedido ${orderLabel} cancelado com sucesso.` });
+        await loadOrders();
+      }
     } catch (error) {
       console.error("[cancel order]", error);
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Não foi possível cancelar o pedido." });
@@ -1742,7 +1774,7 @@ export default function OrdersPage() {
 
         {isInProcessingCannotCancel(status) && (
           <div className="mt-4 rounded-[24px] border px-4 py-3 text-sm" style={{ background: "#F9FAFB", borderColor: "#E5E7EB", color: "#6B7280" }}>
-            Este pedido ja entrou em processamento e nao pode ser cancelado pelo portal. Fala connosco pelo suporte.
+            {CUSTOMER_CANCEL_BLOCKED_MESSAGE}
           </div>
         )}
 
@@ -1831,7 +1863,7 @@ export default function OrdersPage() {
             {canCustomerCancel(status) && (
               <button
                 type="button"
-                onClick={() => setConfirmAction({ kind: "cancel_order", orderId: order.id })}
+                onClick={() => openCancelOrderDialog(order.id)}
                 disabled={busyOrderId === order.id}
                 className="rounded-2xl border px-4 py-2.5 text-sm font-bold"
                 style={{ borderColor: "#FCA5A5", color: "#B91C1C", background: "#FEF2F2" }}
@@ -1967,8 +1999,75 @@ export default function OrdersPage() {
         />
       </section>
       <ClientFeedbackDock feedback={feedback} onClose={() => setFeedback(null)} />
+      {confirmAction?.kind === "cancel_order" && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 px-4 py-5 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cancel-order-title"
+        >
+          <div className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-2xl sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>Cancelamento</p>
+            <h2 id="cancel-order-title" className="mt-2 text-2xl font-black" style={{ color: "#1A1410", fontFamily: "'Sora', sans-serif" }}>
+              Cancelar este pedido?
+            </h2>
+            <p className="mt-3 text-sm leading-6" style={{ color: "#6B7280" }}>
+              Depois de cancelar, a nossa equipa deixa de analisar ou processar este pedido. Podes criar outro pedido quando quiseres.
+            </p>
+
+            <label className="mt-5 block text-sm font-black" htmlFor="cancel-reason" style={{ color: "#1A1410" }}>
+              Motivo do cancelamento
+            </label>
+            <textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(event) => {
+                setCancelReason(event.target.value);
+                if (cancelReasonError) setCancelReasonError("");
+              }}
+              rows={4}
+              maxLength={1000}
+              className="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold outline-none transition focus:ring-4"
+              style={{ borderColor: cancelReasonError ? "#FCA5A5" : "#F2D4CC", color: "#1A1410", background: "#FFF8F5" }}
+              placeholder="Ex.: Quero alterar o produto antes de pedir nova cotação."
+              disabled={busyOrderId === confirmAction.orderId}
+            />
+            {cancelReasonError && (
+              <p className="mt-2 text-xs font-bold" style={{ color: "#B91C1C" }}>{cancelReasonError}</p>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeConfirmAction}
+                disabled={busyOrderId === confirmAction.orderId}
+                className="rounded-2xl border px-5 py-3 text-sm font-black"
+                style={{ borderColor: "#E5E7EB", color: "#374151", background: "white" }}
+              >
+                Manter pedido
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const cleanReason = cancelReason.trim();
+                  if (!cleanReason) {
+                    setCancelReasonError("Indica o motivo do cancelamento.");
+                    return;
+                  }
+                  void handleCancel(confirmAction.orderId, cleanReason).then(closeConfirmAction);
+                }}
+                disabled={busyOrderId === confirmAction.orderId}
+                className="rounded-2xl px-5 py-3 text-sm font-black text-white"
+                style={{ background: busyOrderId === confirmAction.orderId ? "#FDB8A7" : RED }}
+              >
+                {busyOrderId === confirmAction.orderId ? "A cancelar..." : "Confirmar cancelamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ClientConfirmDialog
-        open={Boolean(confirmAction)}
+        open={Boolean(confirmAction && confirmAction.kind !== "cancel_order")}
         title={
           confirmAction?.kind === "cancel" ? "Recusar esta proposta?" :
           confirmAction?.kind === "cancel_order" ? "Cancelar este pedido?" :
@@ -1986,11 +2085,11 @@ export default function OrdersPage() {
         }
         danger={confirmAction?.kind === "cancel" || confirmAction?.kind === "cancel_order"}
         pending={busyOrderId === confirmAction?.orderId}
-        onCancel={() => setConfirmAction(null)}
+        onCancel={closeConfirmAction}
         onConfirm={() => {
           if (!confirmAction) return;
           if (confirmAction.kind === "cancel" || confirmAction.kind === "cancel_order") {
-            void handleCancel(confirmAction.orderId).finally(() => setConfirmAction(null));
+            void handleCancel(confirmAction.orderId).finally(closeConfirmAction);
             return;
           }
           void handleConfirmReceived(confirmAction.orderId);

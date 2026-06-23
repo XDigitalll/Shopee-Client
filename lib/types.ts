@@ -326,6 +326,7 @@ export type Order = {
   deliveryDate?: string;
   cancelledAt?: string;
   cancelledBy?: string;
+  cancelReason?: string;
   deliveryAttempt?: number;
   lastIssueType?: string;
   deliveryNotes?: string;
