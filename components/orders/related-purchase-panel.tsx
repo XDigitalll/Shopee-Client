@@ -42,15 +42,7 @@ function resolveOrderHref(order: Order) {
     return `/orders/${order.id}/receipt`;
   }
 
-  if (order.status === "QUOTED") {
-    return `/orders/${order.id}/quote`;
-  }
-
-  if ((order.status === "PENDING_PAYMENT" || order.status === "PAYMENT_REJECTED") && !order.payOnDelivery) {
-    return `/orders/${order.id}/payment`;
-  }
-
-  return "/orders";
+  return `/orders?highlight=${encodeURIComponent(String(order.id))}`;
 }
 
 export function RelatedPurchasePanel({

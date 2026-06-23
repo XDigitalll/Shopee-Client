@@ -66,12 +66,22 @@ const PUBLIC_CATALOG_ROUTES = ["/", "/store", "/cart"];
 const REQUIRES_AUTH = ["/checkout", "/orders", "/profile", "/settings"];
 const CART_COUNT_CACHE_TTL_MS = 8000;
 
+function normalizeOrderAttentionHref(actionUrl: string | null | undefined, orderId?: number | null) {
+  if (!actionUrl) return null;
+  if (/^\/orders\/[^/]+\/payment(?:[?#].*)?$/.test(actionUrl)) {
+    return orderId ? `/orders?highlight=${encodeURIComponent(String(orderId))}` : "/orders";
+  }
+  return actionUrl;
+}
+
 export function ClientShell({ children, fullWidth = false }: { children: ReactNode; fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, hasProfileWarning, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
   const { summary: ordersAttentionSummary, attentionCount } = useOrdersAttention();
-  const ordersAttentionHref = ordersAttentionSummary.orders.find((order) => order.actionUrl)?.actionUrl ?? "/orders";
+  const ordersAttentionHref = ordersAttentionSummary.orders
+    .map((order) => normalizeOrderAttentionHref(order.actionUrl, order.orderId))
+    .find(Boolean) ?? "/orders";
   const needsAuth = useMemo(() => {
     const isPublicOrderRoute = PUBLIC_ORDER_ROUTES.some((p) => pathname === p || pathname?.startsWith(p + "/"));
     const isPublicCatalogRoute = PUBLIC_CATALOG_ROUTES.some((p) => pathname === p || (p !== "/" && pathname?.startsWith(p + "/")));

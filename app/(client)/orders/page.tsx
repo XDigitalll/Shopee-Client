@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClientConfirmDialog, ClientFeedbackDock, ClientListLoadingOverlay, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { ApiRequestError, CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
@@ -327,6 +327,10 @@ function canCustomerCancel(status: string) {
   return CLIENT_CANCEL_ALLOWED_STATUSES.has(status);
 }
 
+function paymentActionLabel(order: Order) {
+  return String(order.status ?? "").toUpperCase() === "PAYMENT_REJECTED" ? "Tentar novamente" : "Pagar agora";
+}
+
 function isInProcessingCannotCancel(status: string) {
   return ["PAYMENT_SUBMITTED", "PAYMENT_UNDER_REVIEW"].includes(status);
 }
@@ -429,6 +433,7 @@ async function fetchWithToken<T>(url: string, _token: string) {
 
 export default function OrdersPage() {
   const { token, userInitials, userLabel } = useAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const highlightParam = searchParams.get("highlight")?.trim() ?? "";
   const [orders, setOrders] = useState<Order[]>([]);
@@ -454,6 +459,7 @@ export default function OrdersPage() {
   } | null>(null);
   const [clarificationDrafts, setClarificationDrafts] = useState<Record<number, ClarificationDraftState>>({});
   const [timelineOrderId, setTimelineOrderId] = useState<number | null>(null);
+  const [openedOrderId, setOpenedOrderId] = useState<number | null>(null);
   const highlightedOrderRef = useRef<HTMLElement | null>(null);
 
   const loadOrders = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -529,13 +535,30 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (!highlightedOrderId || isLoading) return;
+    setOpenedOrderId(highlightedOrderId);
 
     const timer = window.setTimeout(() => {
-      highlightedOrderRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      highlightedOrderRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 120);
 
     return () => window.clearTimeout(timer);
   }, [highlightedOrderId, isLoading]);
+
+  const openOrderDetails = (orderId: number) => {
+    setOpenedOrderId(orderId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("highlight", String(orderId));
+    router.replace(`/orders?${params.toString()}`, { scroll: false });
+    void markOrderUpdatesSeen(orderId);
+  };
+
+  const closeOrderDetails = () => {
+    setOpenedOrderId(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("highlight");
+    const query = params.toString();
+    router.replace(query ? `/orders?${query}` : "/orders", { scroll: false });
+  };
 
   const replaceOrder = (updated: Order) => {
     setOrders((current) => current.map((item) => item.id === updated.id ? updated : item));
@@ -1044,8 +1067,10 @@ export default function OrdersPage() {
     const trackingSteps = order.trackingSummarySteps ?? [];
     const showTimeline = timelineOrderId === order.id;
     const unreadUpdates = Number(order.unreadUpdatesCount ?? 0);
-    const requiresAction = Boolean(order.requiresAction);
-    const attentionLabel = order.attentionLabel || (requiresAction ? "Ação necessária" : unreadUpdates > 0 ? "Nova atualização" : "");
+    const paymentAction = canShowPaymentAction(order);
+    const requiresAction = Boolean(order.requiresAction) || paymentAction;
+    const attentionLabel = order.attentionLabel
+      || (paymentAction ? (status === "PAYMENT_REJECTED" ? "Pagamento recusado" : "Pagamento pendente") : unreadUpdates > 0 ? "Nova atualização" : "");
     const canChangeDeliveryAddress = Boolean(order.canChangeDeliveryAddress);
     const isCod = order.paymentMethod === "CASH_ON_DELIVERY";
     const isInternalCod = !isExternal && isCod;
@@ -1064,6 +1089,7 @@ export default function OrdersPage() {
     const clarificationDraft = clarificationDrafts[order.id] ?? { answers: {}, photos: [] };
     const clarificationSubmitted = Boolean(clarificationDraft.submitted);
     const isHighlightedOrder = highlightedOrderId === order.id;
+    const detailsOpen = openedOrderId === order.id || isHighlightedOrder || editingExternal || Boolean(activeClarification) || showTimeline;
     const screenshotUrls = order.requestScreenshotUrls?.length
       ? order.requestScreenshotUrls
       : order.requestScreenshotUrl
@@ -1074,12 +1100,28 @@ export default function OrdersPage() {
       <article
         key={order.id}
         ref={isHighlightedOrder ? highlightedOrderRef : undefined}
-        className={`rounded-[28px] border bg-white p-5 transition ${isNested ? "shadow-none" : "shadow-sm"}`}
+        onClick={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest("a,button,input,textarea,select,label")) return;
+          if (!detailsOpen) openOrderDetails(order.id);
+        }}
+        className={`rounded-[28px] border bg-white p-5 transition ${isNested ? "shadow-none" : "shadow-sm"} ${detailsOpen ? "" : "cursor-pointer hover:-translate-y-0.5 hover:shadow-md"}`}
         style={{
-          borderColor: isHighlightedOrder ? RED : isNested ? "#F6CFC2" : "#F2D4CC",
-          boxShadow: isHighlightedOrder ? "0 0 0 4px rgba(232,67,26,0.12), 0 24px 70px rgba(232,67,26,0.16)" : undefined,
+          borderColor: isHighlightedOrder || detailsOpen ? RED : isNested ? "#F6CFC2" : "#F2D4CC",
+          boxShadow: isHighlightedOrder || detailsOpen ? "0 0 0 4px rgba(232,67,26,0.10), 0 24px 70px rgba(232,67,26,0.12)" : undefined,
         }}
       >
+        {detailsOpen && (
+          <button
+            type="button"
+            onClick={closeOrderDetails}
+            className="mb-4 inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black sm:hidden"
+            style={{ borderColor: "#F2D4CC", color: RED, background: "#FFF8F5" }}
+          >
+            Voltar aos meus pedidos
+          </button>
+        )}
+
         {isNested && (
           <div className="mb-3 inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.24em]" style={{ background: "#FFF8F5", color: RED }}>
             {isExternal ? "Parte internacional" : "Parte local"}
@@ -1118,7 +1160,37 @@ export default function OrdersPage() {
           ))}
         </div>
 
-        {isExternal ? (
+        {!detailsOpen && (
+          <div className="mt-5 flex flex-col gap-3 rounded-[22px] border px-4 py-4 sm:flex-row sm:items-center sm:justify-between" style={{ background: "#FFFBF8", borderColor: "#F2D4CC" }}>
+            <div>
+              <p className="text-sm font-black" style={{ color: "#1A1410" }}>
+                {paymentAction ? "Este pedido precisa de uma ação tua." : "Abre o detalhe para ver timeline, mensagens e valores."}
+              </p>
+              <p className="mt-1 text-xs font-semibold" style={{ color: "#6B7280" }}>
+                O detalhe abre aqui primeiro; pagamento só depois de clicares no botão de pagamento.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openOrderDetails(order.id)}
+              className="rounded-2xl border px-4 py-2.5 text-sm font-black"
+              style={{ borderColor: "#F2D4CC", color: RED, background: "white" }}
+            >
+              Ver detalhes do pedido
+            </button>
+          </div>
+        )}
+
+        {detailsOpen && status === "PAYMENT_REJECTED" && (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FEF2F2", borderColor: "#FCA5A5" }}>
+            <h3 className="text-base font-black" style={{ color: "#991B1B", fontFamily: "'Sora', sans-serif" }}>Pagamento recusado</h3>
+            <p className="mt-1 text-sm" style={{ color: "#991B1B" }}>
+              A tentativa anterior não foi aprovada. Revê o pedido e clica em “Tentar novamente” quando quiseres escolher a forma de pagamento.
+            </p>
+          </div>
+        )}
+
+        {detailsOpen && isExternal ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFFBF8", borderColor: "#F2D4CC" }}>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
@@ -1163,7 +1235,7 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {isExternal && order.purchaseConfirmedAt && !order.purchaseProofUrl ? (
+        {detailsOpen && isExternal && order.purchaseConfirmedAt && !order.purchaseProofUrl ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
             <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#166534" }}>Compra confirmada</p>
             <h3 className="mt-1 text-base font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
@@ -1179,7 +1251,7 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {isExternal && order.purchaseProofUrl ? (
+        {detailsOpen && isExternal && order.purchaseProofUrl ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1208,7 +1280,7 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {editConflict ? (
+        {detailsOpen && editConflict ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#EFF6FF", borderColor: "#BFDBFE" }}>
             <h3 className="text-base font-black" style={{ color: "#1D4ED8", fontFamily: "'Sora', sans-serif" }}>
               O pedido foi atualizado pela equipa
@@ -1845,7 +1917,7 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            {canShowPaymentAction(order) && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{order.status === "PAYMENT_REJECTED" ? "Tentar novamente" : "Continuar pagamento"}</Link>}
+            {canShowPaymentAction(order) && <Link href={`/orders/${order.id}/payment`} onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl px-4 py-2.5 text-sm font-black text-white" style={{ background: RED }}>{paymentActionLabel(order)}</Link>}
             {status === "OUT_FOR_DELIVERY" && <a href={order.googleMapsLink || order.externalCartUrl || "#"} target="_blank" rel="noreferrer" onClick={() => void markOrderUpdatesSeen(order.id)} className="rounded-2xl border px-4 py-2.5 text-sm font-bold" style={{ borderColor: "#D8B4FE", color: "#6B21A8" }}>Rastrear</a>}
             {canConfirmDelivery && (
               <button
