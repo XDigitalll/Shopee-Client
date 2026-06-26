@@ -22,7 +22,7 @@ const MAX_SCREENSHOTS = 3;
 const ACCEPTED_SCREENSHOT_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const ACCEPTED_SCREENSHOT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 const TEMPORARY_ACCESS_PREFILL_KEY = "shopeemz_temporary_access_prefill";
-const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "ebay", "shein.pt"];
+const KNOWN_DOMAINS = ["shein.com", "temu.com", "amazon", "aliexpress", "zara.com", "pinduoduo", "yupoo", "shein.pt"];
 const SPAM_WORDS = new Set(["oi", "olá", "ola", "ok", "sim", "nao", "não", "produto", "quero", "item", "123", "teste", "test", "ajuda", "help", "info", "hi", "hey", "bom", "obrigado"]);
 const MIN_DESC_CHARS = 10;
 const MIN_DESC_WORDS = 2;
@@ -35,10 +35,9 @@ const STORE_OPTIONS = [
   { id: "MR_PRICE", label: "Mr Price" },
   { id: "MAKRO", label: "Makro" },
   { id: "BASH", label: "Bash" },
-  { id: "BUFFALO", label: "Buffalo" },
   { id: "ZARA", label: "Zara" },
-  { id: "ASOS", label: "ASOS" },
-  { id: "EBAY", label: "eBay" },
+  { id: "PINDUODUO", label: "Pinduoduo" },
+  { id: "YUPOO", label: "Yupoo" },
   { id: "OTHER", label: "Outras" },
 ];
 

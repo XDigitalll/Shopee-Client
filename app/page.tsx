@@ -45,10 +45,9 @@ const STORES_META = [
   { id: "MR_PRICE",    label: "Mr Price",   color: "#CC0000", abbr: "MP", hint: "mrprice.co.za" },
   { id: "MAKRO",       label: "Makro",      color: "#003087", abbr: "MK", hint: "makro.co.za" },
   { id: "BASH",        label: "Bash",       color: "#2D2D3F", abbr: "BS", hint: "bash.com" },
-  { id: "BUFFALO",     label: "Buffalo",    color: "#7B3F00", abbr: "BF", hint: "buffalo.com" },
   { id: "ZARA",        label: "Zara",       color: "#000000", abbr: "ZR", hint: "zara.com" },
-  { id: "ASOS",        label: "ASOS",       color: "#2D2D2D", abbr: "AS", hint: "asos.com" },
-  { id: "EBAY",        label: "eBay",       color: "#86B817", abbr: "EB", hint: "ebay.com" },
+  { id: "PINDUODUO",   label: "Pinduoduo",  color: "#D91F11", abbr: "PD", hint: "pinduoduo.com" },
+  { id: "YUPOO",       label: "Yupoo",      color: "#2563EB", abbr: "YP", hint: "yupoo.com" },
   { id: "OTHER",       label: "Outras",     color: "#6B7280", abbr: "OU", hint: "outra loja" },
 ];
 
