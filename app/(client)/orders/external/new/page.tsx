@@ -1125,7 +1125,7 @@ export default function NewExternalOrderPage() {
                     </p>
                   ) : (
                     <p id="phoneInput-help" className="mt-2 text-xs font-semibold leading-5" style={{ color: MUTED }}>
-                      Usaremos este número para acompanhar a tua encomenda e enviar atualizações importantes. Preferencialmente com WhatsApp ativo.
+                      Usaremos este número para nos comunicarmos contigo. Brevemente poderás receber as cotações por WhatsApp; por enquanto, usa o aplicativo para ver as cotações.
                     </p>
                   )}
                 </div>
