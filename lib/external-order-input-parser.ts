@@ -43,6 +43,8 @@ export function detectExternalSourceStore(input: string | null | undefined): str
   if (value.includes("mrp.com") || value.includes("mrprice") || value.includes("mr price")) return "MR_PRICE";
   if (value.includes("buffalo")) return "BUFFALO";
   if (value.includes("zara.")) return "ZARA";
+  if (value.includes("pinduoduo.")) return "PINDUODUO";
+  if (value.includes("yupoo.")) return "YUPOO";
   if (value.includes("asos.")) return "ASOS";
   if (value.includes("ebay.")) return "EBAY";
   return null;
@@ -77,7 +79,7 @@ export function extractExternalOrderInput(rawText: string | null | undefined): E
       if (!line) return false;
       const lower = line.toLowerCase();
       const promotional = PROMOTIONAL_PATTERNS.some((pattern) => pattern.test(line));
-      const storeOnly = ["shein", "temu", "amazon", "aliexpress", "alibaba"].includes(lower);
+      const storeOnly = ["shein", "temu", "amazon", "aliexpress", "alibaba", "pinduoduo", "yupoo"].includes(lower);
       if (promotional || storeOnly) {
         promotionalTextRemoved = true;
         return false;
