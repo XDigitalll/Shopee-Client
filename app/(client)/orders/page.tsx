@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ClientConfirmDialog, ClientFeedbackDock, ClientListLoadingOverlay, ClientSectionSkeleton } from "@/components/client-feedback-state";
 import { ApiRequestError, CLIENT_DATA_CHANGED_EVENT, apiFetch } from "@/lib/api-client";
+import { AuthExpiredError, isManualLogoutInProgress, trackAuthenticatedRequest } from "@/lib/auth";
 import { formatDate, formatMoney } from "@/lib/format";
 import { orderDisplayCode } from "@/lib/order-label";
 import { orderVisibleTotal } from "@/lib/order-money";
@@ -423,9 +424,31 @@ function compositeHeadline(orders: Order[]) {
 }
 
 async function fetchWithToken<T>(url: string, _token: string) {
-  const response = await fetch(url, {
-    cache: "no-store",
-  });
+  if (isManualLogoutInProgress()) {
+    throw new AuthExpiredError();
+  }
+
+  const controller = new AbortController();
+  const untrack = trackAuthenticatedRequest(controller);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (isManualLogoutInProgress() && error instanceof DOMException && error.name === "AbortError") {
+      throw new AuthExpiredError();
+    }
+    throw error;
+  } finally {
+    untrack();
+  }
+
+  if ((response.status === 401 || response.status === 403) && isManualLogoutInProgress()) {
+    throw new AuthExpiredError();
+  }
+
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.message || payload?.error || "Nao foi possivel carregar os pedidos.");
   return payload as T;
@@ -475,6 +498,9 @@ export default function OrdersPage() {
       setOrders(ordersData);
       setStats(statsData);
     } catch (error) {
+      if (error instanceof AuthExpiredError || isManualLogoutInProgress()) {
+        return;
+      }
       setFeedback({ type: "error", msg: error instanceof Error ? error.message : "Nao foi possivel carregar os pedidos." });
     } finally {
       if (!silent) {

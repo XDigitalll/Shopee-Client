@@ -791,17 +791,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleLogout = async () => {
-    if (token) {
-      try {
-        await apiFetch<void>("auth/logout", {
-          method: "POST",
-          token,
-        });
-      } catch {
-        // local logout fallback
-      }
-    }
+  const handleLogout = () => {
     logout();
   };
 

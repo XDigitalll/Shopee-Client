@@ -7,6 +7,9 @@ const LEGACY_TOKEN_KEYS = [
   "shopee_admin_token",
   "shopee_refresh_token",
 ];
+const MANUAL_LOGOUT_KEY = "shopeex-manual-logout-at";
+const MANUAL_LOGOUT_GRACE_MS = 10_000;
+const authenticatedRequestControllers = new Set<AbortController>();
 
 export type ClientSessionProfile = {
   displayName?: string;
@@ -53,6 +56,55 @@ function emitAuthExpired() {
   window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
 }
 
+export function isManualLogoutInProgress() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const raw = window.sessionStorage.getItem(MANUAL_LOGOUT_KEY);
+  const startedAt = raw ? Number(raw) : 0;
+  if (!Number.isFinite(startedAt) || startedAt <= 0) {
+    window.sessionStorage.removeItem(MANUAL_LOGOUT_KEY);
+    return false;
+  }
+
+  if (Date.now() - startedAt > MANUAL_LOGOUT_GRACE_MS) {
+    window.sessionStorage.removeItem(MANUAL_LOGOUT_KEY);
+    return false;
+  }
+
+  return true;
+}
+
+export function clearManualLogoutMarker() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.removeItem(MANUAL_LOGOUT_KEY);
+}
+
+export function abortAuthenticatedRequests() {
+  for (const controller of authenticatedRequestControllers) {
+    controller.abort();
+  }
+  authenticatedRequestControllers.clear();
+}
+
+export function trackAuthenticatedRequest(controller: AbortController) {
+  authenticatedRequestControllers.add(controller);
+  return () => {
+    authenticatedRequestControllers.delete(controller);
+  };
+}
+
+export function beginManualLogout() {
+  if (typeof window !== "undefined") {
+    window.sessionStorage.setItem(MANUAL_LOGOUT_KEY, String(Date.now()));
+  }
+  abortAuthenticatedRequests();
+}
+
 export function clearLegacyAuthStorage({ emit = false }: { emit?: boolean } = {}) {
   if (typeof window === "undefined") {
     return;
@@ -68,6 +120,7 @@ export function clearLegacyAuthStorage({ emit = false }: { emit?: boolean } = {}
 }
 
 export function clearStoredSession() {
+  clearManualLogoutMarker();
   clearLegacyAuthStorage({ emit: true });
 }
 
@@ -75,14 +128,39 @@ export function clearStoredToken() {
   clearStoredSession();
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 export async function loadSessionProfile() {
+  if (isManualLogoutInProgress()) {
+    return null;
+  }
+
   clearLegacyAuthStorage();
 
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    cache: "no-store",
-    credentials: "same-origin",
-  });
+  const controller = new AbortController();
+  const untrack = trackAuthenticatedRequest(controller);
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/me", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error) && isManualLogoutInProgress()) {
+      return null;
+    }
+    throw error;
+  } finally {
+    untrack();
+  }
+
+  if (isManualLogoutInProgress()) {
+    return null;
+  }
 
   if (response.status === 401 || response.status === 403) {
     clearLegacyAuthStorage();
@@ -107,7 +185,7 @@ let pendingRefreshPromise: Promise<ClientSessionProfile | null> | null = null;
 export async function expireStoredSession({ redirectToLogin = false } = {}) {
   clearLegacyAuthStorage();
 
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || isManualLogoutInProgress()) {
     return;
   }
 
@@ -126,18 +204,35 @@ export async function expireStoredSession({ redirectToLogin = false } = {}) {
 
 export async function refreshStoredSession(): Promise<ClientSessionProfile | null> {
   // Guard: the function uses browser-only APIs; on the server return null.
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || isManualLogoutInProgress()) return null;
 
   if (pendingRefreshPromise) return pendingRefreshPromise;
 
   pendingRefreshPromise = (async () => {
     clearLegacyAuthStorage();
 
-    const response = await fetch("/api/auth/refresh", {
-      method: "POST",
-      cache: "no-store",
-      credentials: "same-origin",
-    });
+    const controller = new AbortController();
+    const untrack = trackAuthenticatedRequest(controller);
+    let response: Response;
+    try {
+      response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (isAbortError(error) && isManualLogoutInProgress()) {
+        return null;
+      }
+      throw error;
+    } finally {
+      untrack();
+    }
+
+    if (isManualLogoutInProgress()) {
+      return null;
+    }
 
     if (response.status === 401) {
       await expireStoredSession();

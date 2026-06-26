@@ -77,7 +77,7 @@ function normalizeOrderAttentionHref(actionUrl: string | null | undefined, order
 export function ClientShell({ children, fullWidth = false }: { children: ReactNode; fullWidth?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isReady, token, logout, userInitials, userLabel, userAvatarUrl, hasProfileWarning, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
+  const { isReady, token, logout, isLoggingOut, userInitials, userLabel, userAvatarUrl, hasProfileWarning, accountCompletionPercentage, emailVerified, hasRealEmail } = useAuth();
   const { summary: ordersAttentionSummary, attentionCount } = useOrdersAttention();
   const ordersAttentionHref = ordersAttentionSummary.orders
     .map((order) => normalizeOrderAttentionHref(order.actionUrl, order.orderId))
@@ -90,8 +90,13 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
 
   useEffect(() => {
     if (!isReady || token) return;
-    if (needsAuth) router.replace("/login?expired=true");
-  }, [isReady, needsAuth, token, router]);
+    if (!needsAuth) return;
+    if (isLoggingOut) {
+      router.replace("/");
+      return;
+    }
+    router.replace("/login?expired=true");
+  }, [isLoggingOut, isReady, needsAuth, token, router]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuPanelRef = useRef<HTMLDivElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -199,7 +204,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     return "Pagina inicial";
   }, [pathname]);
 
-  if (needsAuth && (!isReady || !token)) {
+  if (needsAuth && (!isReady || (!token && !isLoggingOut))) {
     return <GlobalAppLoader />;
   }
 

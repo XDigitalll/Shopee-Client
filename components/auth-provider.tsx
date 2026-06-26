@@ -15,8 +15,11 @@ import {
   AUTH_CHANGE_EVENT,
   AUTH_EXPIRED_EVENT,
   AuthExpiredError,
+  beginManualLogout,
   clearLegacyAuthStorage,
+  clearManualLogoutMarker,
   expireStoredSession,
+  isManualLogoutInProgress,
   loadSessionProfile,
   notifyAuthChanged,
   refreshStoredSession,
@@ -30,6 +33,7 @@ type AuthContextValue = {
   user: SessionProfile | null;
   isAuthenticated: boolean;
   isReady: boolean;
+  isLoggingOut: boolean;
   userLabel: string;
   userInitials: string;
   userAvatarUrl: string;
@@ -104,15 +108,27 @@ function isAuthRequiredPath(pathname: string | null) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionProfile, setSessionProfile] = useState<SessionProfile | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(() => isManualLogoutInProgress());
   const router = useRouter();
   const pathname = usePathname();
   const refreshFailureHandledRef = useRef(false);
   const currentRefreshPromiseRef = useRef<ReturnType<typeof refreshStoredSession> | null>(null);
+  const logoutRequestInFlightRef = useRef(false);
 
   const isAuthenticated = Boolean(sessionProfile);
   const token = isAuthenticated ? AUTHENTICATED_MARKER : null;
 
   const clearExpiredSessionAndRedirect = useCallback(() => {
+    if (isManualLogoutInProgress()) {
+      refreshFailureHandledRef.current = true;
+      currentRefreshPromiseRef.current = null;
+      clearLegacyAuthStorage();
+      setSessionProfile(null);
+      setIsReady(true);
+      setIsLoggingOut(true);
+      return;
+    }
+
     refreshFailureHandledRef.current = true;
     currentRefreshPromiseRef.current = null;
     clearLegacyAuthStorage();
@@ -132,6 +148,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionProfile(profile);
     } catch (error) {
       if (error instanceof AuthExpiredError) {
+        if (isManualLogoutInProgress()) {
+          setSessionProfile(null);
+          setIsReady(true);
+          setIsLoggingOut(true);
+          return;
+        }
         clearExpiredSessionAndRedirect();
         return;
       }
@@ -140,6 +162,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearExpiredSessionAndRedirect]);
 
   const handleRefreshFailureOnce = useCallback((reason: string) => {
+    if (isManualLogoutInProgress()) {
+      refreshFailureHandledRef.current = true;
+      currentRefreshPromiseRef.current = null;
+      clearLegacyAuthStorage();
+      setSessionProfile(null);
+      setIsReady(true);
+      setIsLoggingOut(true);
+      return;
+    }
+
     if (refreshFailureHandledRef.current) {
       return;
     }
@@ -164,6 +196,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [pathname, router]);
 
   const safeRefresh = useCallback((reason = "unknown") => {
+    if (isManualLogoutInProgress()) {
+      setSessionProfile(null);
+      setIsReady(true);
+      setIsLoggingOut(true);
+      return Promise.resolve(null);
+    }
+
     if (currentRefreshPromiseRef.current) {
       return currentRefreshPromiseRef.current;
     }
@@ -204,6 +243,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Google OAuth callback page, which hasn't persisted its tokens yet when
         // bootstrap fires concurrently. safeRefresh handles graceful failure and
         // only redirects for auth-required paths, which the callback page is not.
+        if (isManualLogoutInProgress()) {
+          setSessionProfile(null);
+          setIsReady(true);
+          setIsLoggingOut(true);
+          return;
+        }
       }
       if (cancelled) return;
 
@@ -229,10 +274,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap();
 
     const handleAuthChange = () => {
+      if (isManualLogoutInProgress()) return;
       void refreshProfile();
     };
 
     const handleAuthExpired = () => {
+      if (isManualLogoutInProgress()) {
+        setSessionProfile(null);
+        setIsReady(true);
+        setIsLoggingOut(true);
+        return;
+      }
+
       setSessionProfile(null);
       setIsReady(true);
       if (isAuthRequiredPath(pathname)) {
@@ -258,9 +311,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!isAuthenticated && isProtectedRoute) {
+      if (isLoggingOut || isManualLogoutInProgress()) {
+        router.replace("/");
+        return;
+      }
       router.replace("/login?expired=true");
     }
-  }, [isAuthenticated, isReady, pathname, router]);
+  }, [isAuthenticated, isLoggingOut, isReady, pathname, router]);
 
   useEffect(() => {
     if (!isReady || !isAuthenticated) return;
@@ -273,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isReady, pathname, router, sessionProfile?.mustChangePassword]);
 
   useEffect(() => {
-    if (!sessionProfile?.expiresAt) {
+    if (isLoggingOut || !sessionProfile?.expiresAt) {
       return;
     }
 
@@ -285,7 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, timeoutMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [safeRefresh, sessionProfile?.expiresAt]);
+  }, [isLoggingOut, safeRefresh, sessionProfile?.expiresAt]);
 
   const {
     userLabel,
@@ -360,6 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: sessionProfile,
     isAuthenticated,
     isReady,
+    isLoggingOut,
     userLabel,
     userInitials,
     userAvatarUrl,
@@ -374,18 +432,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phoneVerified,
     hasRealEmail,
     login: () => {
+      clearManualLogoutMarker();
+      setIsLoggingOut(false);
+      logoutRequestInFlightRef.current = false;
       refreshFailureHandledRef.current = false;
       currentRefreshPromiseRef.current = null;
       notifyAuthChanged();
       void refreshProfile();
     },
     logout: () => {
+      if (logoutRequestInFlightRef.current) {
+        router.replace("/");
+        return;
+      }
+
+      logoutRequestInFlightRef.current = true;
+      beginManualLogout();
       refreshFailureHandledRef.current = true;
       currentRefreshPromiseRef.current = null;
       clearLegacyAuthStorage();
       setSessionProfile(null);
-      void fetch("/api/auth/logout", { method: "POST", cache: "no-store" });
-      router.replace("/login");
+      setIsReady(true);
+      setIsLoggingOut(true);
+      void fetch("/api/auth/logout", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+      }).catch(() => {}).finally(() => {
+        window.setTimeout(() => {
+          logoutRequestInFlightRef.current = false;
+        }, 1000);
+      });
+      router.replace("/");
     },
     refreshProfile,
   };
