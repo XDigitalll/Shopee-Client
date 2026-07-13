@@ -181,6 +181,7 @@ export default function NewExternalOrderPage() {
   const isLoggedIn = Boolean(token);
 
   const [productLink, setProductLink] = useState("");
+  const [catalogSlug, setCatalogSlug] = useState("");
   const [selectedStore, setSelectedStore] = useState("SHEIN");
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -211,6 +212,8 @@ export default function NewExternalOrderPage() {
     const params = new URLSearchParams(window.location.search);
     // "input" is the current param; "link" kept for backward compat
     const initialInput = params.get("input")?.trim() || params.get("link")?.trim();
+    setCatalogSlug(params.get("catalogSlug")?.trim() || "");
+    setVariant(params.get("variant")?.trim() || "");
     setSelectedStore(normalizeStore(params.get("store")));
     if (initialInput) {
       setProductLink(initialInput);
@@ -520,11 +523,26 @@ export default function NewExternalOrderPage() {
     setFeedback({ type: "loading", msg: "A enviar pedido para análise..." });
 
     try {
-      const response = await apiFetch<SubmissionResponse>("orders/external", {
-        method: "POST",
-        body,
-        ...(token ? { token } : {}),
-      });
+      const response = catalogSlug
+        ? await apiFetch<SubmissionResponse>(`catalog/products/${encodeURIComponent(catalogSlug)}/order`, {
+            method: "POST",
+            body: JSON.stringify({
+              fullName: userLabel,
+              primaryPhoneNumber: cleanPhone,
+              email: userEmail,
+              quantity,
+              deliveryMethod: "DELIVERY",
+              communicationChannel: "WHATSAPP",
+              communicationPhone: cleanCommPhone || cleanPhone,
+              customerNotes: cleanVariant,
+            }),
+            ...(token ? { token } : {}),
+          })
+        : await apiFetch<SubmissionResponse>("orders/external", {
+            method: "POST",
+            body,
+            ...(token ? { token } : {}),
+          });
 
       const nextOrderId = Number(response.orderId ?? response.id ?? 0);
       const nextOrderNumber =

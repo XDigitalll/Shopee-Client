@@ -12,6 +12,8 @@ import { normalizeClientError } from "@/lib/client-errors";
 import type { Category, Order, Product } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientShell } from "@/components/client-shell";
+import { CatalogGrid } from "@/components/catalog/catalog-grid";
+import { fetchFeaturedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
 
 // Constants
 
@@ -1192,6 +1194,55 @@ function ProductsSection({
 
 // Order Tracker
 
+function ShopeeChoicesSection({
+  products,
+  loading,
+  error,
+}: {
+  products: CatalogProduct[];
+  loading: boolean;
+  error: boolean;
+}) {
+  if (!loading && !error && products.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="bg-[#FFFDFC] px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+              Escolhas da ShopeeMz
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-sora)] text-2xl font-black" style={{ color: DARK }}>
+              Produtos de importacao selecionados
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Preco final em MZN, ja com produto, importacao, taxas e entrega incluidos.
+            </p>
+          </div>
+          <Link href="/catalogo" className="rounded-2xl border-2 px-5 py-3 text-sm font-black transition hover:border-[#E8431A] hover:text-[#E8431A]" style={{ borderColor: "#F2D4CC", color: "#374151" }}>
+            Ver catalogo
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-[18px] bg-[#FFF0EC]" />)}
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-dashed border-[#F2D4CC] bg-white p-6 text-sm font-semibold text-slate-500">
+            Nao foi possivel carregar as escolhas neste momento.
+          </div>
+        ) : (
+          <CatalogGrid products={products.slice(0, 8)} />
+        )}
+      </div>
+    </section>
+  );
+}
+
 function OrderTracker({ order }: { order: Order }) {
   const currentStep = STATUS_STEP[order.status] ?? 0;
 
@@ -1282,6 +1333,9 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
+  const [choiceProducts, setChoiceProducts] = useState<CatalogProduct[]>([]);
+  const [loadingChoices, setLoadingChoices] = useState(true);
+  const [choicesError, setChoicesError] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1318,6 +1372,24 @@ export default function Home() {
   );
 
   useEffect(() => { void loadPublicData(); }, [loadPublicData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadChoices() {
+      setLoadingChoices(true);
+      setChoicesError(false);
+      try {
+        const payload = await fetchFeaturedCatalogProducts(8);
+        if (!cancelled) setChoiceProducts(payload.content || []);
+      } catch {
+        if (!cancelled) setChoicesError(true);
+      } finally {
+        if (!cancelled) setLoadingChoices(false);
+      }
+    }
+    void loadChoices();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load and auto-refresh latest order for the tracker
   useEffect(() => {
@@ -1357,6 +1429,8 @@ export default function Home() {
       <CategoriesSection categories={categories} />
 
       <ExternalOrderBanner />
+
+      <ShopeeChoicesSection products={choiceProducts} loading={loadingChoices} error={choicesError} />
 
       <ProductsSection
         products={products}

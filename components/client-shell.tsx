@@ -17,9 +17,10 @@ const RED_DARK = "#CC3315";
 
 const navItems = [
   { href: "/", label: "Inicio" },
-  { href: "/store", label: "Loja" },
+  { href: "/orders/external/new", label: "Comprar por Link" },
+  { href: "/catalogo", label: "Escolhas da ShopeeMz" },
+  { href: "/store", label: "Produtos Locais" },
   { href: "/orders", label: "Pedidos" },
-  { href: "/orders/external/new", label: "Comprar do estrangeiro" },
 ];
 
 function MenuIcon() {
@@ -62,7 +63,7 @@ function CartIcon() {
 }
 
 const PUBLIC_ORDER_ROUTES = ["/external-order", "/orders/external/new", "/delivery-address"];
-const PUBLIC_CATALOG_ROUTES = ["/", "/store", "/cart"];
+const PUBLIC_CATALOG_ROUTES = ["/", "/store", "/catalogo", "/cart"];
 const REQUIRES_AUTH = ["/checkout", "/orders", "/profile", "/settings"];
 const CART_COUNT_CACHE_TTL_MS = 8000;
 
@@ -194,11 +195,12 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
 
   const pageTitle = useMemo(() => {
     if (pathname?.startsWith("/orders/external/new")) return "Comprar do estrangeiro";
+    if (pathname?.startsWith("/catalogo")) return "Escolhas da ShopeeMz";
     if (pathname?.startsWith("/orders")) return "Meus pedidos";
     if (pathname?.startsWith("/cart")) return "Carrinho";
     if (pathname?.startsWith("/checkout")) return "Checkout";
     if (pathname?.startsWith("/external-order")) return "Comprar do estrangeiro";
-    if (pathname?.startsWith("/store")) return "Loja";
+    if (pathname?.startsWith("/store")) return "Produtos Locais";
     if (pathname?.startsWith("/profile")) return "Meu perfil";
     if (pathname?.startsWith("/settings")) return "Definicoes";
     return "Pagina inicial";
