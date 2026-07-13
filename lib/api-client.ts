@@ -1,4 +1,4 @@
-import { AuthExpiredError, expireStoredSession, refreshStoredSession } from "@/lib/auth";
+import { AuthExpiredError, expireStoredSession, isManualLogoutInProgress, refreshStoredSession, trackAuthenticatedRequest } from "@/lib/auth";
 import { normalizeClientError } from "@/lib/client-errors";
 import { getCsrfToken, XSRF_HEADER } from "@/lib/csrf";
 
@@ -99,7 +99,15 @@ function statusFallbackMessage(status: number): string {
   return "Não foi possível concluir a operação.";
 }
 
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
 async function performRequest(path: string, options: ApiOptions = {}) {
+  if (options.token && isManualLogoutInProgress()) {
+    throw new AuthExpiredError();
+  }
+
   const headers = new Headers(options.headers);
   const isFormData = isFormDataBody(options.body);
 
@@ -117,16 +125,26 @@ async function performRequest(path: string, options: ApiOptions = {}) {
     }
   }
 
-  return fetch(`/api/xdigital/${path.replace(/^\/+/, "")}`, {
-    ...options,
-    headers,
-    cache: "no-store",
-    credentials: "same-origin",
-  });
+  const controller = options.token && !options.signal ? new AbortController() : null;
+  const untrack = controller ? trackAuthenticatedRequest(controller) : () => {};
+
+  try {
+    return await fetch(`/api/xdigital/${path.replace(/^\/+/, "")}`, {
+      ...options,
+      headers,
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: options.signal ?? controller?.signal,
+    });
+  } finally {
+    untrack();
+  }
 }
 
 async function expireAndThrow(): Promise<never> {
-  await expireStoredSession({ redirectToLogin: true });
+  if (!isManualLogoutInProgress()) {
+    await expireStoredSession({ redirectToLogin: true });
+  }
   throw new AuthExpiredError();
 }
 
@@ -134,7 +152,20 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const mutation = isMutation(method);
   const csrfBeforeRequest = getCsrfToken();
-  let response = await performRequest(path, options);
+  let response: Response;
+
+  try {
+    response = await performRequest(path, options);
+  } catch (error) {
+    if (isManualLogoutInProgress() && isAbortError(error)) {
+      throw new AuthExpiredError();
+    }
+    throw error;
+  }
+
+  if ((response.status === 401 || response.status === 403) && isManualLogoutInProgress()) {
+    throw new AuthExpiredError();
+  }
 
   if (response.status === 401 && path !== "auth/refresh") {
     const refreshed = await refreshStoredSession();
@@ -157,6 +188,10 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}) {
   }
 
   const payload = await response.json().catch(() => null);
+
+  if ((response.status === 401 || response.status === 403) && isManualLogoutInProgress()) {
+    throw new AuthExpiredError();
+  }
 
   if (response.status === 401) {
     await expireAndThrow();
