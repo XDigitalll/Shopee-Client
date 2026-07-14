@@ -342,6 +342,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
   const imageSwipeRef = useRef<{ x: number; y: number } | null>(null);
   const suppressImageClickRef = useRef(false);
   const catalogOrderKeyRef = useRef<string | null>(null);
+  const catalogSubmittingRef = useRef(false);
 
   useEffect(() => {
     const loadPage = async () => {
@@ -520,11 +521,13 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
   const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
     if (isExternalProduct) {
       if (source === "catalog" && product?.slug) {
+        if (catalogSubmittingRef.current) return;
         if (!isReady) return;
         if (!token) {
           router.push(`/login?redirect=${encodeURIComponent(`/catalogo/${product.slug}`)}`);
           return;
         }
+        catalogSubmittingRef.current = true;
         setBusyAction("buy");
         setFeedback(null);
         catalogOrderKeyRef.current ||= crypto.randomUUID();
@@ -536,10 +539,13 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
             body: JSON.stringify({ quantity: qty, selectedVariants: selectedAttrValues }),
           });
           catalogOrderKeyRef.current = null;
+          catalogSubmittingRef.current = false;
+          setBusyAction(null);
           router.push(order.paymentUrl || `/orders/${order.id}/payment`);
         } catch (err) {
           setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível preparar a encomenda." });
           setBusyAction(null);
+          catalogSubmittingRef.current = false;
         }
         return;
       }
