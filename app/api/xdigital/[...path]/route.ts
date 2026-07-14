@@ -67,6 +67,28 @@ async function forward(request: NextRequest, path: string[]) {
 
   const headers = new Headers();
   const contentType = request.headers.get("content-type") ?? "";
+  const isCatalogOrder = request.method === "POST"
+    && path.length === 4
+    && path[0] === "catalog"
+    && path[1] === "products"
+    && path[3] === "order";
+  const idempotencyKey = request.headers.get("Idempotency-Key")?.trim() || "";
+
+  if (isCatalogOrder && !idempotencyKey) {
+    return NextResponse.json({
+      code: "IDEMPOTENCY_KEY_REQUIRED",
+      message: "Não foi possível iniciar a encomenda. Atualize a página e tente novamente.",
+    }, { status: 400 });
+  }
+
+  if (isCatalogOrder) {
+    console.info("[catalog-order]", {
+      slug: path[2],
+      hasIdempotencyKey: true,
+      keyPrefix: idempotencyKey.slice(0, 8),
+    });
+    headers.set("Idempotency-Key", idempotencyKey);
+  }
 
   const cookieToken = request.cookies.get(SESSION_COOKIE)?.value || request.cookies.get(BACKEND_ACCESS_COOKIE)?.value;
   if (cookieToken) {
