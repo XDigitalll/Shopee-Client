@@ -26,6 +26,8 @@ export type CatalogProduct = {
   description?: string | null;
   category?: CatalogTaxonomy | null;
   brand?: CatalogTaxonomy | null;
+  supplierLink?: string | null;
+  supplierLinkVisibleToCustomer?: boolean;
   finalPrice: number;
   estimatedDeadline?: string | null;
   featured: boolean;
