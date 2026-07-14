@@ -270,6 +270,8 @@ export type Order = {
   supplierOrderReference?: string | null;
   supplierName?: string | null;
   purchaseNote?: string | null;
+  purchaseConfirmationRevertedAt?: string | null;
+  purchaseConfirmationRevertedReason?: string | null;
   baseAmount?: number;
   commissionAmount?: number;
   deliveryFee?: number;
