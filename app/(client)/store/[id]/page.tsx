@@ -305,6 +305,7 @@ function catalogToStoreProduct(item: CatalogProduct): Product {
   return {
     id: item.id, name: item.name, slug: item.slug, description: item.description || undefined,
     shortDescription: item.shortDescription || undefined, finalPrice: Number(item.finalPrice), available: true,
+    externalLink: item.supplierLink || undefined,
     madeToOrder: true, source: "EXTERNAL", availabilityNote: item.estimatedDeadline ? `Prazo estimado: ${item.estimatedDeadline}` : "Disponibilidade sob confirmação",
     category: item.category ? { id: item.category.id, name: item.category.name, slug: item.category.slug } : undefined,
     gallery: (item.images || []).map((image) => ({ id: image.id, originalUrl: image.originalUrl, thumbnailUrl: image.thumbnailUrl, displayOrder: image.displayOrder, primaryImage: image.primaryImage, altText: image.altText || undefined })),
@@ -1087,6 +1088,17 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
                     ? product.description.split("\n").filter(Boolean).map((line, i) => <p key={i}>{line}</p>)
                     : <p className="italic" style={{ color: "#9CA3AF" }}>Sem descrição detalhada para este produto.</p>}
                 </div>
+                {product.madeToOrder && product.externalLink ? (
+                  <a
+                    href={product.externalLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex rounded-2xl border px-4 py-2.5 text-sm font-black transition hover:bg-orange-50"
+                    style={{ borderColor: RED, color: RED }}
+                  >
+                    Ver produto no fornecedor
+                  </a>
+                ) : null}
                 {product.packageItems && product.packageItems.length > 0 && (
                   <div className="mt-4 rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
                     <p className="mb-2 text-xs font-bold uppercase tracking-widest" style={{ color: "#374151" }}>Conteudo da caixa</p>
