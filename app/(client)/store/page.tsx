@@ -10,6 +10,7 @@ import { CategoryIcon } from "@/lib/category-icons";
 import { formatMoney } from "@/lib/format";
 import type { Category, Product, SpringPage } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
+import { SharedProductCard } from "@/components/products/shared-product-card";
 
 const RED = "#E8431A";
 const RED_HOVER = "#CC3315";
@@ -183,6 +184,10 @@ function ProductCard({
   const canAdd = canAddToCart(product);
   const discount = discountPct(product);
 
+  return <SharedProductCard href={`/store/${product.id}`} name={product.name} imageUrl={img} price={Number(product.finalPrice)} originalPrice={product.originalPrice} pricePrefix={product.hasVariants ? "A partir de " : undefined} badges={product.madeToOrder ? ["Por encomenda"] : []} availability={product.madeToOrder ? (product.availabilityNote || "Por encomenda") : canAdd ? `${product.stockAvailable ?? product.stock ?? 0} em stock` : "Sem stock"} availabilityTone={canAdd ? "neutral" : "danger"} actionLabel={adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"} actionIcon={<CartPlusIcon />} actionDisabled={!canAdd || !authReady} actionPending={adding} onAction={(event) => onAddToCart(event, product.id)} />;
+
+  /* Legacy markup retained temporarily for safe comparison during this refactor. */
+  // eslint-disable-next-line no-unreachable
   return (
     <Link
       href={`/store/${product.id}`}
@@ -312,7 +317,7 @@ export default function StorePage() {
         setProducts(productPage.content);
         setTotalPages(Math.max(productPage.totalPages || 1, 1));
       } catch (err) {
-        setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Nao foi possivel carregar a loja." });
+        setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível carregar a loja." });
       } finally {
         setIsLoading(false);
       }
@@ -351,7 +356,7 @@ export default function StorePage() {
       });
       setFeedback({ type: "success", msg: "Produto adicionado ao carrinho." });
     } catch (err) {
-      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Nao foi possivel adicionar." });
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível adicionar." });
     } finally {
       setIsAddingId(null);
     }
@@ -422,7 +427,7 @@ export default function StorePage() {
         <div className="space-y-4">
           <ClientStateCard
             title="A carregar a loja"
-            message="Estamos a preparar categorias, produtos e precos desta pagina."
+            message="Estamos a preparar categorias, produtos e preços desta página."
           />
           <ClientProductGridSkeleton items={8} />
         </div>
@@ -430,7 +435,7 @@ export default function StorePage() {
         <div className="space-y-4">
           <ClientStateCard
             title="Nada encontrado"
-            message="Nao encontramos produtos para esta combinacao de categoria e pesquisa."
+            message="Não encontrámos produtos para esta combinação de categoria e pesquisa."
           />
           <div className="rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-20 text-center" style={{ borderColor: "#E9ECEF" }}>
             <PackageIcon />

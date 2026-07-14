@@ -1,11 +1,12 @@
 export function formatMoney(value?: number | null) {
   const amount = typeof value === "number" ? value : 0;
 
-  return new Intl.NumberFormat("pt-MZ", {
-    style: "currency",
-    currency: "MZN",
+  const formatted = new Intl.NumberFormat("pt-PT", {
+    minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+
+  return `${formatted.replace(/\u00A0/g, " ")} MT`;
 }
 
 export function formatDate(value?: string | null) {

@@ -12,6 +12,8 @@ import { normalizeClientError } from "@/lib/client-errors";
 import type { Category, Order, Product } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientShell } from "@/components/client-shell";
+import { SharedProductCard } from "@/components/products/shared-product-card";
+import { catalogImage, fetchCatalogProducts, fetchFeaturedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
 
 // Constants
 
@@ -22,8 +24,8 @@ const DARK = "#1A1410";
 const BLUE_DARK = "#1A2744";
 
 const ORDER_STEPS = [
-  "Criado", "Em analise", "Cotado", "Aprovado",
-  "Aguarda pagamento", "Pago", "Encomendado", "Em transito",
+  "Criado", "Em análise", "Cotado", "Aprovado",
+  "Aguarda pagamento", "Pago", "Encomendado", "Em trânsito",
   "Chegou", "Saiu para entrega", "Entregue",
 ];
 
@@ -218,7 +220,7 @@ function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
         </form>
 
         <p className="mt-5 text-center text-sm" style={{ color: "#6B7280" }}>
-          Ainda nao tens conta?{" "}
+          Ainda não tens conta?{" "}
           <Link href="/register" onClick={onClose} className="font-bold" style={{ color: RED }}>
             Regista-te gratis
           </Link>
@@ -397,12 +399,12 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
             ) : hasBanners ? (
               <>
                 <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
-                Plataforma lider de importacao em Mocambique
+                Plataforma líder de importação em Moçambique
               </>
             ) : (
               <>
                 <span className="h-2 w-2 rounded-full bg-white/60" />
-                Destaques indisponiveis
+                Destaques indisponíveis
               </>
             )}
           </div>
@@ -530,18 +532,18 @@ function HeroSection({ token, onLoginClick }: { token: string | null; onLoginCli
 
 function TrustStrip() {
   const items = [
-    { icon: <TruckIcon />, title: "Entrega em Mocambique", sub: "Maputo, Matola e mais" },
-    { icon: <ShieldIcon />, title: "Pagamento seguro", sub: "M-Pesa, e-Mola, transferencia" },
+    { icon: <TruckIcon />, title: "Entrega em Moçambique", sub: "Maputo, Matola e mais" },
+    { icon: <ShieldIcon />, title: "Pagamento seguro", sub: "M-Pesa, e-Mola, transferência" },
     { icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
-    ), title: "Suporte em Portugues", sub: "Equipa local disponivel" },
+    ), title: "Suporte em Português", sub: "Equipa local disponível" },
     { icon: (
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
       </svg>
-    ), title: "Alfandega incluida", sub: "Sem surpresas no desalfandegamento" },
+    ), title: "Alfândega incluída", sub: "Sem surpresas no desalfandegamento" },
   ];
 
   return (
@@ -579,13 +581,13 @@ function HowItWorks() {
     {
       n: "02",
       title: "Nos tratamos de tudo",
-      desc: "Compramos, importamos, tratamos da alfandega e da documentacao em teu nome.",
+      desc: "Compramos, importamos, tratamos da alfândega e da documentação em teu nome.",
       color: RED,
     },
     {
       n: "03",
       title: "Recebe em casa",
-      desc: "Entregamos na tua porta em Maputo, Matola e cidades principais de Mocambique.",
+      desc: "Entregamos na tua porta em Maputo, Matola e nas principais cidades de Moçambique.",
       color: "#16A34A",
     },
   ];
@@ -598,10 +600,10 @@ function HowItWorks() {
             Como funciona
           </p>
           <h2 className="text-2xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
-            Simples, rapido e seguro
+            Simples, rápido e seguro
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm leading-6" style={{ color: "#6B7280" }}>
-            Toda a complexidade da importacao fica connosco. Tu so precisas de escolher o que queres.
+            Toda a complexidade da importação fica connosco. Tu só precisas de escolher o que queres.
           </p>
         </div>
 
@@ -755,10 +757,10 @@ function ExternalOrderBanner() {
           Compra internacional
         </p>
         <h2 className="mb-4 text-2xl font-black sm:text-3xl" style={{ fontFamily: "'Sora',sans-serif" }}>
-          Compra no estrangeiro com apoio local em Mocambique
+          Compra no estrangeiro com apoio local em Moçambique
         </h2>
         <p className="mb-8 max-w-xl mx-auto text-sm leading-7 text-white/70">
-          Cola o link agora. Depois confirmamos quantidade, variante e contacto no fluxo oficial.
+          Cola o link agora. Depois, confirmamos a quantidade, a variante e o contacto no fluxo oficial.
         </p>
 
         {/* Store buttons */}
@@ -888,106 +890,7 @@ function ProductCard({ product, token, authReady, onLoginClick, onFeedback }: Pr
     }
   };
 
-  return (
-    <Link
-      href={`/store/${product.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-2xl border bg-white transition-all"
-      style={{ borderColor: "#E9ECEF", boxShadow: "0 1px 4px rgba(0,0,0,0.05)", textDecoration: "none" }}
-      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = `0 8px 28px ${RED}18`)}
-      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.05)")}
-    >
-      {/* Image */}
-      <div className="relative aspect-square overflow-hidden" style={{ background: "#F8F9FA" }}>
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
-            alt={product.name}
-            className="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <PackageIcon size={48} />
-          </div>
-        )}
-
-        {/* Badges */}
-        {discountPct > 0 && (
-          <span
-            className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-black text-white"
-            style={{ background: RED }}
-          >
-            -{discountPct}%
-          </span>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <h3 className="line-clamp-2 text-sm font-bold leading-snug" style={{ color: DARK }}>
-          {product.name}
-        </h3>
-
-        {product.availabilityNote && (
-          <p className="rounded-lg px-2 py-1 text-[11px]" style={{ background: RED_PALE, color: RED }}>
-            {product.availabilityNote}
-          </p>
-        )}
-
-        {/* Rating placeholder */}
-        {product.rating && (
-          <div className="flex items-center gap-1">
-            <div className="flex gap-0.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <StarIcon key={i} />
-              ))}
-            </div>
-            <span className="text-[10px] text-gray-400">({product.reviewCount ?? 0})</span>
-          </div>
-        )}
-
-        <div className="mt-auto flex items-end justify-between gap-1">
-          <div>
-            {hasDiscount && (
-              <p className="text-[11px] line-through" style={{ color: "#9CA3AF" }}>
-                {formatMoney(origPrice)}
-              </p>
-            )}
-            <p className="text-base font-black sm:text-lg" style={{ color: RED, fontFamily: "'Sora',sans-serif" }}>
-              {product.hasVariants ? `A partir de ${formatMoney(finalPrice)}` : formatMoney(finalPrice)}
-            </p>
-          </div>
-          <span className="text-[11px]" style={{ color: "#9CA3AF" }}>
-            {product.stock != null ? `${product.stock} un.` : ""}
-          </span>
-        </div>
-
-        <button
-          type="button"
-          onClick={(e) => void handleAdd(e)}
-          disabled={adding || !canAdd || !authReady}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition-all"
-          style={{
-            background: adding || !canAdd || !authReady ? "#9CA3AF" : RED,
-            cursor: adding || !canAdd || !authReady ? "not-allowed" : "pointer",
-          }}
-          onMouseEnter={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED_HOVER; }}
-          onMouseLeave={(e) => { if (!adding && canAdd && authReady) e.currentTarget.style.background = RED; }}
-        >
-          <CartIconSvg size={16} />
-          {adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"}
-        </button>
-        {cardFeedback ? (
-          <p className="rounded-xl px-3 py-2 text-xs font-semibold" style={{
-            background: cardFeedback.type === "success" ? "#F0FFF4" : "#FFF5F5",
-            color: cardFeedback.type === "success" ? "#166534" : "#B42318",
-          }}>
-            {cardFeedback.msg}
-          </p>
-        ) : null}
-      </div>
-    </Link>
-  );
+  return <SharedProductCard href={`/store/${product.id}`} name={product.name} imageUrl={img} price={finalPrice} originalPrice={hasDiscount ? origPrice : null} pricePrefix={product.hasVariants ? "A partir de " : undefined} availability={product.availabilityNote || (canAdd ? `${product.stockAvailable ?? product.stock ?? 0} em stock` : "Sem stock")} availabilityTone={canAdd ? "neutral" : "danger"} actionLabel={adding ? "A adicionar..." : !authReady ? "A preparar..." : canAdd ? "Carrinho" : "Sem stock"} actionIcon={<CartIconSvg size={16} />} actionDisabled={!canAdd || !authReady} actionPending={adding} onAction={(event) => void handleAdd(event)} feedback={cardFeedback ? <p className="rounded-xl px-3 py-2 text-xs font-semibold" style={{ background: cardFeedback.type === "success" ? "#F0FFF4" : "#FFF5F5", color: cardFeedback.type === "success" ? "#166534" : "#B42318" }}>{cardFeedback.msg}</p> : null} />;
 }
 
 // Products Section
@@ -1064,7 +967,7 @@ function ProductsSection({
         <div className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-[0.2em]" style={{ color: RED }}>
-              Catalogo
+              Catálogo
             </p>
             <h2 className="text-xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
               Mais vendidos e novidades
@@ -1129,7 +1032,7 @@ function ProductsSection({
           >
             <PackageIcon size={48} />
             <p className="mt-4 text-sm font-semibold" style={{ color: "#6B7280" }}>
-              Nao foi possivel carregar produtos.
+              Não foi possível carregar os produtos.
             </p>
             <p className="mt-1 text-xs" style={{ color: "#9CA3AF" }}>
               Estamos com dificuldade em ligar ao serviço. Tenta novamente dentro de instantes.
@@ -1192,6 +1095,92 @@ function ProductsSection({
 
 // Order Tracker
 
+function getHomeChoiceProducts(products: CatalogProduct[]) {
+  const uniqueProducts = Array.from(
+    new Map(products.map((product) => [product.id || product.slug, product])).values()
+  );
+
+  return uniqueProducts
+    .filter((product) => catalogImage(product) && Number(product.finalPrice) > 0)
+    .slice(0, 8);
+}
+
+function choiceBadge(product: CatalogProduct) {
+  if (product.newProduct) return "Novo";
+  if (product.bestSeller) return "Mais vendido";
+  if (product.recommended) return "Recomendado";
+  return null;
+}
+
+function CatalogHomeCard({ product }: { product: CatalogProduct }) {
+  const badge = choiceBadge(product);
+  return (
+    <SharedProductCard href={`/catalogo/${product.slug}`} name={product.name} imageUrl={catalogImage(product)} price={Number(product.finalPrice)} badges={["Por encomenda", ...(badge ? [badge] : [])]} availability={`Prazo estimado: ${product.estimatedDeadline || "sob confirmação"}`} actionLabel="Ver produto" />
+  );
+}
+
+function ShopeeChoicesSection({
+  products,
+  loading,
+  error,
+}: {
+  products: CatalogProduct[];
+  loading: boolean;
+  error: boolean;
+}) {
+  if (error) {
+    return null;
+  }
+
+  if (!loading && products.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="bg-[#FFFDFC] px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: RED }}>
+              ESCOLHAS DA SHOPEEMZ
+            </p>
+            <h2 className="mt-1 font-[family-name:var(--font-sora)] text-2xl font-black" style={{ color: DARK }}>
+              Produtos selecionados para encomenda
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Compra produtos escolhidos pela ShopeeMz com preço final em Meticais.
+            </p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-[18px] bg-[#FFF0EC]" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+            {products.slice(0, 8).map((product) => (
+              <CatalogHomeCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
+
+        {!loading && products.length > 0 && (
+          <div className="mt-8 text-center">
+            <Link
+              href="/catalogo"
+              className="inline-flex items-center gap-2 rounded-2xl border-2 px-6 py-3 text-sm font-bold transition-all hover:border-[#E8431A] hover:text-[#E8431A]"
+              style={{ borderColor: "#E9ECEF", color: "#374151" }}
+            >
+              Ver todas as Escolhas <ArrowRight />
+            </Link>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function OrderTracker({ order }: { order: Order }) {
   const currentStep = STATUS_STEP[order.status] ?? 0;
 
@@ -1204,7 +1193,7 @@ function OrderTracker({ order }: { order: Order }) {
               Rastreamento
             </p>
             <h2 className="text-xl font-black" style={{ fontFamily: "'Sora',sans-serif", color: DARK }}>
-              O Teu Ultimo Pedido
+              O teu último pedido
             </h2>
             <p className="mt-0.5 text-sm" style={{ color: "#9CA3AF" }}>
               Pedido {orderDisplayCode(order)} - {order.sourceStore ?? order.type}
@@ -1282,6 +1271,9 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
+  const [choiceProducts, setChoiceProducts] = useState<CatalogProduct[]>([]);
+  const [loadingChoices, setLoadingChoices] = useState(true);
+  const [choicesError, setChoicesError] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [productsError, setProductsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1318,6 +1310,38 @@ export default function Home() {
   );
 
   useEffect(() => { void loadPublicData(); }, [loadPublicData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadChoices() {
+      setLoadingChoices(true);
+      setChoicesError(false);
+      try {
+        const featured = await fetchFeaturedCatalogProducts(8);
+        let choices = getHomeChoiceProducts(featured.content || []);
+
+        if (!choices.length) {
+          const params = new URLSearchParams({ page: "0", size: "24" });
+          const fallback = await fetchCatalogProducts(params);
+          choices = getHomeChoiceProducts((fallback.content || []).filter((product) => product.recommended));
+        }
+
+        if (!cancelled) setChoiceProducts(choices);
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[Home] Catalog choices failed", error);
+        }
+        if (!cancelled) {
+          setChoiceProducts([]);
+          setChoicesError(true);
+        }
+      } finally {
+        if (!cancelled) setLoadingChoices(false);
+      }
+    }
+    void loadChoices();
+    return () => { cancelled = true; };
+  }, []);
 
   // Load and auto-refresh latest order for the tracker
   useEffect(() => {
@@ -1370,6 +1394,8 @@ export default function Home() {
         onSearchSubmit={() => void handleSearchSubmit()}
         searchActive={searchActive}
       />
+
+      <ShopeeChoicesSection products={choiceProducts} loading={loadingChoices} error={choicesError} />
 
       {latestOrder && <OrderTracker order={latestOrder} />}
     </ClientShell>

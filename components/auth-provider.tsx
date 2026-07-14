@@ -83,6 +83,8 @@ function isAuthRequiredPath(pathname: string | null) {
     pathname === "/external-order" ||
     pathname === "/store" ||
     pathname.startsWith("/store/") ||
+    pathname === "/catalogo" ||
+    pathname.startsWith("/catalogo/") ||
     pathname === "/cart" ||
     pathname.startsWith("/cart/") ||
     pathname === "/delivery-address" ||
