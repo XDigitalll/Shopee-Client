@@ -529,13 +529,14 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
         setFeedback(null);
         catalogOrderKeyRef.current ||= crypto.randomUUID();
         try {
-          const order = await apiFetch<{ id: number }>(`catalog/products/${product.slug}/order`, {
+          const order = await apiFetch<{ id: number; paymentUrl?: string }>(`catalog/products/${product.slug}/order`, {
             method: "POST",
             token,
             headers: { "Idempotency-Key": catalogOrderKeyRef.current },
             body: JSON.stringify({ quantity: qty, selectedVariants: selectedAttrValues }),
           });
-          router.push(`/orders/${order.id}/payment`);
+          catalogOrderKeyRef.current = null;
+          router.push(order.paymentUrl || `/orders/${order.id}/payment`);
         } catch (err) {
           setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível preparar a encomenda." });
           setBusyAction(null);
