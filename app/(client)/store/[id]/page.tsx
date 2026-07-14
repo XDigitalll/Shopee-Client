@@ -5,6 +5,7 @@ import Image, { type ImageLoaderProps } from "next/image";
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
+import { fetchCatalogProduct, fetchRelatedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
 import { formatMoney } from "@/lib/format";
 import type { Product, ProductReview, ProductReviewSummary, SpringPage } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
@@ -298,10 +299,27 @@ function StarRow({ rating }: { rating: number }) {
 }
 
 /* ─── Page ───────────────────────────────────────────────── */
-export default function ProductDetailPage() {
-  const params = useParams<{ id: string }>();
+function catalogToStoreProduct(item: CatalogProduct): Product {
+  const definitions = (item.variants || []).filter((variant) => variant.values?.length);
+  const combinations = definitions.reduce<Record<string, string>[]>((rows, definition) => rows.flatMap((row) => definition.values.map((value) => ({ ...row, [definition.key]: value }))), [{}]);
+  return {
+    id: item.id, name: item.name, slug: item.slug, description: item.description || undefined,
+    shortDescription: item.shortDescription || undefined, finalPrice: Number(item.finalPrice), available: true,
+    madeToOrder: true, source: "EXTERNAL", availabilityNote: item.estimatedDeadline ? `Prazo estimado: ${item.estimatedDeadline}` : "Disponibilidade sob confirmação",
+    category: item.category ? { id: item.category.id, name: item.category.name, slug: item.category.slug } : undefined,
+    gallery: (item.images || []).map((image) => ({ id: image.id, originalUrl: image.originalUrl, thumbnailUrl: image.thumbnailUrl, displayOrder: image.displayOrder, primaryImage: image.primaryImage, altText: image.altText || undefined })),
+    primaryImageUrl: item.images?.find((image) => image.primaryImage)?.originalUrl || item.images?.[0]?.originalUrl,
+    specifications: item.specifications, hasVariants: definitions.length > 0,
+    variantAttributeKeys: definitions.map((definition) => definition.key),
+    variants: definitions.length ? combinations.map((attributes, index) => ({ id: index + 1, active: true, inStock: true, attributes, finalPrice: Number(item.finalPrice), effectivePrice: Number(item.finalPrice) })) : undefined,
+  };
+}
+
+export default function ProductDetailPage({ source = "store" }: { source?: "store" | "catalog" }) {
+  const params = useParams<{ id?: string; slug?: string }>();
   const router = useRouter();
   const { token, isReady } = useAuth();
+  const routeKey = source === "catalog" ? String(params.slug || "") : String(params.id || "");
   const productId = Number(params.id);
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -323,14 +341,16 @@ export default function ProductDetailPage() {
   const [imgFading, setImgFading] = useState(false);
   const imageSwipeRef = useRef<{ x: number; y: number } | null>(null);
   const suppressImageClickRef = useRef(false);
+  const catalogOrderKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const loadPage = async () => {
-      if (!productId) return;
+      if (!routeKey) return;
       setLoading(true);
       setPageError(null);
       try {
-        const data = await apiFetch<Product>(`products/${productId}`, token ? { token } : {});
+        const catalogItem = source === "catalog" ? await fetchCatalogProduct(routeKey) : null;
+        const data = catalogItem ? catalogToStoreProduct(catalogItem) : await apiFetch<Product>(`products/${productId}`, token ? { token } : {});
         setProduct(data);
         const imgs = resolveImages(data);
         setActiveImage(imgs[0] || "");
@@ -350,10 +370,10 @@ export default function ProductDetailPage() {
           setSelectedAttrValues(defaults);
         }
 
-        const [revPayload] = await Promise.allSettled([
+        const [revPayload] = source === "catalog" ? [] : await Promise.allSettled([
           apiFetch<ProductReviewSummary>(`products/${productId}/reviews`, token ? { token } : {}),
         ]);
-        if (revPayload.status === "fulfilled") {
+        if (revPayload?.status === "fulfilled") {
           setReviews(Array.isArray(revPayload.value.reviews) ? revPayload.value.reviews : []);
           setReviewSummary({
             averageRating: Number(revPayload.value.averageRating || data.rating || 0),
@@ -361,7 +381,9 @@ export default function ProductDetailPage() {
           });
         }
 
-        if (data.category?.id) {
+        if (source === "catalog" && catalogItem) {
+          fetchRelatedCatalogProducts(catalogItem.slug, 6).then((page) => setRelated((page.content || []).map(catalogToStoreProduct))).catch(() => undefined);
+        } else if (data.category?.id) {
           apiFetch<SpringPage<Product>>(`products?page=0&size=12`, token ? { token } : {})
             .then((p) => setRelated((p.content || []).filter((i) => i.id !== data.id && i.category?.id === data.category?.id).slice(0, 6)))
             .catch(() => undefined);
@@ -373,7 +395,7 @@ export default function ProductDetailPage() {
       }
     };
     void loadPage();
-  }, [productId, token]);
+  }, [productId, routeKey, source, token]);
 
   const selectedVariant = useMemo(() => {
     const variants = (product?.variants || []).filter((v) => v.active !== false);
@@ -497,9 +519,32 @@ export default function ProductDetailPage() {
 
   const addToCart = async (targetId: number, mode: "add" | "buy", variantVal?: string | number, qty = quantity) => {
     if (isExternalProduct) {
+      if (source === "catalog" && product?.slug) {
+        if (!isReady) return;
+        if (!token) {
+          router.push(`/login?redirect=${encodeURIComponent(`/catalogo/${product.slug}`)}`);
+          return;
+        }
+        setBusyAction("buy");
+        setFeedback(null);
+        catalogOrderKeyRef.current ||= crypto.randomUUID();
+        try {
+          const order = await apiFetch<{ id: number }>(`catalog/products/${product.slug}/order`, {
+            method: "POST",
+            token,
+            headers: { "Idempotency-Key": catalogOrderKeyRef.current },
+            body: JSON.stringify({ quantity: qty, selectedVariants: selectedAttrValues }),
+          });
+          router.push(`/orders/${order.id}/payment`);
+        } catch (err) {
+          setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível preparar a encomenda." });
+          setBusyAction(null);
+        }
+        return;
+      }
       const input = product?.externalLink || product?.name || "";
       const query = input ? `?input=${encodeURIComponent(input)}` : "";
-      setFeedback({ type: "info", msg: "Este produto é pedido por cotação. Usa Comprar do estrangeiro para enviares o link ou descrição." });
+      setFeedback({ type: "info", msg: "Este produto requer um pedido assistido. Confirma os dados para continuar." });
       router.push(`/orders/external/new${query}`);
       return;
     }
@@ -613,7 +658,7 @@ export default function ProductDetailPage() {
         <nav className="flex items-center gap-1.5 text-sm" style={{ color: "#9CA3AF" }}>
           <Link href="/" className="transition hover:text-gray-700">Início</Link>
           <ChevronRightIcon />
-          <Link href="/store" className="transition hover:text-gray-700">Loja</Link>
+          <Link href={source === "catalog" ? "/catalogo" : "/store"} className="transition hover:text-gray-700">{source === "catalog" ? "Escolhas da ShopeeMz" : "Loja"}</Link>
           {product.category?.name && (
             <>
               <ChevronRightIcon />
@@ -967,12 +1012,12 @@ export default function ProductDetailPage() {
             </div>
 
             {/* CTAs */}
-            <div className="hidden gap-3 lg:grid lg:grid-cols-2">
-              <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF", background: canUseCta ? "white" : "#F9FAFB" }}>
-                {isExternalProduct ? "Pedir cotação" : busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
-              </button>
+            <div className={`hidden gap-3 lg:grid ${isExternalProduct ? "lg:grid-cols-1" : "lg:grid-cols-2"}`}>
+              {!isExternalProduct && <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl border px-5 py-3.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF", background: canUseCta ? "white" : "#F9FAFB" }}>
+                {busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
+              </button>}
               <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
-                {isExternalProduct ? "Comprar do estrangeiro" : busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
+                {isExternalProduct ? busyAction === "buy" ? "A preparar encomenda..." : "Encomendar agora" : busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
               </button>
             </div>
 
@@ -1181,7 +1226,7 @@ export default function ProductDetailPage() {
                 <p className="text-xs font-bold uppercase tracking-widest" style={{ color: RED }}>Também pode gostar</p>
                 <h2 className="mt-1 text-xl font-black sm:text-2xl" style={{ color: "#111827", fontFamily: "'Sora', sans-serif" }}>Produtos relacionados</h2>
               </div>
-              <Link href="/store" className="rounded-full border px-4 py-2 text-sm font-bold transition hover:bg-gray-50" style={{ borderColor: "#E5E7EB", color: "#374151" }}>Ver todos</Link>
+              <Link href={source === "catalog" ? "/catalogo" : "/store"} className="rounded-full border px-4 py-2 text-sm font-bold transition hover:bg-gray-50" style={{ borderColor: "#E5E7EB", color: "#374151" }}>Ver todos</Link>
             </div>
             <div className="flex gap-4 overflow-x-auto pb-2 sm:grid sm:overflow-visible sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 [&::-webkit-scrollbar]:hidden">
               {related.map((item) => {
@@ -1189,9 +1234,10 @@ export default function ProductDetailPage() {
                 const itemPrice = Number(item.finalPrice || 0);
                 const itemOriginal = Number(item.originalPrice || 0);
                 const itemDiscount = itemOriginal > itemPrice && itemPrice > 0 ? Math.round((1 - itemPrice / itemOriginal) * 100) : 0;
+                const itemHref = source === "catalog" ? `/catalogo/${item.slug}` : `/store/${item.id}`;
                 return (
                   <article key={item.id} className="flex w-44 flex-none flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md sm:w-auto" style={{ borderColor: "#F0F0F0" }}>
-                    <Link href={`/store/${item.id}`} className="relative block bg-[#FAFAFA]">
+                    <Link href={itemHref} className="relative block bg-[#FAFAFA]">
                       {itemDiscount > 0 && <span className="absolute left-2 top-2 z-10 rounded-full px-2 py-0.5 text-[10px] font-black text-white" style={{ background: RED }}>-{itemDiscount}%</span>}
                       <div className="relative flex h-36 items-center justify-center p-3">
                         {img
@@ -1208,13 +1254,13 @@ export default function ProductDetailPage() {
                       </div>
                     </Link>
                     <div className="flex flex-1 flex-col gap-2 p-3">
-                      <Link href={`/store/${item.id}`} className="text-xs font-semibold leading-snug line-clamp-2 hover:underline" style={{ color: "#111827" }}>{item.name}</Link>
+                      <Link href={itemHref} className="text-xs font-semibold leading-snug line-clamp-2 hover:underline" style={{ color: "#111827" }}>{item.name}</Link>
                       <div className="mt-auto">
                         <p className="text-sm font-black" style={{ color: RED }}>{formatMoney(itemPrice)}</p>
                         {itemOriginal > itemPrice && <p className="text-xs line-through" style={{ color: "#9CA3AF" }}>{formatMoney(itemOriginal)}</p>}
                       </div>
-                      <button type="button" onClick={() => void addToCart(item.id, "add", undefined, 1)} disabled={!isReady || busyAction !== null} className="w-full rounded-xl py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-60" style={{ background: isReady ? RED : "#9CA3AF" }}>
-                        {!isReady ? "A preparar..." : "Adicionar"}
+                      <button type="button" onClick={() => source === "catalog" ? router.push(itemHref) : void addToCart(item.id, "add", undefined, 1)} disabled={source !== "catalog" && (!isReady || busyAction !== null)} className="w-full rounded-xl py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-60" style={{ background: source === "catalog" || isReady ? RED : "#9CA3AF" }}>
+                        {source === "catalog" ? "Ver produto" : !isReady ? "A preparar..." : "Adicionar"}
                       </button>
                     </div>
                   </article>
@@ -1232,11 +1278,9 @@ export default function ProductDetailPage() {
             <p className="line-clamp-1 text-xs font-semibold" style={{ color: "#6B7280" }}>{product.name}</p>
             <p className="text-base font-black" style={{ color: RED }}>{formatMoney(price)}</p>
           </div>
-          <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF" }}>
-            {isExternalProduct ? "Cotação" : busyAction === "add" || !isReady ? "..." : "Carrinho"}
-          </button>
+          {!isExternalProduct && <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF" }}>{busyAction === "add" || !isReady ? "..." : "Carrinho"}</button>}
           <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
-            {isExternalProduct ? "Estrangeiro" : busyAction === "buy" || !isReady ? "..." : "Comprar"}
+            {isExternalProduct ? busyAction === "buy" ? "A preparar encomenda..." : "Encomendar agora" : busyAction === "buy" || !isReady ? "..." : "Comprar"}
           </button>
         </div>
       </div>

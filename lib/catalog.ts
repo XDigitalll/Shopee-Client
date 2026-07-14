@@ -6,6 +6,7 @@ export type CatalogTaxonomy = {
   slug: string;
   description?: string | null;
   active: boolean;
+  specificationTemplate?: string | null;
 };
 
 export type CatalogImage = {
@@ -35,8 +36,16 @@ export type CatalogProduct = {
   seoTitle?: string | null;
   seoDescription?: string | null;
   specifications?: Record<string, string>;
+  variants?: CatalogProductVariantDefinition[];
   images: CatalogImage[];
   badges: string[];
+};
+
+export type CatalogProductVariantDefinition = {
+  key: string;
+  label: string;
+  required: boolean;
+  values: string[];
 };
 
 export type CatalogPage<T> = {
@@ -51,11 +60,12 @@ export function catalogImage(product: CatalogProduct) {
   return primary?.thumbnailUrl || primary?.originalUrl || "";
 }
 
-export function catalogOrderHref(product: CatalogProduct) {
+export function catalogOrderHref(product: CatalogProduct, selectedVariants: Record<string, string> = {}, quantity = 1) {
   const params = new URLSearchParams({
     input: product.name,
     store: "OTHER",
     catalogSlug: product.slug,
+    quantity: String(Math.max(1, Math.min(20, Math.floor(Number(quantity) || 1)))),
   });
   const details = [
     product.brand?.name ? `Marca: ${product.brand.name}` : null,
@@ -63,6 +73,10 @@ export function catalogOrderHref(product: CatalogProduct) {
     product.estimatedDeadline ? `Prazo estimado: ${product.estimatedDeadline}` : null,
   ].filter(Boolean).join(" | ");
   if (details) params.set("variant", details);
+  const selectedVariantEntries = Object.entries(selectedVariants).filter(([, value]) => value.trim());
+  if (selectedVariantEntries.length) {
+    params.set("selectedVariants", JSON.stringify(Object.fromEntries(selectedVariantEntries)));
+  }
   return `/orders/external/new?${params.toString()}`;
 }
 

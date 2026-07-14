@@ -16,7 +16,7 @@ const RED = "#E8431A";
 const RED_DARK = "#CC3315";
 
 const navItems = [
-  { href: "/", label: "Inicio" },
+  { href: "/", label: "Início" },
   { href: "/orders/external/new", label: "Comprar por Link" },
   { href: "/catalogo", label: "Escolhas da ShopeeMz" },
   { href: "/store", label: "Produtos Locais" },
@@ -203,7 +203,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
     if (pathname?.startsWith("/store")) return "Produtos Locais";
     if (pathname?.startsWith("/profile")) return "Meu perfil";
     if (pathname?.startsWith("/settings")) return "Definicoes";
-    return "Pagina inicial";
+    return "Página inicial";
   }, [pathname]);
 
   if (needsAuth && (!isReady || (!token && !isLoggingOut))) {
@@ -279,9 +279,9 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                     href="/profile?focus=verification"
                     className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition hover:opacity-90"
                     style={{ background: "#FFF7E8", color: "#7C2D12" }}
-                    title="Email nao verificado"
+                    title="Email não verificado"
                   >
-                    Email nao verificado
+                    Email não verificado
                   </Link>
                 ) : null}
                 <div className="flex items-center gap-2 rounded-full bg-white/14 px-2 py-1 text-white">
@@ -342,7 +342,7 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
                   style={{ background: "#FFF7E8", color: "#7C2D12" }}
                 >
                   <span className="mr-1.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-black" style={{ background: "#FED7AA", color: "#7C2D12" }}>!</span>
-                  Email nao verificado
+                  Email não verificado
                 </Link>
               ) : null}
               {hasProfileWarning ? (

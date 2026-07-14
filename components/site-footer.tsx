@@ -5,7 +5,7 @@ const RED = "#E8431A";
 const DARK = "#1A1410";
 
 const platformLinks = [
-  { href: "/", label: "Pagina inicial" },
+  { href: "/", label: "Página inicial" },
   { href: "/store", label: "Loja" },
   { href: "/cart", label: "Carrinho" },
   { href: "/orders", label: "Os meus pedidos" },
@@ -14,7 +14,7 @@ const platformLinks = [
 
 const supportLinks = [
   { href: "/how-it-works", label: "Como funciona" },
-  { href: "/privacy", label: "Politica de Privacidade" },
+  { href: "/privacy", label: "Política de Privacidade" },
   { href: "/terms", label: "Termos" },
   { href: "/refunds", label: "Reembolsos" },
   { href: "/delivery-policy", label: "Entrega" },
@@ -31,7 +31,7 @@ export function SiteFooter() {
               ShopeeMz
             </Link>
             <p className="text-xs leading-6">
-              Plataforma de importacao intermediaria para o mercado mocambicano, ligada a todas as areas do cliente.
+              Plataforma de importação intermediária para o mercado moçambicano, ligada a todas as áreas do cliente.
             </p>
           </div>
 
@@ -64,7 +64,7 @@ export function SiteFooter() {
           <div>
             <p className="mb-3 text-sm font-bold text-white">Contacto</p>
             <ul className="space-y-2 text-xs">
-              <li>Maputo, Mocambique</li>
+              <li>Maputo, Moçambique</li>
               <li>
                 <a href={SUPPORT_WHATSAPP_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-white">
                   WhatsApp: {SUPPORT_WHATSAPP_LABEL}

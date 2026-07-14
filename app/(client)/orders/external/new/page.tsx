@@ -182,6 +182,7 @@ export default function NewExternalOrderPage() {
 
   const [productLink, setProductLink] = useState("");
   const [catalogSlug, setCatalogSlug] = useState("");
+  const [selectedCatalogVariants, setSelectedCatalogVariants] = useState<Record<string, string>>({});
   const [selectedStore, setSelectedStore] = useState("SHEIN");
   const [variant, setVariant] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -212,8 +213,25 @@ export default function NewExternalOrderPage() {
     const params = new URLSearchParams(window.location.search);
     // "input" is the current param; "link" kept for backward compat
     const initialInput = params.get("input")?.trim() || params.get("link")?.trim();
+    const initialQuantity = Number(params.get("quantity") || 1);
     setCatalogSlug(params.get("catalogSlug")?.trim() || "");
     setVariant(params.get("variant")?.trim() || "");
+    if (Number.isFinite(initialQuantity) && initialQuantity >= 1) {
+      setQuantity(Math.min(20, Math.floor(initialQuantity)));
+    }
+    const selectedVariantsParam = params.get("selectedVariants")?.trim();
+    if (selectedVariantsParam) {
+      try {
+        const parsedVariants = JSON.parse(selectedVariantsParam) as Record<string, unknown>;
+        setSelectedCatalogVariants(Object.fromEntries(
+          Object.entries(parsedVariants)
+            .filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0)
+            .map(([key, value]) => [key, value.trim()])
+        ));
+      } catch {
+        setSelectedCatalogVariants({});
+      }
+    }
     setSelectedStore(normalizeStore(params.get("store")));
     if (initialInput) {
       setProductLink(initialInput);
@@ -534,6 +552,7 @@ export default function NewExternalOrderPage() {
               deliveryMethod: "DELIVERY",
               communicationChannel: "WHATSAPP",
               communicationPhone: cleanCommPhone || cleanPhone,
+              selectedVariants: selectedCatalogVariants,
               customerNotes: cleanVariant,
             }),
             ...(token ? { token } : {}),
@@ -694,7 +713,7 @@ export default function NewExternalOrderPage() {
                   <ol className="mt-4 space-y-3 text-sm font-bold" style={{ color: TEXT }}>
                     <li className="flex gap-3">
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white" style={{ background: RED }}>1</span>
-                      <span>Clica em "Entrar agora"</span>
+                      <span>Clica em &quot;Entrar agora&quot;</span>
                     </li>
                     <li className="flex gap-3">
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white" style={{ background: RED }}>2</span>

@@ -36,7 +36,7 @@ export function CatalogFilters({
       <button className="rounded-2xl bg-[#E8431A] px-5 py-3 text-sm font-black text-white" type="submit">Filtrar</button>
       <div className="flex flex-wrap gap-3 md:col-span-4">
         {[
-          ["promotion", "Promocao"],
+          ["promotion", "Promoção"],
           ["bestSeller", "Mais vendidos"],
           ["newProduct", "Novos"],
         ].map(([key, label]) => (
