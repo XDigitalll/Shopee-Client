@@ -1261,7 +1261,7 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {detailsOpen && isExternal && order.purchaseConfirmedAt && !order.purchaseProofUrl ? (
+        {detailsOpen && isExternal && order.status === "PURCHASED" && order.purchaseConfirmedAt && !order.purchaseProofUrl ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
             <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#166534" }}>Compra confirmada</p>
             <h3 className="mt-1 text-base font-black" style={{ color: "#14532D", fontFamily: "'Sora', sans-serif" }}>
@@ -1277,7 +1277,7 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {detailsOpen && isExternal && order.purchaseProofUrl ? (
+        {detailsOpen && isExternal && order.status === "PURCHASED" && order.purchaseConfirmedAt && order.purchaseProofUrl ? (
           <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#F1FBF4", borderColor: "#B7DFC4" }}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1303,6 +1303,18 @@ export default function OrdersPage() {
                 Ver comprovativo
               </a>
             </div>
+          </div>
+        ) : null}
+
+        {detailsOpen && isExternal && order.status === "TO_PURCHASE" && order.purchaseConfirmationRevertedAt ? (
+          <div className="mt-5 rounded-[24px] border px-4 py-4" style={{ background: "#FFF7ED", borderColor: "#FDBA74" }}>
+            <p className="text-xs font-black uppercase tracking-[0.16em]" style={{ color: "#C2410C" }}>Compra em processamento</p>
+            <h3 className="mt-1 text-base font-black" style={{ color: "#9A3412", fontFamily: "'Sora', sans-serif" }}>
+              A compra foi colocada novamente em espera.
+            </h3>
+            <p className="mt-1 text-sm" style={{ color: "#9A3412" }}>
+              A nossa equipa aguarda a confirmação do fornecedor antes de concluir a compra.
+            </p>
           </div>
         ) : null}
 
