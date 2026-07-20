@@ -36,6 +36,7 @@ export type CatalogProduct = {
   quoteMessage?: string | null;
   quoteResponseDeadline?: string | null;
   estimatedDeadline?: string | null;
+  estimatedDeliveryTime?: string | null;
   featured: boolean;
   promotionActive: boolean;
   newProduct: boolean;
@@ -87,6 +88,10 @@ export function catalogImage(product: CatalogProduct) {
   return primary?.thumbnailUrl || primary?.originalUrl || "";
 }
 
+export function catalogEstimatedDeliveryTime(product: CatalogProduct) {
+  return product.estimatedDeliveryTime || product.estimatedDeadline || "Sob confirmação";
+}
+
 export function catalogOrderHref(product: CatalogProduct, selectedVariants: Record<string, string> = {}, quantity = 1) {
   const params = new URLSearchParams({
     input: product.name,
@@ -97,7 +102,7 @@ export function catalogOrderHref(product: CatalogProduct, selectedVariants: Reco
   const details = [
     product.brand?.name ? `Marca: ${product.brand.name}` : null,
     product.category?.name ? `Categoria: ${product.category.name}` : null,
-    product.estimatedDeadline ? `Prazo estimado: ${product.estimatedDeadline}` : null,
+    `Prazo estimado: ${catalogEstimatedDeliveryTime(product)}`,
   ].filter(Boolean).join(" | ");
   if (details) params.set("variant", details);
   const selectedVariantEntries = Object.entries(selectedVariants).filter(([, value]) => value.trim());

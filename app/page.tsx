@@ -13,7 +13,7 @@ import type { Category, Order, Product } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
 import { ClientShell } from "@/components/client-shell";
 import { SharedProductCard } from "@/components/products/shared-product-card";
-import { catalogImage, fetchCatalogProducts, fetchFeaturedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
+import { catalogEstimatedDeliveryTime, catalogImage, fetchCatalogProducts, fetchFeaturedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
 
 // Constants
 
@@ -1115,7 +1115,7 @@ function choiceBadge(product: CatalogProduct) {
 function CatalogHomeCard({ product }: { product: CatalogProduct }) {
   const badge = choiceBadge(product);
   return (
-    <SharedProductCard href={`/catalogo/${product.slug}`} name={product.name} imageUrl={catalogImage(product)} price={Number(product.finalPrice)} badges={["Por encomenda", ...(badge ? [badge] : [])]} availability={`Prazo estimado: ${product.estimatedDeadline || "sob confirmação"}`} actionLabel="Ver produto" />
+    <SharedProductCard href={`/catalogo/${product.slug}`} name={product.name} imageUrl={catalogImage(product)} price={Number(product.finalPrice)} badges={["Por encomenda", ...(badge ? [badge] : [])]} availability={`Prazo estimado: ${catalogEstimatedDeliveryTime(product)}`} actionLabel="Ver produto" />
   );
 }
 

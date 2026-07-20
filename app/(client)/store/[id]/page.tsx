@@ -5,7 +5,7 @@ import Image, { type ImageLoaderProps } from "next/image";
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
-import { fetchCatalogProduct, fetchRelatedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
+import { catalogEstimatedDeliveryTime, fetchCatalogProduct, fetchRelatedCatalogProducts, type CatalogProduct } from "@/lib/catalog";
 import { formatMoney } from "@/lib/format";
 import type { Product, ProductReview, ProductReviewSummary, SpringPage } from "@/lib/types";
 import { useAuth } from "@/components/auth-provider";
@@ -310,7 +310,7 @@ function catalogToStoreProduct(item: CatalogProduct): Product {
     shortDescription: item.shortDescription || undefined, finalPrice: Number(item.finalPrice || 0), available: true,
     pricingMode: item.pricingMode || "FIXED_PRICE", quoteMessage: item.quoteMessage || undefined, quoteResponseDeadline: item.quoteResponseDeadline || undefined,
     externalLink: item.supplierLink || undefined,
-    madeToOrder: true, source: "EXTERNAL", availabilityNote: item.estimatedDeadline ? `Prazo estimado: ${item.estimatedDeadline}` : "Disponibilidade sob confirmação",
+    madeToOrder: true, source: "EXTERNAL", availabilityNote: `Prazo estimado: ${catalogEstimatedDeliveryTime(item)}`,
     category: item.category ? { id: item.category.parentId || item.category.id, name: item.category.parentName || item.category.name, slug: item.category.parentSlug || item.category.slug } : undefined,
     subCategory: item.category?.parentId ? item.category.name : undefined,
     gallery: (item.images || []).map((image) => ({ id: image.id, originalUrl: image.originalUrl, thumbnailUrl: image.thumbnailUrl, displayOrder: image.displayOrder, primaryImage: image.primaryImage, altText: image.altText || undefined })),
