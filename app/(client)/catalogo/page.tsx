@@ -10,6 +10,8 @@ import {
   fetchCatalogBrands,
   fetchCatalogCategories,
   fetchCatalogProducts,
+  fetchPerfumePromotions,
+  type CatalogPerfumePromotion,
   type CatalogProduct,
   type CatalogTaxonomy,
 } from "@/lib/catalog";
@@ -17,6 +19,7 @@ import {
 const initialFilters: CatalogFilterState = {
   search: "",
   category: "",
+  subcategory: "",
   brand: "",
   promotion: false,
   bestSeller: false,
@@ -28,6 +31,7 @@ export default function CatalogPage() {
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const [categories, setCategories] = useState<CatalogTaxonomy[]>([]);
   const [brands, setBrands] = useState<CatalogTaxonomy[]>([]);
+  const [perfumePromotions, setPerfumePromotions] = useState<CatalogPerfumePromotion[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -37,7 +41,7 @@ export default function CatalogPage() {
   const buildParams = useCallback((nextPage: number) => {
     const params = new URLSearchParams({ page: String(nextPage), size: "16" });
     if (filters.search.trim()) params.set("search", filters.search.trim());
-    if (filters.category) params.set("category", filters.category);
+    if (filters.subcategory || filters.category) params.set("category", filters.subcategory || filters.category);
     if (filters.brand) params.set("brand", filters.brand);
     if (filters.promotion) params.set("promotion", "true");
     if (filters.bestSeller) params.set("bestSeller", "true");
@@ -72,6 +76,7 @@ export default function CatalogPage() {
     void Promise.all([
       fetchCatalogCategories().then(setCategories).catch(() => setCategories([])),
       fetchCatalogBrands().then(setBrands).catch(() => setBrands([])),
+      fetchPerfumePromotions().then(setPerfumePromotions).catch(() => setPerfumePromotions([])),
     ]);
   }, []);
 
@@ -94,6 +99,15 @@ export default function CatalogPage() {
           Produtos escolhidos pela ShopeeMz, com preço final em Meticais. Seleciona as opções, encomenda e acompanha tudo pela tua conta.
         </p>
       </section>
+
+      {perfumePromotions.length > 0 ? <section className="space-y-4">
+        <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#E8431A]">Promoções especiais</p><h2 className="mt-1 text-2xl font-black text-[#1A1410]">Escolhe os teus perfumes</h2></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{perfumePromotions.map((promotion) => <Link key={promotion.id} href={`/catalogo/promocoes/${promotion.slug}`} className="rounded-2xl border border-[#F2D4CC] bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+          <p className="text-xs font-black uppercase tracking-wider text-[#E8431A]">{promotion.fixedVolume} · escolhe {promotion.choiceQuantity}</p>
+          <h3 className="mt-2 text-lg font-black text-[#1A1410]">{promotion.name}</h3>
+          <p className="mt-3 text-xl font-black text-[#E8431A]">{new Intl.NumberFormat("pt-MZ", { style: "currency", currency: "MZN" }).format(promotion.bundlePrice)}</p>
+        </Link>)}</div>
+      </section> : null}
 
       <CatalogFilters filters={filters} categories={categories} brands={brands} onChange={setFilters} onSubmit={() => void loadProducts(0, false)} />
 

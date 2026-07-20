@@ -17,6 +17,9 @@ export type Product = {
   slug?: string;
   originalPrice?: number;
   finalPrice?: number;
+  pricingMode?: "FIXED_PRICE" | "QUOTE_REQUIRED";
+  quoteMessage?: string;
+  quoteResponseDeadline?: string;
   rating?: number;
   reviewCount?: number;
   category?: Category;

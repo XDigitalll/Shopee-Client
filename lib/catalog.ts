@@ -5,6 +5,9 @@ export type CatalogTaxonomy = {
   name: string;
   slug: string;
   description?: string | null;
+  parentId?: number | null;
+  parentName?: string | null;
+  parentSlug?: string | null;
   active: boolean;
   specificationTemplate?: string | null;
 };
@@ -28,7 +31,10 @@ export type CatalogProduct = {
   brand?: CatalogTaxonomy | null;
   supplierLink?: string | null;
   supplierLinkVisibleToCustomer?: boolean;
-  finalPrice: number;
+  finalPrice?: number | null;
+  pricingMode?: "FIXED_PRICE" | "QUOTE_REQUIRED" | null;
+  quoteMessage?: string | null;
+  quoteResponseDeadline?: string | null;
   estimatedDeadline?: string | null;
   featured: boolean;
   promotionActive: boolean;
@@ -48,6 +54,7 @@ export type CatalogProductVariantDefinition = {
   label: string;
   required: boolean;
   values: string[];
+  options?: Array<{ value: string; price?: number | null; imageUrl?: string | null; available?: boolean | null; stock?: number | null }>;
 };
 
 export type CatalogPage<T> = {
@@ -55,6 +62,24 @@ export type CatalogPage<T> = {
   number?: number;
   totalPages: number;
   totalElements: number;
+};
+
+export type CatalogPerfumePromotion = {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+  promotionType: "BUNDLE_PICK" | string;
+  choiceQuantity: number;
+  bundlePrice: number;
+  fixedVolume: string;
+  allowRepeats: boolean;
+  maxPerCustomer?: number | null;
+  participants: Array<{ productId: number; volume: string }>;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  imageUrl?: string | null;
+  active: boolean;
 };
 
 export function catalogImage(product: CatalogProduct) {
@@ -104,4 +129,12 @@ export function fetchCatalogCategories() {
 
 export function fetchCatalogBrands() {
   return apiFetch<CatalogTaxonomy[]>("catalog/brands");
+}
+
+export function fetchPerfumePromotions() {
+  return apiFetch<CatalogPerfumePromotion[]>("catalog/perfume-promotions");
+}
+
+export function fetchPerfumePromotion(slug: string) {
+  return apiFetch<CatalogPerfumePromotion>(`catalog/perfume-promotions/${slug}`);
 }

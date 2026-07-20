@@ -133,7 +133,10 @@ function getAttrValueStock(
   madeToOrder: boolean | undefined,
   currentSelections: Record<string, string>
 ): StockStatus {
-  if (madeToOrder) return "available";
+  if (madeToOrder) {
+    return variants.some((variant) => variant.active !== false && variant.attributes?.[attrKey] === attrValue)
+      ? "available" : "unavailable";
+  }
   const compatible = variants.filter((v) => {
     if (!v.active) return false;
     const attrs = v.attributes ?? {};
@@ -304,15 +307,20 @@ function catalogToStoreProduct(item: CatalogProduct): Product {
   const combinations = definitions.reduce<Record<string, string>[]>((rows, definition) => rows.flatMap((row) => definition.values.map((value) => ({ ...row, [definition.key]: value }))), [{}]);
   return {
     id: item.id, name: item.name, slug: item.slug, description: item.description || undefined,
-    shortDescription: item.shortDescription || undefined, finalPrice: Number(item.finalPrice), available: true,
+    shortDescription: item.shortDescription || undefined, finalPrice: Number(item.finalPrice || 0), available: true,
+    pricingMode: item.pricingMode || "FIXED_PRICE", quoteMessage: item.quoteMessage || undefined, quoteResponseDeadline: item.quoteResponseDeadline || undefined,
     externalLink: item.supplierLink || undefined,
     madeToOrder: true, source: "EXTERNAL", availabilityNote: item.estimatedDeadline ? `Prazo estimado: ${item.estimatedDeadline}` : "Disponibilidade sob confirmação",
-    category: item.category ? { id: item.category.id, name: item.category.name, slug: item.category.slug } : undefined,
+    category: item.category ? { id: item.category.parentId || item.category.id, name: item.category.parentName || item.category.name, slug: item.category.parentSlug || item.category.slug } : undefined,
+    subCategory: item.category?.parentId ? item.category.name : undefined,
     gallery: (item.images || []).map((image) => ({ id: image.id, originalUrl: image.originalUrl, thumbnailUrl: image.thumbnailUrl, displayOrder: image.displayOrder, primaryImage: image.primaryImage, altText: image.altText || undefined })),
     primaryImageUrl: item.images?.find((image) => image.primaryImage)?.originalUrl || item.images?.[0]?.originalUrl,
     specifications: item.specifications, hasVariants: definitions.length > 0,
     variantAttributeKeys: definitions.map((definition) => definition.key),
-    variants: definitions.length ? combinations.map((attributes, index) => ({ id: index + 1, active: true, inStock: true, attributes, finalPrice: Number(item.finalPrice), effectivePrice: Number(item.finalPrice) })) : undefined,
+    variants: definitions.length ? combinations.map((attributes, index) => {
+      const enriched = definitions.flatMap((definition) => definition.options || []).find((option) => Object.values(attributes).includes(option.value));
+      return { id: index + 1, active: enriched?.available !== false, inStock: enriched?.available !== false, stock: enriched?.stock ?? undefined, attributes, mainImageUrl: enriched?.imageUrl || undefined, finalPrice: Number(enriched?.price ?? item.finalPrice), effectivePrice: Number(enriched?.price ?? item.finalPrice) };
+    }) : undefined,
   };
 }
 
@@ -456,6 +464,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
       : product?.stockAvailable ?? product?.stock;
   const variantRequired = product?.hasVariants && !selectedVariant;
   const isExternalProduct = product?.madeToOrder || product?.source === "EXTERNAL";
+  const quoteRequired = source === "catalog" && product?.pricingMode === "QUOTE_REQUIRED";
   const canAdd = !variantRequired && (isExternalProduct || typeof stock !== "number" || stock > 0);
   const canUseCta = canAdd && (isReady || isExternalProduct);
   const sizeOptions = Array.from(new Set((product?.variants || []).map((v) => v.size).filter(Boolean) as string[]));
@@ -542,7 +551,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
           catalogOrderKeyRef.current = null;
           catalogSubmittingRef.current = false;
           setBusyAction(null);
-          router.push(order.paymentUrl || `/orders/${order.id}/payment`);
+          router.push(quoteRequired ? "/orders" : order.paymentUrl || `/orders/${order.id}/payment`);
         } catch (err) {
           setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Não foi possível preparar a encomenda." });
           setBusyAction(null);
@@ -673,6 +682,12 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
               <span className="text-gray-500">{product.category.name}</span>
             </>
           )}
+          {product.subCategory && (
+            <>
+              <ChevronRightIcon />
+              <span className="text-gray-500">{product.subCategory}</span>
+            </>
+          )}
           <ChevronRightIcon />
           <span className="line-clamp-1 max-w-[140px] font-medium" style={{ color: "#374151" }}>{product.name}</span>
         </nav>
@@ -794,6 +809,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
 
             {/* Price */}
             <div className="rounded-2xl border p-4" style={{ borderColor: "#F0F0F0", background: "#FAFAFA" }}>
+              {quoteRequired ? <div><p className="text-2xl font-black sm:text-3xl" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>Preço sob consulta</p><p className="mt-2 max-w-xl text-sm leading-6 text-gray-600">{product.quoteMessage || "O preço poderá variar conforme disponibilidade, câmbio ou fornecedor. Respondemos rapidamente com uma cotação personalizada."}</p>{product.quoteResponseDeadline ? <p className="mt-2 text-sm font-bold text-gray-800">{product.quoteResponseDeadline}</p> : null}</div> : <>
               <div className="flex flex-wrap items-end gap-3">
                 <span className="text-3xl font-black sm:text-4xl" style={{ color: RED, fontFamily: "'Sora', sans-serif" }}>
                   {formatMoney(price)}
@@ -812,13 +828,14 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
                   Poupas {formatMoney(originalPrice - price)} em relação ao preço original
                 </p>
               )}
+              </>}
             </div>
 
             {/* Dynamic attribute-based variant selectors (only multi-value keys) */}
             {product.hasVariants && selectorKeys.length > 0 && (
               <div className="space-y-5">
                 {selectorKeys.map((attrKey) => {
-                  const activeVariants = (product.variants || []).filter((v) => v.active !== false);
+                  const activeVariants = product.variants || [];
                   const values = Array.from(new Set(
                     activeVariants.map((v) => v.attributes?.[attrKey]).filter(Boolean) as string[]
                   ));
@@ -999,7 +1016,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-xs font-medium" style={{ color: "#9CA3AF" }}>Disponível</p>
+                <p className="text-xs font-medium" style={{ color: "#9CA3AF" }}>{product.madeToOrder ? "Chegada estimada" : "Disponível"}</p>
                 <p className="text-sm font-bold" style={{ color: typeof stock === "number" && stock <= 3 ? "#DC2626" : GREEN }}>
                   {typeof stock === "number"
                     ? stock <= 3 && stock > 0
@@ -1008,7 +1025,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
                         ? "Sem stock"
                         : `${stock} unidades`
                     : product.madeToOrder
-                      ? "Por encomenda"
+                      ? product.availabilityNote?.replace(/^Prazo estimado:\s*/i, "") || "Sob confirmação"
                       : product.availabilityNote || "Disponível"}
                 </p>
                 {typeof stock === "number" && stock > 0 && stock <= 10 && (
@@ -1025,7 +1042,7 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
                 {busyAction === "add" ? "A adicionar..." : !isReady ? "A preparar..." : canAdd ? "Adicionar ao carrinho" : "Sem stock"}
               </button>}
               <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="rounded-2xl px-5 py-3.5 text-sm font-black text-white shadow-md transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
-                {isExternalProduct ? busyAction === "buy" ? "A preparar encomenda..." : "Encomendar agora" : busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
+                {isExternalProduct ? busyAction === "buy" ? (quoteRequired ? "A solicitar cotação..." : "A preparar encomenda...") : (quoteRequired ? "Solicitar cotação" : "Encomendar agora") : busyAction === "buy" ? "A processar..." : canAdd ? "Comprar agora" : "Indisponível"}
               </button>
             </div>
 
@@ -1295,11 +1312,11 @@ export default function ProductDetailPage({ source = "store" }: { source?: "stor
         <div className="flex items-center gap-3">
           <div className="flex-1">
             <p className="line-clamp-1 text-xs font-semibold" style={{ color: "#6B7280" }}>{product.name}</p>
-            <p className="text-base font-black" style={{ color: RED }}>{formatMoney(price)}</p>
+            <p className="text-base font-black" style={{ color: RED }}>{quoteRequired ? "Preço sob consulta" : formatMoney(price)}</p>
           </div>
           {!isExternalProduct && <button type="button" onClick={() => void addToCart(product.id, "add")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl border px-4 py-2.5 text-sm font-black transition" style={{ borderColor: canUseCta ? RED : "#E5E7EB", color: canUseCta ? RED : "#9CA3AF" }}>{busyAction === "add" || !isReady ? "..." : "Carrinho"}</button>}
           <button type="button" onClick={() => void addToCart(product.id, "buy")} disabled={busyAction !== null || !canUseCta} className="flex-none rounded-xl px-5 py-2.5 text-sm font-black text-white shadow transition hover:opacity-90" style={{ background: canUseCta ? RED : "#9CA3AF" }}>
-            {isExternalProduct ? busyAction === "buy" ? "A preparar encomenda..." : "Encomendar agora" : busyAction === "buy" || !isReady ? "..." : "Comprar"}
+            {isExternalProduct ? busyAction === "buy" ? (quoteRequired ? "A solicitar..." : "A preparar encomenda...") : (quoteRequired ? "Solicitar cotação" : "Encomendar agora") : busyAction === "buy" || !isReady ? "..." : "Comprar"}
           </button>
         </div>
       </div>
