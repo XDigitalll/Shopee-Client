@@ -125,7 +125,7 @@ function canShowPaymentAction(order: Order) {
 }
 
 function customerStage(status: string) {
-  const map: Record<string, "RECEIVED" | "PRICING" | "AWAITING_PAYMENT" | "CONFIRMED" | "PROCESSING" | "INTERNATIONAL_TRANSIT" | "AT_HQ" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED"> = {
+  const map: Record<string, "RECEIVED" | "PRICING" | "AWAITING_PAYMENT" | "CONFIRMED" | "PROCESSING" | "INTERNATIONAL_TRANSIT" | "AT_HQ" | "ON_THE_WAY" | "DELIVERED" | "CANCELLED" | "FAILED"> = {
     CREATED: "RECEIVED",
     PENDING: "RECEIVED",
     UNDER_REVIEW: "PRICING",
@@ -150,7 +150,7 @@ function customerStage(status: string) {
     DELIVERY_FAILED: "ON_THE_WAY",
     DELIVERED: "DELIVERED",
     CANCELLED: "CANCELLED",
-    FAILED: "CANCELLED",
+    FAILED: "FAILED",
   };
 
   return map[status] || "RECEIVED";
@@ -159,19 +159,19 @@ function customerStage(status: string) {
 function statusMeta(status: string) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     RECEIVED: { label: "Recebido", bg: "#FFF7ED", color: "#C2410C" },
-    PRICING: { label: "Em analise", bg: "#FEF3C7", color: "#92400E" },
+    PRICING: { label: "Em análise", bg: "#FEF3C7", color: "#92400E" },
     AWAITING_PAYMENT: { label: "Aguardando pagamento", bg: "#FFF7ED", color: "#9A3412" },
     PAYMENT_SUBMITTED: { label: "Pagamento submetido", bg: "#EFF6FF", color: "#1D4ED8" },
-    PAYMENT_UNDER_REVIEW: { label: "Pagamento em analise", bg: "#F5F3FF", color: "#5B21B6" },
-    PAYMENT_REJECTED: { label: "Pagamento recusado", bg: "#FEE2E2", color: "#991B1B" },
+    PAYMENT_UNDER_REVIEW: { label: "Pagamento em validação", bg: "#F5F3FF", color: "#5B21B6" },
+    PAYMENT_REJECTED: { label: "Pagamento não validado", bg: "#FEE2E2", color: "#991B1B" },
     CONFIRMED: { label: "Confirmado", bg: "#DCFCE7", color: "#166534" },
     PROCESSING: { label: "Em processamento", bg: "#E0F2FE", color: "#0369A1" },
-    INTERNATIONAL_TRANSIT: { label: "Em transito", bg: "#DBEAFE", color: "#1D4ED8" },
+    INTERNATIONAL_TRANSIT: { label: "Em trânsito", bg: "#DBEAFE", color: "#1D4ED8" },
     AT_HQ: { label: "Na nossa sede", bg: "#EDE9FE", color: "#5B21B6" },
     ON_THE_WAY: { label: "A caminho", bg: "#DBEAFE", color: "#1D4ED8" },
     DELIVERED: { label: "Entregue", bg: "#DCFCE7", color: "#166534" },
     CANCELLED: { label: "Cancelado", bg: "#FEE2E2", color: "#991B1B" },
-    FAILED: { label: "Pagamento recusado", bg: "#FEE2E2", color: "#991B1B" },
+    FAILED: { label: "Não foi possível concluir", bg: "#FEE2E2", color: "#991B1B" },
     DELIVERY_FAILED: { label: "Tentativa falhada", bg: "#FEF3C7", color: "#92400E" },
   };
 
