@@ -157,3 +157,19 @@ describe("success screen display rules", () => {
     assert.equal(clipboardValue, null);
   });
 });
+
+describe("public link order successful response", () => {
+  test("success=true displays confirmation with orderReference", () => {
+    const response = {
+      success: true,
+      orderId: 28,
+      orderReference: "SMZ-ORD-2026-000028",
+      message: "Recebemos o teu pedido.",
+    };
+
+    const orderNumber = resolveOrderNumber(response);
+    assert.equal(response.success, true);
+    assert.equal(orderNumber, "SMZ-ORD-2026-000028");
+    assert.equal(buildTrackingHref(orderNumber), "/track/SMZ-ORD-2026-000028");
+  });
+});
