@@ -409,90 +409,85 @@ export function ClientShell({ children, fullWidth = false }: { children: ReactNo
           </div>
         )}
       </header>
-
-
      
-     
-      {/* Navegação inferior mobile */}
-      <nav
-        aria-label="Navegação principal mobile"
-        className="fixed inset-x-2 bottom-2 z-50 overflow-visible rounded-[32px] border border-white/40 bg-white/30 shadow-[0_8px_32px_rgba(0,0,0,0.18)] backdrop-blur-[30px] backdrop-saturate-[180%] lg:hidden"
-      >
-        <div className="mx-auto grid h-[76px] max-w-lg grid-cols-5 items-center px-2">
+   {/* Navegação inferior mobile */}
+<nav
+  aria-label="Navegação principal mobile"
+  className="fixed inset-x-3 bottom-2 z-50 overflow-visible rounded-[24px] border border-white/40 bg-white/30 shadow-[0_6px_24px_rgba(0,0,0,0.15)] backdrop-blur-[24px] backdrop-saturate-[160%] lg:hidden"
+>
+  <div className="mx-auto grid h-[62px] max-w-md grid-cols-5 items-center px-2">
+    <Link
+      href="/"
+      className={`flex flex-col items-center gap-0.5 text-[9px] font-semibold ${
+        pathname === "/" ? "text-[#E8431A]" : "text-gray-700"
+      }`}
+    >
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z" />
+      </svg>
+      Início
+    </Link>
 
-          <Link
-            href="/"
-            className={`flex flex-col items-center justify-center gap-1 text-[12px] font-semibold ${
-              pathname === "/" ? "text-[#E8431A]" : "text-gray-700"
-            }`}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z" />
-            </svg>
-            Início
-          </Link>
+    <Link
+      href="/#produtos"
+      className="flex flex-col items-center gap-0.5 text-[9px] font-semibold text-gray-700"
+    >
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+        <circle cx="10.8" cy="10.8" r="6.8" />
+        <path d="m16 16 5 5" />
+      </svg>
+      Pesquisar
+    </Link>
 
-          <Link
-            href="/#produtos"
-            className="flex flex-col items-center justify-center gap-1 text-[12px] font-semibold text-gray-700"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <circle cx="10.8" cy="10.8" r="6.8" />
-              <path d="m16 16 5 5" />
-            </svg>
-            Pesquisar
-          </Link>
+    <Link
+      href="/orders/external/new"
+      className="flex flex-col items-center justify-center gap-0.5"
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#E8431A] text-white shadow-md shadow-orange-200/60">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" />
+          <path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" />
+        </svg>
+      </span>
+      <span className="text-[9px] font-bold text-[#E8431A]">Adicionar link</span>
+    </Link>
 
-          <Link
-            href="/orders/external/new"
-            className="flex h-full flex-col items-center justify-center gap-1"
-          >
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#E8431A] text-white shadow-md shadow-orange-300/50">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7" />
-                <path d="M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7" />
-              </svg>
-            </span>
-            <span className="whitespace-nowrap text-[10px] font-bold text-[#C93617]">
-              Adicionar link
-            </span>
-          </Link>
+    <Link
+      href={ordersAttentionHref}
+      className={`relative flex flex-col items-center gap-0.5 text-[9px] font-semibold ${
+        pathname.startsWith("/orders") ? "text-[#E8431A]" : "text-gray-700"
+      }`}
+    >
+      <span className="relative">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 4h16v16H4z" />
+          <path d="M8 8h8M8 12h8M8 16h5" />
+        </svg>
+        {attentionCount > 0 ? (
+          <NotificationBadge count={attentionCount} tone="light" className="absolute -right-3 -top-2" />
+        ) : null}
+      </span>
+      Pedidos
+    </Link>
 
-          <Link
-            href={ordersAttentionHref}
-            className={`relative flex flex-col items-center justify-center gap-1 text-[12px] font-semibold ${
-              pathname.startsWith("/orders") ? "text-[#E8431A]" : "text-gray-700"
-            }`}
-          >
-            <span className="relative">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 4h16v16H4z" />
-                <path d="M8 8h8M8 12h8M8 16h5" />
-              </svg>
-              {attentionCount > 0 ? (
-                <NotificationBadge count={attentionCount} tone="light" className="absolute -right-3 -top-2" />
-              ) : null}
-            </span>
-            Pedidos
-          </Link>
+    <Link
+      href="/profile"
+      className={`flex flex-col items-center gap-0.5 text-[9px] font-semibold ${
+        pathname.startsWith("/profile") ? "text-[#E8431A]" : "text-gray-700"
+      }`}
+    >
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21a8 8 0 0 1 16 0" />
+      </svg>
+      Perfil
+    </Link>
+  </div>
+  <div className="h-[env(safe-area-inset-bottom)]" />
+</nav>
 
-          <Link
-            href="/profile"
-            className={`flex flex-col items-center justify-center gap-1 text-[12px] font-semibold ${
-              pathname.startsWith("/profile") ? "text-[#E8431A]" : "text-gray-700"
-            }`}
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 21a8 8 0 0 1 16 0" />
-            </svg>
-            Perfil
-          </Link>
-        </div>
-        <div className="h-[env(safe-area-inset-bottom)]" />
-      </nav>
+<div className={showMobileAccountWarnings ? "h-[110px] shrink-0 sm:h-16" : "h-16 shrink-0 sm:h-16"} />
 
-      <div className={showMobileAccountWarnings ? "h-[110px] shrink-0 sm:h-16" : "h-20 shrink-0 sm:h-16"} />
 
       <main className={fullWidth ? "flex-1 overflow-x-hidden" : `mx-auto w-full max-w-7xl flex-1 overflow-x-hidden px-4 pb-6 ${showMobileAccountWarnings ? "pt-3" : "pt-6"} sm:px-6 sm:py-6 lg:px-8`}>{children}</main>
 
